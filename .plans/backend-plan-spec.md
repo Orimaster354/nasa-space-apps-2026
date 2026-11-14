@@ -23,3 +23,12 @@ Decisions captured while preparing `docs/BACKEND_IMPLEMENTATION_PLAN.md` and `do
 - Source code of WISEView (only README, metadata, and directory listing read).
 - TAP column list beyond those in the IRSA tutorial; flag bit meanings; observation time/ID header keywords.
 - Free-tier LLM provider limits.
+
+## Updates 2026-11-14 (second interview)
+| Topic | Decision |
+|---|---|
+| Judge access | Public web link |
+| Demo data | Ship pre-rendered images for the five challenge targets; other targets fetch live |
+| LLM | Google Gemini (AI Studio key) first; check real free limits in the console before relying on it |
+| AI quota protection | Per-visitor message limit, then automated summaries |
+| Still open | Hosting platform, Gemini key and model, submission freeze clock time |

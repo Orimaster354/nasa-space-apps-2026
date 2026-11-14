@@ -265,9 +265,9 @@ Probe all five listed targets (Barnard's Star, WISE 0855, RW Aurigae, R Draconis
 
 | ID | Decision | Status |
 |---|---|---|
-| D-1 | Which two free LLM providers/models, and their limits | **You decide** (needs a check of current free tiers and tool-calling) |
+| D-1 | LLM providers | **Decided 2026-11-14: Google Gemini (AI Studio key) first.** Free-tier limits are not published per model in the docs (they are shown in the AI Studio console), some models have no free quota, and free-tier requests may be used by Google to improve its products. Before building: create the key, read the actual limits and model list in the console, and pick a model that has free quota. A second provider is optional; the deterministic fallback is the safety net. Function-calling support on the free tier was not confirmed, so v1 does not depend on it (the backend assembles the structured results, the model returns JSON). |
 | D-2 | Contract v0.2.0 | **Resolved** (merged 2026-11-14, frontend data layer updated). Remaining open: OD-7 (server-side investigations/client ID), OD-16 (co-add), OD-17 (overlays) |
-| D-3 | Cloud host choice (persistent disk required) | **You decide** |
+| D-3 | Cloud host | **Partly decided:** a public web link is required (decided 2026-11-14). The platform is still open: it needs a Python server that stays up, outbound access to IRSA and Gemini, environment variables for the key, and a few hundred MB of disk if demo images are shipped (about 2 GB if the raw cache is kept). |
 | D-4 | Blink frame definition | Recommended: same-band-epoch primary, cross-band labeled, finalized after the coverage probe |
 | D-5 | Spectrum source: spectral images vs All-Sky Cube | Open until A10 checked |
 | D-6 | `observationId` scheme | Open; derive from archive unique ID |
@@ -337,3 +337,9 @@ Run a throwaway script that (1) lists the schema of `spherex.plane` and `spherex
 - [IRSA tutorial: SPHEREx cutouts](https://caltech-ipac.github.io/irsa-tutorials/spherex-cutouts)
 - [WISEView repository](https://github.com/backyardworlds/wiseview) and its README
 - Search result pages (QR overview, challenge listings) as noted; not all were opened.
+
+### Decisions made 2026-11-14 (after the first working demo)
+- **Judges use a public web link.**
+- **Demo targets ship as pre-rendered images** (the five challenge targets at the default field of view), so they load instantly and work if IRSA is down. Other targets still fetch live. The raw cache measured 1.8 GB for five targets, so it is not shipped.
+- **AI quota:** a per-visitor message limit (suggested 15); after it, the companion returns evidence-based automated summaries without the LLM. The Gemini key lives only in the server environment.
+- **AI design for v1:** the backend builds the structured context (object, observation, comparison, measurements, flags) and the model answers from it as JSON; the numeric check validates the answer; no dependence on model-side tool calling.
