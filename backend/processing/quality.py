@@ -83,11 +83,11 @@ def summarize(flags: np.ndarray, region: np.ndarray | None = None) -> list[dict]
     for bit in sorted({d.bit for v in np.unique(arr) for d in decode_value(int(v))}):
         count = int(((arr >> bit) & 1).sum())
         d = FLAGS_BY_BIT.get(bit, FlagDef(bit, f"BIT{bit}", "", "info"))
-        meaning = f" ({d.meaning})" if d.meaning else ""
+        meaning = d.meaning or "no definition in IRSA's table"
         result.append({
             "code": d.name,
             "severity": d.severity,
-            "description": f"{d.name}{meaning}: {count} of {total} pixels (bit {bit}).",
+            "description": f"{meaning}: {count} of {total} pixels (bit {bit}).",
             "origin": "source",
         })
     return result
