@@ -1,0 +1,161 @@
+[
+  {
+    "observationId": "mock-obs-barnard-1",
+    "objectIds": [
+      "mock-obj-barnard"
+    ],
+    "dataRelease": "ILLUSTRATIVE-0",
+    "observedAt": "2026-01-16T03:22:10Z",
+    "center": {
+      "raDeg": 269.452,
+      "decDeg": 4.6934
+    },
+    "detector": "illustrative",
+    "wavelengthRangeUm": {
+      "min": 0.75,
+      "max": 5.0
+    },
+    "image": {
+      "status": "available"
+    },
+    "qualityFlags": [],
+    "qualitySummary": "good",
+    "sourceMetadata": {
+      "note": "ILLUSTRATIVE mock record, not NASA data"
+    }
+  },
+  {
+    "observationId": "mock-obs-barnard-2",
+    "objectIds": [
+      "mock-obj-barnard"
+    ],
+    "dataRelease": "ILLUSTRATIVE-0",
+    "observedAt": "2026-01-24T03:22:10Z",
+    "center": {
+      "raDeg": 269.452,
+      "decDeg": 4.6934
+    },
+    "detector": "illustrative",
+    "wavelengthRangeUm": {
+      "min": 0.75,
+      "max": 5.0
+    },
+    "image": {
+      "status": "available"
+    },
+    "qualityFlags": [],
+    "qualitySummary": "good",
+    "sourceMetadata": {
+      "note": "ILLUSTRATIVE mock record, not NASA data"
+    }
+  },
+  {
+    "observationId": "mock-obs-barnard-3",
+    "objectIds": [
+      "mock-obj-barnard"
+    ],
+    "dataRelease": "ILLUSTRATIVE-0",
+    "observedAt": "2026-02-03T03:22:10Z",
+    "center": {
+      "raDeg": 269.452,
+      "decDeg": 4.6934
+    },
+    "detector": "illustrative",
+    "wavelengthRangeUm": {
+      "min": 0.75,
+      "max": 5.0
+    },
+    "image": {
+      "status": "available"
+    },
+    "qualityFlags": [
+      {
+        "code": "MOCK_EDGE",
+        "severity": "warning",
+        "description": "Illustrative: target near detector edge.",
+        "origin": "derived"
+      }
+    ],
+    "qualitySummary": "degraded",
+    "sourceMetadata": {
+      "note": "ILLUSTRATIVE mock record, not NASA data"
+    }
+  },
+  {
+    "observationId": "mock-obs-barnard-4",
+    "objectIds": [
+      "mock-obj-barnard"
+    ],
+    "dataRelease": "ILLUSTRATIVE-0",
+    "observedAt": "2026-02-15T03:22:10Z",
+    "center": {
+      "raDeg": 269.452,
+      "decDeg": 4.6934
+    },
+    "detector": "illustrative",
+    "wavelengthRangeUm": {
+      "min": 0.75,
+      "max": 5.0
+    },
+    "image": {
+      "status": "available"
+    },
+    "qualityFlags": [],
+    "qualitySummary": "good",
+    "sourceMetadata": {
+      "note": "ILLUSTRATIVE mock record, not NASA data"
+    }
+  },
+  {
+    "observationId": "mock-obs-barnard-5",
+    "objectIds": [
+      "mock-obj-barnard"
+    ],
+    "dataRelease": "ILLUSTRATIVE-0",
+    "observedAt": "2026-02-27T03:22:10Z",
+    "center": {
+      "raDeg": 269.452,
+      "decDeg": 4.6934
+    },
+    "detector": "illustrative",
+    "wavelengthRangeUm": {
+      "min": 0.75,
+      "max": 5.0
+    },
+    "image": {
+      "status": "processing",
+      "statusReason": "Illustrative: image being prepared.",
+      "retryAfterSeconds": 2
+    },
+    "qualityFlags": [],
+    "qualitySummary": "good",
+    "sourceMetadata": {
+      "note": "ILLUSTRATIVE mock record, not NASA data"
+    }
+  },
+  {
+    "observationId": "mock-obs-barnard-6",
+    "objectIds": [
+      "mock-obj-barnard"
+    ],
+    "dataRelease": "ILLUSTRATIVE-0",
+    "observedAt": "2026-03-10T03:22:10Z",
+    "center": {
+      "raDeg": 269.452,
+      "decDeg": 4.6934
+    },
+    "detector": "illustrative",
+    "wavelengthRangeUm": {
+      "min": 0.75,
+      "max": 5.0
+    },
+    "image": {
+      "status": "available"
+    },
+    "qualityFlags": [],
+    "qualitySummary": "good",
+    "sourceMetadata": {
+      "note": "ILLUSTRATIVE mock record, not NASA data"
+    }
+  }
+]

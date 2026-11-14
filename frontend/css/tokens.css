@@ -1,0 +1,107 @@
+/* ==========================================================================
+   SPHERE X design tokens
+   Source of truth: approved palette + frontend/design-refs/*.png
+   Every page uses the SAME background gradient (--bg-page).
+   ========================================================================== */
+
+@font-face {
+  font-family: "Pixelify Sans";
+  src: url("../assets/fonts/pixelify-sans-latin-700-normal.woff2") format("woff2");
+  font-weight: 700; font-display: swap;
+}
+@font-face {
+  font-family: "Pixelify Sans";
+  src: url("../assets/fonts/pixelify-sans-latin-500-normal.woff2") format("woff2");
+  font-weight: 500; font-display: swap;
+}
+@font-face {
+  font-family: "IBM Plex Sans";
+  src: url("../assets/fonts/ibm-plex-sans-latin-400-normal.woff2") format("woff2");
+  font-weight: 400; font-display: swap;
+}
+@font-face {
+  font-family: "IBM Plex Sans";
+  src: url("../assets/fonts/ibm-plex-sans-latin-600-normal.woff2") format("woff2");
+  font-weight: 600; font-display: swap;
+}
+@font-face {
+  font-family: "IBM Plex Mono";
+  src: url("../assets/fonts/ibm-plex-mono-latin-400-normal.woff2") format("woff2");
+  font-weight: 400; font-display: swap;
+}
+
+:root {
+  /* --- Approved palette ------------------------------------------------ */
+  --midnight-charcoal: #101820;
+  --deep-slate:        #1b2b33;
+  --glacier-blue:      #75bfe8;
+  --slate-blue:        #405a6b;   /* borders / fills ONLY: ~2.4:1 on charcoal, fails as text */
+  --warm-ivory:        #f2f0e9;
+  --aurora-teal:       #42bfae;
+  --solar-orange:      #f28c58;
+
+  /* --- Semantic colours ------------------------------------------------ */
+  --bg:           var(--midnight-charcoal);
+  --surface:      rgba(27, 43, 51, 0.55);      /* panels over the gradient */
+  --surface-solid:var(--deep-slate);
+  --surface-hi:   rgba(117, 191, 232, 0.12);   /* selected row */
+  --border:       var(--slate-blue);
+  --border-soft:  rgba(64, 90, 107, 0.55);
+  --text:         var(--warm-ivory);
+  --text-muted:   #b4b8b2;                     /* ivory at ~70%: 9:1 on charcoal */
+  --accent:       var(--glacier-blue);
+  --accent-2:     var(--aurora-teal);
+  --warn:         var(--solar-orange);
+  --focus:        var(--solar-orange);
+
+  /* --- Page gradient (same on every page) ------------------------------
+     Near-black at the top, deep slate-teal toward the bottom, with a very
+     faint aurora glow rising from the lower edge (see investigate mockup). */
+  --aurora-glow: radial-gradient(120% 55% at 50% 108%,
+                   rgba(66, 191, 174, 0.20) 0%,
+                   rgba(66, 191, 174, 0.07) 45%,
+                   transparent 72%);
+  --bg-page: var(--aurora-glow),
+             linear-gradient(180deg, #0b1218 0%, #101820 38%, #15252d 78%, #1b2b33 100%);
+
+  /* --- Muted cosmic-spectrum gradient (Spectral Explorer, M6) ----------
+     PLACEHOLDER stops: confirm against the supplied reference. */
+  --spectrum-gradient: linear-gradient(90deg,
+     #5b6fb0 0%, #5a8fc0 20%, #5fb0b8 40%, #8fc08a 55%, #d6b56a 72%, #e08f60 88%, #c8605a 100%);
+
+  /* --- Typography ------------------------------------------------------ */
+  --font-pixel: "Pixelify Sans", "Courier New", monospace;       /* selected headings only */
+  --font-body:  "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono:  "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+
+  --fs-xs: 0.75rem;  --fs-sm: 0.875rem; --fs-md: 1rem;
+  --fs-lg: 1.25rem;  --fs-xl: 1.75rem;  --fs-2xl: 2.5rem; --fs-hero: clamp(2.5rem, 7vw, 5.5rem);
+  --tracking-label: 0.12em;               /* uppercase labels, as in the mockups */
+
+  /* --- Spacing (4px base) --------------------------------------------- */
+  --sp-1: 4px;  --sp-2: 8px;  --sp-3: 12px; --sp-4: 16px;
+  --sp-5: 24px; --sp-6: 32px; --sp-7: 48px; --sp-8: 72px;
+
+  /* --- Shape (neo-brutalist: square corners, crisp 1-2px lines) -------- */
+  --radius: 4px;
+  --radius-lg: 8px;
+  --line: 1px;
+  --line-bold: 2px;
+  --shadow-hard: 3px 3px 0 rgba(0, 0, 0, 0.45);   /* pixel-style offset shadow */
+
+  /* --- Motion ---------------------------------------------------------- */
+  --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
+  --dur-fast: 120ms;
+  --dur: 220ms;
+
+  /* --- Layout ---------------------------------------------------------- */
+  --nav-h: 64px;
+  --gutter: 16px;
+  --panel-w: 280px;
+}
+
+@media (min-width: 768px) { :root { --gutter: 24px; } }
+
+@media (prefers-reduced-motion: reduce) {
+  :root { --dur-fast: 0ms; --dur: 0ms; }
+}

@@ -1,0 +1,43 @@
+[
+  {
+    "objectId": "mock-obj-barnard",
+    "name": "Barnard's Star",
+    "aliases": [
+      "GJ 699",
+      "V2500 Oph"
+    ],
+    "coordinates": {
+      "raDeg": 269.452,
+      "decDeg": 4.6934
+    },
+    "objectType": "High proper motion star",
+    "resolver": {
+      "name": "Illustrative sample (not a real resolver)"
+    }
+  },
+  {
+    "objectId": "mock-obj-field-b",
+    "name": "Sample field B",
+    "aliases": [],
+    "coordinates": {
+      "raDeg": 150.1,
+      "decDeg": 2.2
+    },
+    "objectType": "Extragalactic field",
+    "resolver": {
+      "name": "Illustrative sample (not a real resolver)"
+    }
+  },
+  {
+    "objectId": "mock-obj-empty",
+    "name": "Sample field with no coverage",
+    "aliases": [],
+    "coordinates": {
+      "raDeg": 10.0,
+      "decDeg": -80.0
+    },
+    "resolver": {
+      "name": "Illustrative sample (not a real resolver)"
+    }
+  }
+]
