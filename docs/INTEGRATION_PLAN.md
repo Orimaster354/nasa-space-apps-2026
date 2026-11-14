@@ -1,6 +1,6 @@
 # Integration Plan
 
-> Contract version **0.1.0 (draft)**. For a 48-hour hackathon. This plan covers only the **shared** path: contract, backend delivery, connecting, testing, deployment. The frontend developer plans their own internal work.
+> Contract version **0.2.0 (draft)**. For a 48-hour hackathon. This plan covers only the **shared** path: contract, backend delivery, connecting, testing, deployment. The frontend developer plans their own internal work.
 
 ## Phases and dependencies
 

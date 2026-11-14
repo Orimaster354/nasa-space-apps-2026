@@ -1,7 +1,7 @@
 # Development Ownership
 
 > Goal: two developers work independently on separate branches without building incompatible things.
-> Contract version **0.1.0 (draft)**. See [FRONTEND_BACKEND_CONTRACT.md](FRONTEND_BACKEND_CONTRACT.md).
+> Contract version **0.2.0 (draft)**. See [FRONTEND_BACKEND_CONTRACT.md](FRONTEND_BACKEND_CONTRACT.md).
 
 Each developer designs and structures their own side. The **contract and canonical data models are the only boundary** between the two implementations.
 
@@ -9,7 +9,7 @@ Each developer designs and structures their own side. The **contract and canonic
 
 | Role | Developer | Branch |
 |---|---|---|
-| Backend / AI | Developer 1 | Backend branch name undecided (OD-10) |
+| Backend / AI | Developer 1 | `back-end` |
 | Frontend | Developer 2 | `front-end` (exists) |
 
 `main` holds the shared agreed state (these docs and anything both sides have merged).
