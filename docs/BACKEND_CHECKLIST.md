@@ -22,39 +22,39 @@ Priorities: **P0** essential for a functioning submission · **P1** important di
   Dep: P0-03. Done: `astropy` builds a celestial WCS from the IMAGE header; pixel↔sky round-trip error is reported; the observation time source (TAP column vs header) is confirmed against the file (closes A2); wavelength obtained at a pixel via the WCS-WAVE method.
 - [x] **P0-05 Backend skeleton and health endpoint.**
   Dep: none. Done: FastAPI app starts from a clean venv using `pyproject.toml`; `GET /api/v1/health` returns `{status:"ok", contractVersion:"0.1.0"}`; settings read from env; `.env.example` lists variable names only; one passing test.
-- [ ] **P0-06 🛰 Coverage probe of the five candidate targets.**
+- [x] **P0-06 🛰 Coverage probe of the five candidate targets.**
   Dep: P0-01. Done: for Barnard's Star, WISE 0855, RW Aurigae, R Draconis, Epsilon Indi B: number of observations, bands, distinct epochs, same-band epoch counts, and whether the target is detected are tabulated; a written feasibility verdict per target and a recommended primary target (closes A3, informs D-4/D-7).
 
 ### Foundations
 
-- [ ] **P0-07 Error handling to the contract's `ApiError` envelope.**
+- [x] **P0-07 Error handling to the contract's `ApiError` envelope.**
   Dep: P0-05. Done: every error code in contract §4 can be produced in tests; unknown errors become `INTERNAL` with a request ID; no stack traces in responses.
-- [ ] **P0-08 Logging with request IDs.**
+- [x] **P0-08 Logging with request IDs.**
   Dep: P0-05. Done: each request logs method, path, status, duration, request ID; secrets never logged (checked by a test).
-- [ ] **P0-09 Pydantic models mirroring contract §3.**
+- [ ] **P0-09 Pydantic models mirroring contract §3.** *(Objects, observations, images done in `api/schemas.py`; the rest as endpoints are built.)*
   Dep: P0-05. Done: a model exists for each contract type; example JSON from DATA_MODELS.md validates; omitted-not-null enforced by serialization settings (test).
-- [ ] **P0-10 Test structure and markers.**
+- [x] **P0-10 Test structure and markers.**
   Dep: P0-05. Done: `synthetic`, `recorded`, `realdata` markers; `pytest -m "not realdata"` runs offline.
 
 ### Observations and images
 
-- [ ] **P0-11 Object resolution.**
+- [x] **P0-11 Object resolution.**
   Dep: P0-05. Done: a name or RA/Dec returns an `AstronomicalObject` with `resolver` recorded; unknown name returns `NOT_FOUND`; invalid coordinates return `INVALID_REQUEST`; resolution tested for the five targets (closes A13 partly).
-- [ ] **P0-12 `GET /objects/search`, `/objects/resolve`, `/objects/{id}`.**
+- [x] **P0-12 `GET /objects/search`, `/objects/resolve`, `/objects/{id}`.**
   Dep: P0-09, P0-11. Done: responses validate against the contract; limits enforced.
-- [ ] **P0-13 Observation discovery returns observation records in the agreed schema.**
+- [x] **P0-13 Observation discovery returns observation records in the agreed schema.**
   Dep: P0-02, P0-09. Done: `GET /objects/{id}/observations` returns `Page<Observation>` sorted by time; optional fields omitted when absent; empty coverage returns `items: []` + `coverageNote`; `from/to/dataRelease/limit/offset` honored.
-- [ ] **P0-14 `observationId` scheme (D-6).**
+- [x] **P0-14 `observationId` scheme (D-6).**
   Dep: P0-02. Done: IDs are stable across restarts and map back to the archive record; documented.
-- [ ] **P0-15 Cutout fetch + cache.**
+- [x] **P0-15 Cutout fetch + cache.**
   Dep: P0-03. Done: cutouts are cached under `backend/data/` keyed by URL+center+size; second request does not hit IRSA (test with a stub); concurrent requests for one key share one download; timeouts and retries with backoff.
-- [ ] **P0-16 FITS reader with defensive parsing.**
+- [x] **P0-16 FITS reader with defensive parsing.**
   Dep: P0-03. Done: reads IMAGE/FLAGS/VARIANCE/ZODI when present; missing HDUs produce warnings not crashes; malformed file returns `failed` availability (synthetic tests for each case).
-- [ ] **P0-17 Generate a frontend-displayable image on a common pixel grid.**
+- [x] **P0-17 Generate a frontend-displayable image on a common pixel grid.** *(Done; quality-mask overlay URL not built.)*
   Dep: P0-16, P0-04. Done: `GET /observations/{id}/image` accepts `centerRa`, `centerDec`, `fovArcmin`, reprojects the cutout onto a north-up grid with a fixed pixel scale, returns the same `gridId` for the same parameters (test: two observations from different pointings share width, height and grid), and returns `ObservationImage` with a loadable PNG URL, `width/height`, `stretch`, `wcs` (`approximate` set honestly), optional mask URL; image opens in a browser from the frontend origin (CORS verified).
-- [ ] **P0-18 `GET /observations/{id}/pixel-to-sky`.**
+- [x] **P0-18 `GET /observations/{id}/pixel-to-sky`.**
   Dep: P0-04. Done: returns sky coordinate; round-trip error under a stated tolerance in a synthetic-WCS test.
-- [ ] **P0-19 Quality flags decoded.**
+- [x] **P0-19 Quality flags decoded.** *(Done in `processing/quality.py` from IRSA online help; still to cross-check against the Explanatory Supplement.)*
   Dep: P0-16, A5. Done: flag decoder table sourced from the Explanatory Supplement (cited in code); unknown bits reported as `info` with raw value; `qualitySummary` rule documented and tested.
 - [ ] **P0-20 Async/“processing” behavior.**
   Dep: P0-15. Done: slow fetch returns `processing` with `retryAfterSeconds`, then resolves; failure returns `failed` with a reason; tested with a slow stub.
@@ -112,7 +112,7 @@ Priorities: **P0** essential for a functioning submission · **P1** important di
   Dep: P0-17, OD-16. Done: contract addition agreed; stacking of same-bandpass aligned frames improves measured noise on a synthetic test, and the result is labelled as a derived stack with its input observation IDs.
 - [ ] **P1-20 Per-position spectrum on the fly.**
   Dep: P1-13. Done: `GET /objects/{id}/spectrum` accepts `ra`/`dec` and returns a spectrum for that position within a documented time budget.
-- [ ] **P1-21 Release-agnostic data discovery.**
+- [x] **P1-21 Release-agnostic data discovery.**
   Dep: P0-13. Done: collections/releases are configuration (not hard-coded); a new release name added to config is searchable without code changes.
 
 - [x] **P1-01 Agree contract v0.2 with the frontend developer (D-2).** Done 2026-11-14: contract 0.2.0 merged into `main`, frontend data layer updated.
@@ -146,7 +146,7 @@ Priorities: **P0** essential for a functioning submission · **P1** important di
   Dep: P0-17. Done: `fovArcmin` up to a documented maximum works with caching and time budget; larger values return `INVALID_REQUEST` with a clear message.
 - [ ] **P1-16 Science-grade wavelength (CWAVE/CBAND) if the WCS-WAVE accuracy is not enough.**
   Dep: A9. Done: comparison between the two methods is recorded; decision documented.
-- [ ] **P1-17 Rate/backoff guard for IRSA.**
+- [x] **P1-17 Rate/backoff guard for IRSA.**
   Dep: P0-15. Done: global concurrency cap and retry-with-backoff configurable; test with a failing stub.
 - [ ] **P1-18 Data acknowledgment text.**
   Dep: none. Done: required IRSA/SPHEREx acknowledgment confirmed from IRSA and surfaced to the frontend developer for display; WISEView and other resources cited in the README.
@@ -164,6 +164,12 @@ Priorities: **P0** essential for a functioning submission · **P1** important di
 - [ ] **P2-07 Basic CI** running `pytest -m "not realdata"`. Dep: P0-10. Done: workflow passes on the branch.
 
 ---
+
+## Added from the first real-data run (2026-11-14)
+
+- [ ] **P0-22b Pre-warm script for the curated demo targets.** Dep: P0-15. Done: one command downloads and renders images for the five challenge targets at the default field of view into the cache (cold frames take 3-8 s each; 4 MB per cutout).
+- [ ] **P0-22c Same-band timeline.** Dep: P0-13. Done: backend supports `bandpass` filtering (implemented) and contract/frontend agree that a blink series is requested per bandpass (contract addition pending).
+- [ ] **P0-22d Pagination guard.** Dep: P0-13. Done: confirmed the frontend pages through observations (Barnard's Star has 363, R Draconis 2514; the API caps a page at 200).
 
 ## Cross-cutting acceptance
 

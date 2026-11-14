@@ -9,7 +9,7 @@ pytestmark = pytest.mark.synthetic
 def test_health_reports_contract_version():
     r = TestClient(create_app()).get("/api/v1/health")
     assert r.status_code == 200
-    assert r.json() == {"status": "ok", "contractVersion": "0.1.0"}
+    assert r.json() == {"status": "ok", "contractVersion": "0.2.0"}
 
 
 def test_unknown_path_uses_error_envelope():

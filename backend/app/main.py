@@ -9,6 +9,15 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from pathlib import Path
+
+from fastapi.staticfiles import StaticFiles
+
+from api.routes import router
+from processing.irsa import CutoutCache, discover
+from services.core import BadRequest, NotFound, Services, Upstream
+from store.registry import Registry
+
 from .config import CONTRACT_VERSION, settings
 
 log = logging.getLogger("spx")
@@ -26,9 +35,18 @@ def error_body(code: str, message: str, retryable: bool = False, request_id: str
     return {"error": err}
 
 
-def create_app() -> FastAPI:
+def build_default_services() -> Services:
+    data = Path(settings.data_dir)
+    collections = tuple(c.strip() for c in settings.sia_collections.split(",") if c.strip())
+    return Services(Registry(data / "registry.sqlite"), CutoutCache(data / "cutouts"), data / "images",
+                    discover=lambda ra, dec: discover(ra, dec, collections=collections))
+
+
+def create_app(services: Services | None = None) -> FastAPI:
     logging.basicConfig(level=settings.log_level, format="%(asctime)s %(levelname)s %(name)s %(message)s")
     app = FastAPI(title="SPHEREx backend", version=CONTRACT_VERSION)
+    app.state.services = services or build_default_services()
+    app.mount("/media/images", StaticFiles(directory=app.state.services.images_dir), name="images")
 
     app.add_middleware(
         CORSMiddleware,
@@ -52,6 +70,18 @@ def create_app() -> FastAPI:
         code = _CODE_FOR_STATUS.get(exc.status_code, "INTERNAL")
         return JSONResponse(error_body(code, str(exc.detail), exc.status_code in (429, 502, 503), request.state.request_id), status_code=exc.status_code)
 
+    @app.exception_handler(NotFound)
+    async def not_found(request: Request, exc: NotFound):
+        return JSONResponse(error_body("NOT_FOUND", str(exc), False, request.state.request_id), status_code=404)
+
+    @app.exception_handler(BadRequest)
+    async def bad_request(request: Request, exc: BadRequest):
+        return JSONResponse(error_body("INVALID_REQUEST", str(exc), False, request.state.request_id), status_code=400)
+
+    @app.exception_handler(Upstream)
+    async def upstream(request: Request, exc: Upstream):
+        return JSONResponse(error_body("UPSTREAM_UNAVAILABLE", str(exc), exc.retryable, request.state.request_id), status_code=503)
+
     @app.exception_handler(RequestValidationError)
     async def validation_exc(request: Request, exc: RequestValidationError):
         return JSONResponse(error_body("INVALID_REQUEST", "The request is not valid.", False, request.state.request_id, {"errors": exc.errors()[:5]}), status_code=400)
@@ -65,6 +95,9 @@ def create_app() -> FastAPI:
     def health():
         return {"status": "ok", "contractVersion": CONTRACT_VERSION}
 
+    app.include_router(router, prefix="/api/v1")
+    if settings.frontend_dir and Path(settings.frontend_dir).is_dir():
+        app.mount("/", StaticFiles(directory=settings.frontend_dir, html=True), name="frontend")   # must be mounted last
     return app
 
 
