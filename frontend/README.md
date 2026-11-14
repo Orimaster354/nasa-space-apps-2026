@@ -15,7 +15,7 @@ Open `/index.html` for the landing page, or `/app.html` for the workspace.
 ## Check
 
 ```bash
-node frontend/tools/check-fixtures.mjs   # mock fixtures vs contract v0.1.0 + labelling rules
+node frontend/tools/check-fixtures.mjs   # mock fixtures vs contract v0.2.0 + labelling rules
 node frontend/tools/smoke.mjs            # module linking, mock service layer, store, real-client error mapping
 ```
 
@@ -48,6 +48,6 @@ Type `simulate error` to see the AI-unavailable state. Spot-the-shift: start it 
 
 ## Backend swap
 
-`CONFIG.useMock = false`. Contract operations #1-#18 are wired in `js/api/client.js`. Operations marked PROPOSED
-(candidates, guided investigation, catalogue extras, chat suggestions) report "unavailable" until the contract
-proposal in `docs/proposals/` is agreed.
+`CONFIG.useMock = false`. Contract operations #1-#19 (contract 0.2.0) are wired in `js/api/client.js`, including candidates (#19)
+and catalogue extras (read from `AstronomicalObject.properMotion` / `objectType`). Frontend-only content that is not in the
+contract (guided investigation script, chat suggestions) reports "unavailable" or empty in real mode.

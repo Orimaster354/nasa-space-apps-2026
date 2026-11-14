@@ -4,11 +4,11 @@
   "imageSize": { "width": 1000, "height": 600 },
 
   "catalogue": {
-    "mock-obj-barnard":  { "classification": "M dwarf (red dwarf)", "properMotion": { "value": 10.31, "unit": "arcsec/yr", "source": "Catalogue value, quoted for illustration" } },
-    "mock-obj-wise0855": { "classification": "Y dwarf (brown dwarf)", "properMotion": { "value": 8.1, "unit": "arcsec/yr", "source": "Catalogue value, quoted for illustration" } },
+    "mock-obj-barnard":  { "classification": "M dwarf (red dwarf)", "properMotion": { "value": 10.31, "unit": "arcsec/yr", "provenanceKind": "catalog", "source": "Catalogue value, quoted for illustration" } },
+    "mock-obj-wise0855": { "classification": "Y dwarf (brown dwarf)", "properMotion": { "value": 8.1, "unit": "arcsec/yr", "provenanceKind": "catalog", "source": "Catalogue value, quoted for illustration" } },
     "mock-obj-rwaur":    { "classification": "T Tauri star (young, variable)" },
     "mock-obj-rdra":     { "classification": "Mira variable (red giant)" },
-    "mock-obj-epsindib": { "classification": "T dwarf (brown dwarf)", "properMotion": { "value": 4.7, "unit": "arcsec/yr", "source": "Catalogue value, quoted for illustration" } }
+    "mock-obj-epsindib": { "classification": "T dwarf (brown dwarf)", "properMotion": { "value": 4.7, "unit": "arcsec/yr", "provenanceKind": "catalog", "source": "Catalogue value, quoted for illustration" } }
   },
 
   "candidates": {

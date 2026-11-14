@@ -97,7 +97,8 @@ ok(store.getState().objectId === "o1" && store.getState().bandIndex === 12 && st
 CONFIG.useMock = false;
 const real = (await imp("js/api/client.js?real")).api;
 await rejects(real.getObject("x"), "NETWORK", "network failure is a separate case");
-await rejects(real.listCandidates("x"), "DATA_UNAVAILABLE", "proposed op unavailable in real mode");
+await rejects(real.listCandidates("x"), "NETWORK", "candidates (contract #19) hit HTTP in real mode");
+await rejects(real.getGuidedInvestigation("x"), "DATA_UNAVAILABLE", "frontend-only op unavailable in real mode");
 ok(Array.isArray(await real.getChatSuggestions("x")), "suggestions degrade gracefully");
 
 if (failed) { console.error(`${failed} check(s) failed`); process.exit(1); }

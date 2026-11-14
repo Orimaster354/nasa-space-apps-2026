@@ -5,7 +5,7 @@
  * Views must never fetch() directly and never parse FITS (contract: frontend rule 5).
  *
  * Operations numbered #n are from docs/FRONTEND_BACKEND_CONTRACT.md §5.
- * Operations marked PROPOSED are not in contract 0.1.0; in real mode they reject with
+ * Operations marked FRONTEND-ONLY are not in the contract; in real mode they reject with
  * DATA_UNAVAILABLE so the UI shows an "unavailable" state instead of breaking.
  */
 
@@ -62,9 +62,14 @@ const real = /** @type {any} */ ({
   getInvestigation: (/** @type {string} */ id) => http(`/investigations/${enc(id)}`),
   updateInvestigation: (/** @type {string} */ id, /** @type {any} */ body) => http(`/investigations/${enc(id)}`, { method: "PUT", body }),
   deleteInvestigation: (/** @type {string} */ id) => http(`/investigations/${enc(id)}`, { method: "DELETE" }),
-  // PROPOSED (contract 0.2.0 proposal):
-  listCandidates: notYet("Candidate detection"),
-  getObjectExtras: () => Promise.resolve({}),
+  // Contract 0.2.0 #19: candidates ranked by the backend.
+  listCandidates: (/** @type {string} */ id, opts = {}) => http(`/objects/${enc(id)}/candidates`, { params: opts }),
+  // Catalogue extras come from AstronomicalObject (objectType, properMotion); there is no separate operation.
+  getObjectExtras: async (/** @type {string} */ id) => {
+    const o = await http(`/objects/${enc(id)}`);
+    return { ...(o.objectType ? { classification: o.objectType } : {}), ...(o.properMotion ? { properMotion: o.properMotion } : {}) };
+  },
+  // FRONTEND-ONLY (not in the contract): guided content and chat suggestions are scripted in the frontend.
   getGuidedInvestigation: notYet("Guided investigations"),
   getChatSuggestions: () => Promise.resolve([]),
 });

@@ -1,4 +1,4 @@
-// Dependency-free conformance check: mock fixtures vs contract v0.1.0 required fields,
+// Dependency-free conformance check: mock fixtures vs contract v0.2.0 required fields,
 // "optional fields omitted, never null", and the illustrative-data labelling rule.
 // Run: node frontend/tools/check-fixtures.mjs
 import { readFileSync } from "node:fs";
@@ -64,6 +64,10 @@ for (const [oid, list] of Object.entries(prop.candidates)) {
       if (x < 0 || y < 0 || x > prop.imageSize.width || y > prop.imageSize.height) errors.push(`${w}: leaves the image at frame ${i}`);
     }
   }
+}
+for (const [oid, ex] of Object.entries(prop.catalogue)) {
+  const pm = ex.properMotion;
+  if (pm && !["catalog", "derived_from_observations", "unvalidated_displacement"].includes(pm.provenanceKind)) errors.push(`catalogue ${oid}: properMotion needs a valid provenanceKind`);
 }
 for (const g of Object.values(prop.guided)) {
   if (!Object.values(prop.candidates).flat().some(c => c.candidateId === g.answerCandidateId)) errors.push(`guided ${g.guidedId}: unknown answer candidate`);

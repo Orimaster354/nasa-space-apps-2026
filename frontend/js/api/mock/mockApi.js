@@ -227,7 +227,7 @@ export async function createMeasurement(/** @type {{kind: string, observationIds
 // In real mode these report "unavailable" until the backend developer agrees them.
 // ===========================================================================
 
-/** Proposed #19: candidates for an object, with a `track` per observation. */
+/** Contract 0.2.0 #19: candidates for an object, with a `track` per observation. */
 export async function listCandidates(/** @type {string} */ objectId) {
   await delay();
   const [{ candidates }, { items: observations }] = await Promise.all([loadFixture("proposed.json"), listObservations(objectId)]);
@@ -238,7 +238,7 @@ export async function listCandidates(/** @type {string} */ objectId) {
       return { observationId: o.observationId, pixel: p, sky: (await pixelToSky(o.observationId, p.x, p.y)).sky };
     }));
     return { candidateId: c.candidateId, label: c.label, objectId, observationIds: observations.map(o => o.observationId), kind: c.kind, track,
-      score: c.score, scoreBasis: c.scoreBasis, qualityFlags: [], warnings: c.warnings, status: "candidate", createdAt: "2026-03-30T00:00:00Z",
+      score: c.score, scoreBasis: c.scoreBasis, isProbability: false, qualityFlags: [], warnings: c.warnings, status: "candidate", createdAt: "2026-03-30T00:00:00Z",
       /* UI-only extras proposed alongside Candidate: */ description: c.description, evidence: c.evidence };
   }));
   items.sort((a, b) => b.score - a.score);

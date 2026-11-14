@@ -1,6 +1,11 @@
 # Contract Proposal: v0.2.0 (candidates, frames, field of view)
 
-> **Status: PROPOSAL from the frontend developer. Not agreed. Not part of the contract.**
+> **Status: MERGED into contract 0.2.0 (see the changelog in FRONTEND_BACKEND_CONTRACT.md), with changes:**
+> `Candidate` gained `description`, `evidence`, `isProbability: false` and optional `evidenceRefs`/`limitations`/`properMotion`; `ProperMotion` gained a required
+> `provenanceKind`; the image field-of-view parameters were adopted; a separate **frame-sequence operation (#20) was not adopted**: the backend instead returns
+> every image on a common pixel grid (`gridId`), so per-observation image loading keeps working; guided investigations stay frontend-scripted.
+>
+> Original status: PROPOSAL from the frontend developer.
 > Per [DEVELOPMENT_OWNERSHIP.md](../DEVELOPMENT_OWNERSHIP.md#changing-the-contract), nothing here changes
 > `FRONTEND_BACKEND_CONTRACT.md` or `DATA_MODELS.md` until the backend developer agrees.
 > Every change below is an **optional addition**, so it is non-breaking (MINOR bump, 0.1.0 → 0.2.0).

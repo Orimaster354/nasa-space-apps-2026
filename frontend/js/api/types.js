@@ -34,11 +34,51 @@
  * @property {SkyCoordinate} center
  * @property {SkyCoordinate[]} [footprint]
  * @property {string} [detector]
+ * @property {string} [bandpass]  archive bandpass name as reported; group same-band frames with it
  * @property {{ min: number, max: number }} [wavelengthRangeUm]
  * @property {Availability} image
  * @property {QualityFlag[]} qualityFlags
  * @property {"good"|"degraded"|"poor"|"unknown"} qualitySummary
  * @property {Record<string, unknown>} [sourceMetadata]
+ */
+
+/**
+ * Contract 0.2.0. Catalogue and app-derived values are never mixed: see provenanceKind.
+ * @typedef {Object} ProperMotion
+ * @property {number} value
+ * @property {string} unit
+ * @property {string} source
+ * @property {"catalog"|"derived_from_observations"|"unvalidated_displacement"} provenanceKind
+ * @property {string} [catalogName]
+ * @property {string} [catalogId]
+ * @property {number} [pmRaMasPerYr]
+ * @property {number} [pmDecMasPerYr]
+ * @property {string} [convention]
+ * @property {string} [referenceEpoch]
+ * @property {number} [uncertainty]
+ */
+
+/**
+ * Contract 0.2.0. A ranking for human follow-up: never a detection, never a probability.
+ * @typedef {Object} Candidate
+ * @property {Id} candidateId
+ * @property {string} label
+ * @property {Id} [objectId]
+ * @property {Id[]} observationIds
+ * @property {"positional_change"|"brightness_change"|"both"} kind
+ * @property {string} description
+ * @property {string[]} evidence
+ * @property {{ observationId: Id, sky: SkyCoordinate, pixel?: { x: number, y: number } }[]} track  pixel is on the grid of that observation's image
+ * @property {{ value: number, unit: string, uncertainty?: number, method: string }} [motion]
+ * @property {ProperMotion} [properMotion]
+ * @property {number} score  in [0, 1]; NOT a probability
+ * @property {string} scoreBasis
+ * @property {false} isProbability
+ * @property {QualityFlag[]} qualityFlags
+ * @property {string[]} warnings
+ * @property {string[]} [limitations]
+ * @property {"candidate"} status
+ * @property {string} createdAt
  */
 
 /**

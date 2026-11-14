@@ -9,7 +9,7 @@ export const CONFIG = {
   /** Base path of the real API (see docs/FRONTEND_BACKEND_CONTRACT.md §1). */
   apiBase: "/api/v1",
   /** Contract version this frontend was written against. */
-  contractVersion: "0.1.0",
+  contractVersion: "0.2.0",
   /** Simulated network latency for mocks (ms). 0 disables it. */
   mockLatencyMs: 250,
 };
