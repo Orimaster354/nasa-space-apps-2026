@@ -37,6 +37,20 @@ async function http(path, opts = {}) {
 }
 
 const enc = encodeURIComponent;
+
+/**
+ * Real-backend view choices (data layer only, no UI): field of view and wavelength band come from the page URL
+ * (?fov=15&band=SPHEREx-D2, or band=all) and fall back to CONFIG. Read per call, so they follow the URL.
+ * `undefined` values are skipped by http(), so the backend default applies.
+ * @returns {{ fovArcmin: number|undefined, bandpass: string|undefined }}
+ */
+function viewParams() {
+  let q = new URLSearchParams("");
+  try { q = new URLSearchParams(window.location.search); } catch { /* no window (tests) */ }
+  const fov = Number(q.get("fov"));
+  const band = q.get("band") ?? CONFIG.bandpass;
+  return { fovArcmin: fov > 0 ? fov : CONFIG.fovArcmin, bandpass: band && band !== "all" ? band : undefined };
+}
 const notYet = (/** @type {string} */ what) => () =>
   Promise.reject(new ApiClientError(`${what} is not available from the backend yet.`, { code: "DATA_UNAVAILABLE" }));
 
@@ -48,10 +62,10 @@ const real = /** @type {any} */ ({
   getObject: (/** @type {string} */ id) => http(`/objects/${enc(id)}`),
   // Sample picker: with a real backend the user searches instead.
   listSampleObjects: () => Promise.resolve([]),
-  listObservations: (/** @type {string} */ id, opts = {}) => http(`/objects/${enc(id)}/observations`, { params: opts }),
+  listObservations: (/** @type {string} */ id, opts = {}) => http(`/objects/${enc(id)}/observations`, { params: { bandpass: viewParams().bandpass, ...opts } }),
   getObservation: (/** @type {string} */ id) => http(`/observations/${enc(id)}`),
-  getObservationImage: (/** @type {string} */ id, params = {}) => http(`/observations/${enc(id)}/image`, { params }),
-  pixelToSky: (/** @type {string} */ id, /** @type {number} */ x, /** @type {number} */ y) => http(`/observations/${enc(id)}/pixel-to-sky`, { params: { x, y } }),
+  getObservationImage: (/** @type {string} */ id, params = {}) => http(`/observations/${enc(id)}/image`, { params: { fovArcmin: viewParams().fovArcmin, ...params } }),
+  pixelToSky: (/** @type {string} */ id, /** @type {number} */ x, /** @type {number} */ y) => http(`/observations/${enc(id)}/pixel-to-sky`, { params: { x, y, fovArcmin: viewParams().fovArcmin } }),
   createComparison: (/** @type {any} */ body) => http("/comparisons", { method: "POST", body }),
   getComparison: (/** @type {string} */ id) => http(`/comparisons/${enc(id)}`),
   getSpectrum: (/** @type {string} */ id, params = {}) => http(`/objects/${enc(id)}/spectrum`, { params }),
