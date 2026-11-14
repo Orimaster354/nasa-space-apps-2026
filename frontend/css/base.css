@@ -28,6 +28,8 @@ button, input, select, textarea { font: inherit; color: inherit; }
   text-transform: uppercase; color: var(--text-muted);
 }
 .mono { font-family: var(--font-mono); }
+/* Units keep their case inside uppercased labels/badges ("µm" must not become "ΜM", which reads as millimetres). */
+.unit { text-transform: none; letter-spacing: 0; }
 .muted { color: var(--text-muted); }
 
 /* Visible keyboard focus everywhere. */

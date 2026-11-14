@@ -9,6 +9,7 @@
 import { api } from "../api/client.js";
 import { getState, update, subscribe } from "../core/store.js";
 import { esc } from "../core/dom.js";
+import { emit } from "../core/events.js";
 
 /** @type {Promise<any>|null} */ let defPromise = null;
 /** Guided definition (cached). Resolves to null if the backend does not provide it. */
@@ -71,7 +72,7 @@ export async function mountGuided(root, host) {
       ${hints ? `<ul class="hints">${hints}</ul>` : ""}
       <div class="guided-actions">
         ${step.hints && g.hints < step.hints.length ? `<button class="btn" data-a="hint">Hint</button>` : ""}
-        ${g.step === 2 ? `<a class="btn" href="#/compare">Open Compare</a>` : ""}
+        ${g.step === 2 ? `<button class="btn" data-a="blink">Blink two dates</button>` : ""}
         <button class="btn" data-a="reset">Exit</button>
       </div>
       <p class="feedback" role="status">${esc(feedback)}</p>`;
@@ -85,6 +86,7 @@ export async function mountGuided(root, host) {
       feedback = ""; update({ guided: { id: def.guidedId, step: 0, hints: 0, done: false, base: getState().history.length } });
     } else if (a === "hint" && g) { update({ guided: { ...g, hints: g.hints + 1 } }); }
     else if (a === "reset") { feedback = ""; update({ guided: null }); }
+    else if (a === "blink") { update({ compareMode: "blink" }); }
   });
 
   const unsub = subscribe((_s, patch) => {
@@ -100,6 +102,7 @@ export async function mountGuided(root, host) {
       const answer = host.getCandidates().find(c => c.candidateId === def.answerCandidateId);
       const hit = !!answer && answer.track.some((/** @type {any} */ t) => Math.hypot(t.pixel.x - x, t.pixel.y - y) <= def.tolerancePx);
       feedback = hit ? def.steps[1].correct : def.steps[1].incorrect;
+      emit(hit ? "guided_right" : "guided_wrong");
       if (hit) update({ guided: { ...g, step: 2 } }); else render();
       return true;
     },

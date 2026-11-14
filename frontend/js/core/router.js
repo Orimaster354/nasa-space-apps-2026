@@ -1,18 +1,17 @@
 // @ts-check
 /**
- * Minimal hash router: "#/compare?o=abc&band=12".
+ * Minimal hash router: "#/spectrum?o=abc&band=12".
  * The path picks the tool; the query is the shareable slice of the store.
  * Switching tools changes only the path, so shared state is never lost.
  */
 
-import { fromQuery, toQuery } from "./store.js";
+import { fromQuery, toQuery, getState, update } from "./store.js";
 
 /** @typedef {{ path: string, title: string, group: "investigate"|"learn" }} Route */
 
 /** @type {Route[]} */
 export const ROUTES = [
   { path: "/investigate", title: "Investigate", group: "investigate" },
-  { path: "/compare",     title: "Compare",     group: "investigate" },
   { path: "/spectrum",    title: "Spectrum",    group: "investigate" },
   { path: "/notes",       title: "Notes",       group: "investigate" },
   { path: "/learn",       title: "Learn",       group: "learn" },
@@ -38,6 +37,15 @@ export function go(/** @type {string} */ path) {
 export function startRouter(onRoute) {
   const handle = () => {
     const { path, query } = currentLocation();
+    // Compare is now a mode of the Investigate workspace. Old "#/compare" links keep working.
+    if (path === "/compare") {
+      if (query) fromQuery(query);
+      const s = getState();
+      if (s.compareMode === "view") update({ compareMode: "blink" });
+      const q = toQuery();
+      history.replaceState(null, "", `#/investigate${q ? "?" + q : ""}`);
+      return handle();
+    }
     if (query) fromQuery(query);              // URL wins on arrival, so shared links restore state
     const route = ROUTES.find(r => r.path === path) ?? ROUTES[0];
     onRoute(route);

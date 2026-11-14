@@ -205,7 +205,17 @@ export async function getSpectrum(/** @type {string} */ objectId, /** @type {Rec
     return { spectrumId: `mock-spec-none-${objectId}`, objectId, availability: { status: "unavailable", statusReason: "No spectrum is available for this target (illustrative sample)." },
       position: (await getObject(objectId)).coordinates, extractionMethod: "n/a", wavelengthUnit: "um", fluxUnit: "n/a", points: [], warnings: [], generatedAt: new Date().toISOString() };
   }
-  return spectra[objectId];
+  // Band centres and edges come from the explicit band metadata (mock/bands.json), the way the real
+  // backend will supply them per point. Spacing is NOT uniform, so nothing downstream may assume it is.
+  const { bands } = await loadFixture("bands.json");
+  const byIndex = new Map(bands.map((/** @type {any} */ b) => [b.bandIndex, b]));
+  const spec = spectra[objectId];
+  spec.points = spec.points.map((/** @type {any} */ p) => {
+    const b = byIndex.get(p.bandIndex);
+    return b ? { ...p, wavelengthUm: b.centerUm, wavelengthMinUm: b.minUm, wavelengthMaxUm: b.maxUm } : p;
+  });
+  spec.expectedBandCount = bands.length;
+  return spec;
 }
 
 /** #11 Deterministic ILLUSTRATIVE values; real values are computed by the backend from data arrays. */

@@ -1,0 +1,719 @@
+{
+ "_note": "ILLUSTRATIVE band metadata (6 detector arrays x 17 bands, geometric spacing within each array). Not official SPHEREx values: the real band centres and edges come from the backend in each SpectralPoint.",
+ "bands": [
+  {
+   "bandIndex": 1,
+   "detector": 1,
+   "minUm": 0.75,
+   "maxUm": 0.7675,
+   "centerUm": 0.7587
+  },
+  {
+   "bandIndex": 2,
+   "detector": 1,
+   "minUm": 0.7675,
+   "maxUm": 0.7854,
+   "centerUm": 0.7764
+  },
+  {
+   "bandIndex": 3,
+   "detector": 1,
+   "minUm": 0.7854,
+   "maxUm": 0.8037,
+   "centerUm": 0.7945
+  },
+  {
+   "bandIndex": 4,
+   "detector": 1,
+   "minUm": 0.8037,
+   "maxUm": 0.8225,
+   "centerUm": 0.813
+  },
+  {
+   "bandIndex": 5,
+   "detector": 1,
+   "minUm": 0.8225,
+   "maxUm": 0.8417,
+   "centerUm": 0.832
+  },
+  {
+   "bandIndex": 6,
+   "detector": 1,
+   "minUm": 0.8417,
+   "maxUm": 0.8613,
+   "centerUm": 0.8514
+  },
+  {
+   "bandIndex": 7,
+   "detector": 1,
+   "minUm": 0.8613,
+   "maxUm": 0.8814,
+   "centerUm": 0.8713
+  },
+  {
+   "bandIndex": 8,
+   "detector": 1,
+   "minUm": 0.8814,
+   "maxUm": 0.902,
+   "centerUm": 0.8916
+  },
+  {
+   "bandIndex": 9,
+   "detector": 1,
+   "minUm": 0.902,
+   "maxUm": 0.923,
+   "centerUm": 0.9124
+  },
+  {
+   "bandIndex": 10,
+   "detector": 1,
+   "minUm": 0.923,
+   "maxUm": 0.9445,
+   "centerUm": 0.9337
+  },
+  {
+   "bandIndex": 11,
+   "detector": 1,
+   "minUm": 0.9445,
+   "maxUm": 0.9666,
+   "centerUm": 0.9555
+  },
+  {
+   "bandIndex": 12,
+   "detector": 1,
+   "minUm": 0.9666,
+   "maxUm": 0.9891,
+   "centerUm": 0.9778
+  },
+  {
+   "bandIndex": 13,
+   "detector": 1,
+   "minUm": 0.9891,
+   "maxUm": 1.0122,
+   "centerUm": 1.0006
+  },
+  {
+   "bandIndex": 14,
+   "detector": 1,
+   "minUm": 1.0122,
+   "maxUm": 1.0358,
+   "centerUm": 1.0239
+  },
+  {
+   "bandIndex": 15,
+   "detector": 1,
+   "minUm": 1.0358,
+   "maxUm": 1.06,
+   "centerUm": 1.0478
+  },
+  {
+   "bandIndex": 16,
+   "detector": 1,
+   "minUm": 1.06,
+   "maxUm": 1.0847,
+   "centerUm": 1.0723
+  },
+  {
+   "bandIndex": 17,
+   "detector": 1,
+   "minUm": 1.0847,
+   "maxUm": 1.11,
+   "centerUm": 1.0973
+  },
+  {
+   "bandIndex": 18,
+   "detector": 2,
+   "minUm": 1.11,
+   "maxUm": 1.1358,
+   "centerUm": 1.1228
+  },
+  {
+   "bandIndex": 19,
+   "detector": 2,
+   "minUm": 1.1358,
+   "maxUm": 1.1622,
+   "centerUm": 1.1489
+  },
+  {
+   "bandIndex": 20,
+   "detector": 2,
+   "minUm": 1.1622,
+   "maxUm": 1.1892,
+   "centerUm": 1.1756
+  },
+  {
+   "bandIndex": 21,
+   "detector": 2,
+   "minUm": 1.1892,
+   "maxUm": 1.2168,
+   "centerUm": 1.2029
+  },
+  {
+   "bandIndex": 22,
+   "detector": 2,
+   "minUm": 1.2168,
+   "maxUm": 1.245,
+   "centerUm": 1.2308
+  },
+  {
+   "bandIndex": 23,
+   "detector": 2,
+   "minUm": 1.245,
+   "maxUm": 1.274,
+   "centerUm": 1.2594
+  },
+  {
+   "bandIndex": 24,
+   "detector": 2,
+   "minUm": 1.274,
+   "maxUm": 1.3035,
+   "centerUm": 1.2887
+  },
+  {
+   "bandIndex": 25,
+   "detector": 2,
+   "minUm": 1.3035,
+   "maxUm": 1.3338,
+   "centerUm": 1.3186
+  },
+  {
+   "bandIndex": 26,
+   "detector": 2,
+   "minUm": 1.3338,
+   "maxUm": 1.3648,
+   "centerUm": 1.3492
+  },
+  {
+   "bandIndex": 27,
+   "detector": 2,
+   "minUm": 1.3648,
+   "maxUm": 1.3965,
+   "centerUm": 1.3806
+  },
+  {
+   "bandIndex": 28,
+   "detector": 2,
+   "minUm": 1.3965,
+   "maxUm": 1.4289,
+   "centerUm": 1.4126
+  },
+  {
+   "bandIndex": 29,
+   "detector": 2,
+   "minUm": 1.4289,
+   "maxUm": 1.4621,
+   "centerUm": 1.4454
+  },
+  {
+   "bandIndex": 30,
+   "detector": 2,
+   "minUm": 1.4621,
+   "maxUm": 1.4961,
+   "centerUm": 1.479
+  },
+  {
+   "bandIndex": 31,
+   "detector": 2,
+   "minUm": 1.4961,
+   "maxUm": 1.5308,
+   "centerUm": 1.5134
+  },
+  {
+   "bandIndex": 32,
+   "detector": 2,
+   "minUm": 1.5308,
+   "maxUm": 1.5664,
+   "centerUm": 1.5485
+  },
+  {
+   "bandIndex": 33,
+   "detector": 2,
+   "minUm": 1.5664,
+   "maxUm": 1.6028,
+   "centerUm": 1.5845
+  },
+  {
+   "bandIndex": 34,
+   "detector": 2,
+   "minUm": 1.6028,
+   "maxUm": 1.64,
+   "centerUm": 1.6213
+  },
+  {
+   "bandIndex": 35,
+   "detector": 3,
+   "minUm": 1.64,
+   "maxUm": 1.678,
+   "centerUm": 1.6589
+  },
+  {
+   "bandIndex": 36,
+   "detector": 3,
+   "minUm": 1.678,
+   "maxUm": 1.7168,
+   "centerUm": 1.6973
+  },
+  {
+   "bandIndex": 37,
+   "detector": 3,
+   "minUm": 1.7168,
+   "maxUm": 1.7566,
+   "centerUm": 1.7366
+  },
+  {
+   "bandIndex": 38,
+   "detector": 3,
+   "minUm": 1.7566,
+   "maxUm": 1.7972,
+   "centerUm": 1.7768
+  },
+  {
+   "bandIndex": 39,
+   "detector": 3,
+   "minUm": 1.7972,
+   "maxUm": 1.8388,
+   "centerUm": 1.8179
+  },
+  {
+   "bandIndex": 40,
+   "detector": 3,
+   "minUm": 1.8388,
+   "maxUm": 1.8814,
+   "centerUm": 1.86
+  },
+  {
+   "bandIndex": 41,
+   "detector": 3,
+   "minUm": 1.8814,
+   "maxUm": 1.925,
+   "centerUm": 1.9031
+  },
+  {
+   "bandIndex": 42,
+   "detector": 3,
+   "minUm": 1.925,
+   "maxUm": 1.9695,
+   "centerUm": 1.9471
+  },
+  {
+   "bandIndex": 43,
+   "detector": 3,
+   "minUm": 1.9695,
+   "maxUm": 2.0151,
+   "centerUm": 1.9922
+  },
+  {
+   "bandIndex": 44,
+   "detector": 3,
+   "minUm": 2.0151,
+   "maxUm": 2.0618,
+   "centerUm": 2.0383
+  },
+  {
+   "bandIndex": 45,
+   "detector": 3,
+   "minUm": 2.0618,
+   "maxUm": 2.1095,
+   "centerUm": 2.0855
+  },
+  {
+   "bandIndex": 46,
+   "detector": 3,
+   "minUm": 2.1095,
+   "maxUm": 2.1583,
+   "centerUm": 2.1338
+  },
+  {
+   "bandIndex": 47,
+   "detector": 3,
+   "minUm": 2.1583,
+   "maxUm": 2.2083,
+   "centerUm": 2.1832
+  },
+  {
+   "bandIndex": 48,
+   "detector": 3,
+   "minUm": 2.2083,
+   "maxUm": 2.2594,
+   "centerUm": 2.2337
+  },
+  {
+   "bandIndex": 49,
+   "detector": 3,
+   "minUm": 2.2594,
+   "maxUm": 2.3117,
+   "centerUm": 2.2854
+  },
+  {
+   "bandIndex": 50,
+   "detector": 3,
+   "minUm": 2.3117,
+   "maxUm": 2.3652,
+   "centerUm": 2.3383
+  },
+  {
+   "bandIndex": 51,
+   "detector": 3,
+   "minUm": 2.3652,
+   "maxUm": 2.42,
+   "centerUm": 2.3925
+  },
+  {
+   "bandIndex": 52,
+   "detector": 4,
+   "minUm": 2.42,
+   "maxUm": 2.4859,
+   "centerUm": 2.4527
+  },
+  {
+   "bandIndex": 53,
+   "detector": 4,
+   "minUm": 2.4859,
+   "maxUm": 2.5535,
+   "centerUm": 2.5195
+  },
+  {
+   "bandIndex": 54,
+   "detector": 4,
+   "minUm": 2.5535,
+   "maxUm": 2.623,
+   "centerUm": 2.588
+  },
+  {
+   "bandIndex": 55,
+   "detector": 4,
+   "minUm": 2.623,
+   "maxUm": 2.6944,
+   "centerUm": 2.6585
+  },
+  {
+   "bandIndex": 56,
+   "detector": 4,
+   "minUm": 2.6944,
+   "maxUm": 2.7677,
+   "centerUm": 2.7308
+  },
+  {
+   "bandIndex": 57,
+   "detector": 4,
+   "minUm": 2.7677,
+   "maxUm": 2.8431,
+   "centerUm": 2.8051
+  },
+  {
+   "bandIndex": 58,
+   "detector": 4,
+   "minUm": 2.8431,
+   "maxUm": 2.9204,
+   "centerUm": 2.8815
+  },
+  {
+   "bandIndex": 59,
+   "detector": 4,
+   "minUm": 2.9204,
+   "maxUm": 2.9999,
+   "centerUm": 2.9599
+  },
+  {
+   "bandIndex": 60,
+   "detector": 4,
+   "minUm": 2.9999,
+   "maxUm": 3.0816,
+   "centerUm": 3.0405
+  },
+  {
+   "bandIndex": 61,
+   "detector": 4,
+   "minUm": 3.0816,
+   "maxUm": 3.1654,
+   "centerUm": 3.1232
+  },
+  {
+   "bandIndex": 62,
+   "detector": 4,
+   "minUm": 3.1654,
+   "maxUm": 3.2516,
+   "centerUm": 3.2082
+  },
+  {
+   "bandIndex": 63,
+   "detector": 4,
+   "minUm": 3.2516,
+   "maxUm": 3.3401,
+   "centerUm": 3.2955
+  },
+  {
+   "bandIndex": 64,
+   "detector": 4,
+   "minUm": 3.3401,
+   "maxUm": 3.431,
+   "centerUm": 3.3852
+  },
+  {
+   "bandIndex": 65,
+   "detector": 4,
+   "minUm": 3.431,
+   "maxUm": 3.5243,
+   "centerUm": 3.4773
+  },
+  {
+   "bandIndex": 66,
+   "detector": 4,
+   "minUm": 3.5243,
+   "maxUm": 3.6203,
+   "centerUm": 3.572
+  },
+  {
+   "bandIndex": 67,
+   "detector": 4,
+   "minUm": 3.6203,
+   "maxUm": 3.7188,
+   "centerUm": 3.6692
+  },
+  {
+   "bandIndex": 68,
+   "detector": 4,
+   "minUm": 3.7188,
+   "maxUm": 3.82,
+   "centerUm": 3.7691
+  },
+  {
+   "bandIndex": 69,
+   "detector": 5,
+   "minUm": 3.82,
+   "maxUm": 3.8529,
+   "centerUm": 3.8364
+  },
+  {
+   "bandIndex": 70,
+   "detector": 5,
+   "minUm": 3.8529,
+   "maxUm": 3.8861,
+   "centerUm": 3.8695
+  },
+  {
+   "bandIndex": 71,
+   "detector": 5,
+   "minUm": 3.8861,
+   "maxUm": 3.9196,
+   "centerUm": 3.9028
+  },
+  {
+   "bandIndex": 72,
+   "detector": 5,
+   "minUm": 3.9196,
+   "maxUm": 3.9534,
+   "centerUm": 3.9365
+  },
+  {
+   "bandIndex": 73,
+   "detector": 5,
+   "minUm": 3.9534,
+   "maxUm": 3.9875,
+   "centerUm": 3.9704
+  },
+  {
+   "bandIndex": 74,
+   "detector": 5,
+   "minUm": 3.9875,
+   "maxUm": 4.0218,
+   "centerUm": 4.0046
+  },
+  {
+   "bandIndex": 75,
+   "detector": 5,
+   "minUm": 4.0218,
+   "maxUm": 4.0565,
+   "centerUm": 4.0391
+  },
+  {
+   "bandIndex": 76,
+   "detector": 5,
+   "minUm": 4.0565,
+   "maxUm": 4.0915,
+   "centerUm": 4.074
+  },
+  {
+   "bandIndex": 77,
+   "detector": 5,
+   "minUm": 4.0915,
+   "maxUm": 4.1267,
+   "centerUm": 4.1091
+  },
+  {
+   "bandIndex": 78,
+   "detector": 5,
+   "minUm": 4.1267,
+   "maxUm": 4.1623,
+   "centerUm": 4.1445
+  },
+  {
+   "bandIndex": 79,
+   "detector": 5,
+   "minUm": 4.1623,
+   "maxUm": 4.1982,
+   "centerUm": 4.1802
+  },
+  {
+   "bandIndex": 80,
+   "detector": 5,
+   "minUm": 4.1982,
+   "maxUm": 4.2344,
+   "centerUm": 4.2162
+  },
+  {
+   "bandIndex": 81,
+   "detector": 5,
+   "minUm": 4.2344,
+   "maxUm": 4.2708,
+   "centerUm": 4.2526
+  },
+  {
+   "bandIndex": 82,
+   "detector": 5,
+   "minUm": 4.2708,
+   "maxUm": 4.3077,
+   "centerUm": 4.2892
+  },
+  {
+   "bandIndex": 83,
+   "detector": 5,
+   "minUm": 4.3077,
+   "maxUm": 4.3448,
+   "centerUm": 4.3262
+  },
+  {
+   "bandIndex": 84,
+   "detector": 5,
+   "minUm": 4.3448,
+   "maxUm": 4.3822,
+   "centerUm": 4.3635
+  },
+  {
+   "bandIndex": 85,
+   "detector": 5,
+   "minUm": 4.3822,
+   "maxUm": 4.42,
+   "centerUm": 4.4011
+  },
+  {
+   "bandIndex": 86,
+   "detector": 6,
+   "minUm": 4.42,
+   "maxUm": 4.4522,
+   "centerUm": 4.4361
+  },
+  {
+   "bandIndex": 87,
+   "detector": 6,
+   "minUm": 4.4522,
+   "maxUm": 4.4846,
+   "centerUm": 4.4683
+  },
+  {
+   "bandIndex": 88,
+   "detector": 6,
+   "minUm": 4.4846,
+   "maxUm": 4.5172,
+   "centerUm": 4.5009
+  },
+  {
+   "bandIndex": 89,
+   "detector": 6,
+   "minUm": 4.5172,
+   "maxUm": 4.5501,
+   "centerUm": 4.5336
+  },
+  {
+   "bandIndex": 90,
+   "detector": 6,
+   "minUm": 4.5501,
+   "maxUm": 4.5832,
+   "centerUm": 4.5666
+  },
+  {
+   "bandIndex": 91,
+   "detector": 6,
+   "minUm": 4.5832,
+   "maxUm": 4.6166,
+   "centerUm": 4.5999
+  },
+  {
+   "bandIndex": 92,
+   "detector": 6,
+   "minUm": 4.6166,
+   "maxUm": 4.6502,
+   "centerUm": 4.6334
+  },
+  {
+   "bandIndex": 93,
+   "detector": 6,
+   "minUm": 4.6502,
+   "maxUm": 4.684,
+   "centerUm": 4.6671
+  },
+  {
+   "bandIndex": 94,
+   "detector": 6,
+   "minUm": 4.684,
+   "maxUm": 4.7181,
+   "centerUm": 4.7011
+  },
+  {
+   "bandIndex": 95,
+   "detector": 6,
+   "minUm": 4.7181,
+   "maxUm": 4.7525,
+   "centerUm": 4.7353
+  },
+  {
+   "bandIndex": 96,
+   "detector": 6,
+   "minUm": 4.7525,
+   "maxUm": 4.7871,
+   "centerUm": 4.7698
+  },
+  {
+   "bandIndex": 97,
+   "detector": 6,
+   "minUm": 4.7871,
+   "maxUm": 4.8219,
+   "centerUm": 4.8045
+  },
+  {
+   "bandIndex": 98,
+   "detector": 6,
+   "minUm": 4.8219,
+   "maxUm": 4.857,
+   "centerUm": 4.8394
+  },
+  {
+   "bandIndex": 99,
+   "detector": 6,
+   "minUm": 4.857,
+   "maxUm": 4.8924,
+   "centerUm": 4.8747
+  },
+  {
+   "bandIndex": 100,
+   "detector": 6,
+   "minUm": 4.8924,
+   "maxUm": 4.928,
+   "centerUm": 4.9102
+  },
+  {
+   "bandIndex": 101,
+   "detector": 6,
+   "minUm": 4.928,
+   "maxUm": 4.9639,
+   "centerUm": 4.9459
+  },
+  {
+   "bandIndex": 102,
+   "detector": 6,
+   "minUm": 4.9639,
+   "maxUm": 5.0,
+   "centerUm": 4.9819
+  }
+ ]
+}

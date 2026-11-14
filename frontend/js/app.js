@@ -1,16 +1,18 @@
 // @ts-check
 /**
  * Application shell: navigation, tool tabs, view lifecycle and the global companion.
- * All four investigation tools share ONE store (core/store.js), so switching tabs never loses
+ * All investigation tools share ONE store (core/store.js), so switching tabs never loses
  * the object, dates, band, bookmarks or notes. Each view is `mount(container) -> unmount`.
  */
 
 import { startRouter, ROUTES, go } from "./core/router.js";
 import { esc } from "./core/dom.js";
 import { isMock } from "./api/client.js";
+import { getState, update } from "./core/store.js";
 import { mountNavi } from "./components/navi.js";
+import { attachBrain } from "./components/naviBrain.js";
+import { mountScene } from "./components/scene.js";
 import * as investigate from "./views/investigate.js";
-import * as compare from "./views/compare.js";
 import * as spectrum from "./views/spectrum.js";
 import * as notes from "./views/notes.js";
 import * as learn from "./views/learn.js";
@@ -23,7 +25,6 @@ const badgeEl = /** @type {HTMLElement} */ (document.getElementById("data-badge"
 /** @type {Record<string, { mount: (el: HTMLElement) => () => void, title: string }>} */
 const VIEWS = {
   "/investigate": { mount: investigate.mount, title: "Investigate the sky" },
-  "/compare": { mount: compare.mount, title: "Compare observations" },
   "/spectrum": { mount: spectrum.mount, title: "Spectral explorer" },
   "/notes": { mount: notes.mount, title: "Investigation notes" },
   "/learn": { mount: learn.mount, title: "Learn" },
@@ -32,7 +33,26 @@ const VIEWS = {
 // Honesty marker: always visible while mock data is in use.
 if (isMock()) badgeEl.innerHTML = `<span class="badge badge-illustrative">Sample / illustrative — not real SPHEREx data</span>`;
 
-const navi = mountNavi(/** @type {HTMLElement} */ (document.getElementById("navi")));
+mountScene(/** @type {HTMLElement} */ (document.getElementById("scene")));
+const navi = mountNavi({
+  inApp: true,
+  // Whispers never cover navigation, titles, imagery or the controls around it.
+  avoid: ".brand, #primary-nav, .toolbar, .page-head h1, #data-badge, .ws-context, .ws-toolbar, .viewer-wrap, .timeline-panel, .ws-drawer, .sp-viewer, .band-selector, #sp-info",
+  // The assistant may sit over a side column, but not over imagery or the main controls.
+  panelAvoid: "#primary-nav, .ws-context, .ws-toolbar, .viewer-wrap, .sp-viewer, .band-selector",
+  critical: ".viewer-wrap, .sp-viewer",
+  panelColumn: ".ws.right-open .ws-right, #sp-info",
+  // In the workspace the assistant docks in the right drawer: open it while she talks, restore afterwards.
+  onPanel: open => {
+    if (!document.querySelector(".ws") || !matchMedia("(min-width: 1000px)").matches) return false;
+    const p = getState().panels;
+    if (open && !p.right) { panelsBeforeNavi = p; update({ panels: { ...p, right: true } }); return true; }
+    if (!open && panelsBeforeNavi) { update({ panels: panelsBeforeNavi }); panelsBeforeNavi = null; }
+    return false;
+  },
+});
+/** @type {{left: boolean, right: boolean}|null} */ let panelsBeforeNavi = null;
+const brain = attachBrain(navi);
 /** @type {(() => void)|null} */ let unmount = null;
 
 /** @param {import("./core/router.js").Route} route */
@@ -55,7 +75,7 @@ function onRoute(route) {
   unmount?.();
   viewEl.innerHTML = "";
   unmount = view.mount(viewEl);
-  navi.onRoute();
+  navi.onRoute(); brain.onRoute();
 }
 
 startRouter(onRoute);

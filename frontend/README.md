@@ -26,13 +26,14 @@ UI behaviour still needs the manual pass in `docs/FRONTEND_CHECKLIST.md`.
 | Path | Purpose |
 |---|---|
 | `css/tokens.css` | Approved palette, page gradient (same on every page), type, spacing |
-| `css/base.css`, `css/components.css` | Reset, focus, shared components |
-| `js/core/` | `store.js` (shared state), `router.js`, `storage.js`, `dom.js`, `playback.js`, `frames.js` (polling + cache) |
-| `js/components/` | `viewer`, `timeline`, `navi`, `guided`, `objectDetails` |
-| `js/views/` | `investigate`, `compare`, `spectrum`, `notes`, `learn` (each `mount(el) -> unmount`) |
+| `css/base.css`, `css/components.css` | Reset, focus, shared components, pixel landscape |
+| `css/navi.css` | Navi, her whispers and the assistant (shared by landing and workspace) |
+| `js/core/` | `store.js` (shared state), `router.js`, `storage.js`, `dom.js`, `playback.js`, `frames.js` (polling + cache), `placement.js` (collision-aware placement), `events.js` (app events Navi reacts to) |
+| `js/components/` | `viewer`, `timeline`, `comparison` (blink/side/overlay/difference inside Investigate), `bandSelector`, `navi` (body: zones, flight, whispers, assistant), `naviBrain` (personality, reactions, tour), `scene` (pixel landscape), `guided`, `objectDetails` |
+| `js/views/` | `investigate` (incl. comparison modes), `spectrum`, `notes`, `learn` (each `mount(el) -> unmount`) |
 | `js/api/` | `client.js` (only data entry point), `types.js` (contract JSDoc), `mock/` |
 | `js/api/mock/` | The only place mock logic lives: `mockApi`, `imagery`, `chat`, `investigations`, `fixtures` |
-| `mock/` | Illustrative JSON: objects, observations, spectra, and `proposed.json` (not-yet-contract content) |
+| `mock/` | Illustrative JSON: objects, observations, spectra, `bands.json` (explicit band metadata, uneven spacing), and `proposed.json` (not-yet-contract content) |
 | `assets/navi/navi.png` | Navi, cropped unmodified from `design-refs/navi-reference.png`, background keyed transparent |
 | `design-refs/` | Approved visual references (source of truth) |
 
@@ -42,9 +43,9 @@ UI behaviour still needs the manual pass in `docs/FRONTEND_CHECKLIST.md`.
 - Mock data must stay labelled "illustrative". Candidates are never described as discoveries.
 - Contract changes go through `docs/proposals/` and the process in `docs/DEVELOPMENT_OWNERSHIP.md`.
 
-## Try in the mock chat
+## Try Navi
 
-Type `simulate error` to see the AI-unavailable state. Spot-the-shift: start it in the Investigate sidebar.
+Click Navi to open the assistant. Type `simulate error` to see the AI-unavailable state. Comments (On / Fewer / Off) and Replay tour are in the assistant. Click a whisper or press Esc to dismiss it. Spot-the-shift: start it in the Investigate sidebar.
 
 ## Backend swap
 

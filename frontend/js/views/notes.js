@@ -10,6 +10,7 @@ import { ApiClientError } from "../api/types.js";
 import { getState, update, subscribe } from "../core/store.js";
 import { esc, shortDate } from "../core/dom.js";
 import { go } from "../core/router.js";
+import { emit } from "../core/events.js";
 
 const errMsg = (/** @type {unknown} */ e) => (e instanceof ApiClientError ? e.message : "Something unexpected went wrong.");
 const when = (/** @type {string} */ iso) => new Date(iso).toLocaleString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
@@ -111,6 +112,7 @@ export function mount(root) {
     const s = getState(), st = $("#save-status");
     try {
       await api.createInvestigation({ title: s.title, ...(s.objectId ? { objectId: s.objectId } : {}), notes: s.notes, bookmarks: s.bookmarks, history: s.history });
+      emit("save");
       st.innerHTML = `<p class="notice">Saved.</p>`; loadSaved();
     } catch (e) { st.innerHTML = `<p class="notice notice-error">${esc(errMsg(e))}</p>`; }
   });

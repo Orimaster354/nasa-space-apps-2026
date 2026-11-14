@@ -1,7 +1,7 @@
 // @ts-check
 /**
- * Spectral explorer. Shows the SpectralData the backend returns: a band strip (count from
- * `expectedBandCount`, never hard-coded), the observation image behind the selected band,
+ * Spectral explorer. Shows the SpectralData the backend returns: a band selector that places
+ * every band at its real wavelength (edges from the API; spacing never assumed uniform), the observation image behind the selected band,
  * and a collapsible flux-vs-wavelength chart. Gaps stay gaps (no interpolation) and error bars
  * are drawn ONLY where `fluxUncertainty` exists. Colours are display-only (false colour).
  */
@@ -12,18 +12,10 @@ import { getState, update, logEvent } from "../core/store.js";
 import { esc, shortDate } from "../core/dom.js";
 import { loadFrame } from "../core/frames.js";
 import { createViewer } from "../components/viewer.js";
+import { createBandSelector, STOPS } from "../components/bandSelector.js";
+import { emit } from "../core/events.js";
 
 const errMsg = (/** @type {unknown} */ e) => (e instanceof ApiClientError ? e.message : "Something unexpected went wrong.");
-
-// Muted cosmic gradient (matches --spectrum-gradient in tokens.css; placeholder stops).
-const STOPS = ["#5b6fb0", "#5a8fc0", "#5fb0b8", "#8fc08a", "#d6b56a", "#e08f60", "#c8605a"];
-/** Display colour for position t in [0,1] along the gradient. */
-function gradientColor(/** @type {number} */ t) {
-  const x = Math.min(0.9999, Math.max(0, t)) * (STOPS.length - 1), i = Math.floor(x), f = x - i;
-  const a = STOPS[i], b = STOPS[i + 1];
-  const mix = (/** @type {number} */ k) => Math.round(parseInt(a.slice(k, k + 2), 16) * (1 - f) + parseInt(b.slice(k, k + 2), 16) * f);
-  return `rgb(${mix(1)},${mix(3)},${mix(5)})`;
-}
 
 /** @param {HTMLElement} root @returns {() => void} */
 export function mount(root) {
@@ -36,11 +28,11 @@ export function mount(root) {
       </div>
       <div class="panel">
         <div class="sp-strip-head"><h2>Spectral bands <span class="muted fine" id="band-count"></span></h2>
-          <label class="inline"><input type="checkbox" id="cmp-toggle"> <span>Compare a second band</span></label></div>
-        <div class="strip" id="strip" role="listbox" aria-label="Spectral bands, left to right from shorter to longer wavelength"></div>
-        <p class="muted fine">False-colour display of band position. ${isMock() ? "Spectrum is a synthetic illustration, not a measurement." : ""} Hatched bands have no usable data.</p>
+          <label class="inline fine"><input type="checkbox" id="cmp-toggle"> <span>Compare a second band</span></label></div>
+        <div id="bands"></div>
+        ${isMock() ? `<p class="muted fine">Band layout and spectrum are illustrative, not SPHEREx measurements.</p>` : ""}
       </div>
-      <details class="panel chart-panel" id="chart-details" open>
+      <details class="panel chart-panel" id="chart-details">
         <summary><h2 style="display:inline">Intensity vs wavelength</h2></summary>
         <div id="chart"></div>
       </details>
@@ -53,6 +45,7 @@ export function mount(root) {
   /** @type {any[]} */ let observations = [];
 
   const viewer = createViewer($("#sp-viewer"), { label: "Image behind the selected band" });
+  const selector = createBandSelector($("#bands"), { onSelect: band => selectBand(band), label: "Spectral band, shorter to longer wavelength" });
 
   async function boot() {
     const { objectId } = getState();
@@ -84,30 +77,17 @@ export function mount(root) {
   const pointOf = (/** @type {number|null} */ band) => spec.points.find((/** @type {any} */ p) => p.bandIndex === band);
   const n = () => spec.expectedBandCount ?? spec.points.length;   // never hard-coded
 
-  // ---- band strip --------------------------------------------------------------
+  // ---- band selector -----------------------------------------------------------------
   function renderStrip() {
     $("#band-count").textContent = `(${n()} bands${spec.points.length !== n() ? `, ${spec.points.length} listed` : ""})`;
-    const sel = getState().bandIndex;
-    $("#strip").innerHTML = spec.points.map((/** @type {any} */ p, /** @type {number} */ i) => {
-      const color = gradientColor(i / Math.max(1, spec.points.length - 1));
-      const cls = ["band", p.available ? "" : "band-gap", p.bandIndex === sel ? "is-sel" : "", p.bandIndex === second ? "is-sel2" : ""].join(" ");
-      return `<button class="${cls}" role="option" aria-selected="${p.bandIndex === sel}" tabindex="${p.bandIndex === sel ? 0 : -1}" data-band="${p.bandIndex}"
-        style="--c:${color}" aria-label="Band ${p.bandIndex}, ${p.wavelengthUm.toFixed(2)} micrometres${p.available ? "" : ", no data"}" title="Band ${p.bandIndex} · ${p.wavelengthUm.toFixed(2)} µm${p.available ? "" : " · no data"}"></button>`;
-    }).join("");
+    selector.set(spec.points, /** @type {number} */ (getState().bandIndex), second);
   }
 
   function selectBand(/** @type {number} */ band) {
+    if (pointOf(band)?.available === false) emit("gap_band", { band });
     if (comparing && band !== getState().bandIndex) second = band; else { update({ bandIndex: band }); }
     renderStrip(); renderChart(); renderSelection();
   }
-  $("#strip").addEventListener("click", e => { const b = /** @type {HTMLElement} */ (e.target).closest("[data-band]"); if (b) selectBand(Number(b.getAttribute("data-band"))); });
-  $("#strip").addEventListener("keydown", e => {
-    const dir = e.key === "ArrowRight" ? 1 : e.key === "ArrowLeft" ? -1 : 0; if (!dir) return;
-    e.preventDefault();
-    const i = spec.points.findIndex((/** @type {any} */ p) => p.bandIndex === getState().bandIndex), next = spec.points[Math.min(spec.points.length - 1, Math.max(0, i + dir))];
-    selectBand(next.bandIndex);
-    queueMicrotask(() => /** @type {HTMLElement|null} */ ($(`[data-band="${next.bandIndex}"]`))?.focus());
-  });
   $("#cmp-toggle").addEventListener("change", e => { comparing = /** @type {HTMLInputElement} */ (e.target).checked; if (!comparing) second = null; renderStrip(); renderChart(); renderSelection(); });
 
   // ---- selection: image + readout ------------------------------------------------
@@ -117,7 +97,7 @@ export function mount(root) {
     renderInfo(p);
     if (!p.available) { viewer.setState({ kind: "unavailable", message: p.unavailableReason ?? "No data for this band." }); viewer.setHud(""); return; }
     const obs = observations.find(o => o.observationId === p.observationId);
-    viewer.setHud(`<span class="badge">Band ${p.bandIndex} · ${esc(p.wavelengthUm.toFixed(2))} µm</span><span class="badge">${esc(shortDate(p.observedAt))}</span>${isMock() ? `<span class="badge badge-illustrative">illustrative · false colour</span>` : ""}`);
+    viewer.setHud(`<span class="badge">Band ${p.bandIndex} · ${esc(p.wavelengthUm.toFixed(2))} <span class="unit">µm</span></span><span class="badge">${esc(shortDate(p.observedAt))}</span>${isMock() ? `<span class="badge badge-illustrative">illustrative · false colour</span>` : ""}`);
     if (!obs) { viewer.setState({ kind: "unavailable", message: "The observation behind this band is not listed." }); return; }
     viewer.setState({ kind: "loading", message: "Loading image…" });
     try {
@@ -145,7 +125,7 @@ export function mount(root) {
   function renderInfo(/** @type {any} */ p) {
     const p2 = second !== null ? pointOf(second) : null;
     $("#sp-info").innerHTML = `<h2>Selected band</h2>${readout(p)}
-      ${p2 ? `<h3 class="label group">Compared band</h3>${readout(p2)}` : comparing ? `<p class="muted fine">Pick a second band on the strip or chart.</p>` : ""}
+      ${p2 ? `<h3 class="label group">Compared band</h3>${readout(p2)}` : comparing ? `<p class="muted fine">Pick a second band on the selector or the chart.</p>` : ""}
       <h3 class="label group">About this spectrum</h3>
       <p class="fine muted">${esc(spec.extractionMethod)}. Aperture ${spec.apertureRadiusArcsec !== undefined ? esc(spec.apertureRadiusArcsec) + " arcsec" : "n/a"}.</p>
       ${spec.warnings.map((/** @type {string} */ w) => `<p class="notice notice-warn fine">${esc(w)}</p>`).join("")}`;
