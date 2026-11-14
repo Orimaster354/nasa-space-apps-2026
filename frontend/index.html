@@ -10,6 +10,7 @@
   <link rel="stylesheet" href="css/base.css">
   <link rel="stylesheet" href="css/components.css">
   <link rel="stylesheet" href="css/landing.css">
+  <link rel="stylesheet" href="css/navi.css">
 </head>
 <body class="landing">
   <a class="skip-link" href="#mission">Skip to the mission</a>
@@ -28,7 +29,7 @@
     <div class="stars" aria-hidden="true"></div>
     <img class="art planet" src="assets/landing/planet.png" alt="" width="300" height="240">
     <img class="art ship" src="assets/landing/ship.png" alt="" width="275" height="225">
-    <img class="art earth" src="assets/landing/earth.png" alt="" width="1330" height="165">
+    <img class="art earth" src="assets/landing/earth.png" alt="" width="1330" height="144">
 
     <div class="hero-copy">
       <h1 class="pixel">The sky is<br><span class="hl">never still.</span></h1>
@@ -38,10 +39,8 @@
       <p class="demo-note"><span class="badge badge-illustrative">Sample / illustrative data in this demo</span></p>
     </div>
 
-    <div class="navi-hero">
-      <p class="navi-bubble">psst… did that star just move?</p>
-      <img src="assets/navi/navi.png" alt="Navi, your research companion" width="88" height="84">
-    </div>
+    <!-- Safe zone beside the spacecraft (Navi is mounted by js/landing.js); she never flies over the art. -->
+    <span class="navi-zone hero-zone" data-navi-zone aria-hidden="true"></span>
 
     <button class="skip-intro" id="skip-intro" type="button">Skip intro</button>
     <a class="down pixel" href="#mission">▼ The Mission ▼</a>
@@ -50,27 +49,69 @@
   <main>
     <section class="mission" id="mission" aria-labelledby="mission-h">
       <div class="wrap">
-        <h2 class="pixel" id="mission-h">The mission</h2>
-        <div class="cards">
-          <article><h3>What is SPHEREx?</h3>
-            <p>SPHEREx is a NASA space telescope that surveys the whole sky in infrared light, splitting it into many narrow colours (spectral bands). That lets scientists study what things are made of, not just where they are.</p></article>
-          <article><h3>Why does time matter?</h3>
-            <p>The sky is observed again and again. If an object is in a different place, or a different brightness, from one date to the next, it may be moving or changing. That is a clue worth following.</p></article>
-          <article><h3>What can you do here?</h3>
-            <p>Step through observations, blink two dates, check how comparable they are, look at an object's infrared spectrum, and ask Navi what you are seeing.</p></article>
+        <header class="m-intro">
+          <div>
+            <h2 class="pixel" id="mission-h">The mission</h2>
+            <p class="m-lede">SPHEREx is a NASA space telescope that maps the whole sky in infrared light, split into many narrow colours. This demo shows how you could look through that sky for things that move or change.</p>
+          </div>
+          <span class="navi-zone m-zone" data-navi-zone aria-hidden="true"></span>
+        </header>
+
+        <div class="m-points">
+          <article class="m-point">
+            <svg class="m-icon" viewBox="0 0 12 12" width="48" height="48" shape-rendering="crispEdges" aria-hidden="true"><path fill="#75bfe8" d="M5 1h2v1H5zM4 2h4v1H4zM3 3h6v4H3zM2 7h8v1H2zM4 8h1v3H4zM7 8h1v3H7z"/><path fill="#f2f0e9" d="M5 4h2v2H5z"/><path fill="#42bfae" d="M1 5h1v1H1zM10 5h1v1h-1z"/></svg>
+            <h3>What is SPHEREx?</h3>
+            <p>An infrared survey telescope. It measures every patch of sky in 102 narrow colours, so scientists can learn what things are made of, not just where they are.</p>
+          </article>
+          <article class="m-point">
+            <svg class="m-icon" viewBox="0 0 12 12" width="48" height="48" shape-rendering="crispEdges" aria-hidden="true"><path fill="#405a6b" d="M3 1h6v1H3zM2 2h1v1H2zM9 2h1v1H9zM1 3h1v6H1zM10 3h1v6h-1zM2 9h1v1H2zM9 9h1v1H9zM3 10h6v1H3z"/><path fill="#f2f0e9" d="M6 3h1v3H6zM7 6h2v1H7z"/></svg>
+            <h3>Why time matters</h3>
+            <p>The same sky is observed again and again. If something is somewhere else, or brighter, on a later date, it may be moving or changing.</p>
+          </article>
+          <article class="m-point">
+            <svg class="m-icon" viewBox="0 0 12 12" width="48" height="48" shape-rendering="crispEdges" aria-hidden="true"><path fill="#5b6fb0" d="M1 6h1v5H1z"/><path fill="#5fb0b8" d="M3 3h1v8H3z"/><path fill="#8fc08a" d="M5 5h1v6H5z"/><path fill="#d6b56a" d="M7 2h1v9H7z"/><path fill="#e08f60" d="M9 4h1v7H9z"/></svg>
+            <h3>What you can do here</h3>
+            <p>Step through dates, blink two of them, check how comparable they are, read a spectrum, and ask Navi what you are seeing.</p>
+          </article>
         </div>
 
-        <h2 class="pixel" id="how">How it works</h2>
-        <ol class="steps">
-          <li><strong>Pick a target</strong><span>Search a name or coordinates.</span></li>
-          <li><strong>Watch it change</strong><span>Play the timeline and look for things that jump.</span></li>
-          <li><strong>Check the evidence</strong><span>Compare dates, read the uncertainty and caveats.</span></li>
-          <li><strong>Keep notes</strong><span>Save what you found and pick it up later.</span></li>
-        </ol>
+        <figure class="m-figure" aria-labelledby="fig-cap">
+          <svg viewBox="0 0 600 170" class="m-diagram" role="img" aria-label="Diagram: the same field on date A and date B. One star has shifted. Blinking the two dates makes that star appear to jump, while the others stay still." shape-rendering="crispEdges">
+            <g font-family="IBM Plex Mono, monospace" font-size="12" fill="#b4b8b2">
+              <text x="70" y="160" text-anchor="middle">Date A</text><text x="270" y="160" text-anchor="middle">Date B</text><text x="500" y="160" text-anchor="middle">Blink: A ⇄ B</text>
+            </g>
+            <g fill="none" stroke="#405a6b" stroke-width="2"><rect x="10" y="10" width="120" height="130"/><rect x="210" y="10" width="120" height="130"/><rect x="440" y="10" width="120" height="130"/></g>
+            <g fill="#f2f0e9">
+              <rect x="34" y="34" width="4" height="4"/><rect x="96" y="28" width="4" height="4"/><rect x="58" y="96" width="4" height="4"/><rect x="104" y="112" width="4" height="4"/><rect x="28" y="120" width="3" height="3"/>
+              <rect x="234" y="34" width="4" height="4"/><rect x="296" y="28" width="4" height="4"/><rect x="258" y="96" width="4" height="4"/><rect x="304" y="112" width="4" height="4"/><rect x="228" y="120" width="3" height="3"/>
+              <rect x="464" y="34" width="4" height="4"/><rect x="526" y="28" width="4" height="4"/><rect x="488" y="96" width="4" height="4"/><rect x="534" y="112" width="4" height="4"/><rect x="458" y="120" width="3" height="3"/>
+            </g>
+            <rect x="72" y="62" width="5" height="5" fill="#75bfe8"/><rect x="290" y="70" width="5" height="5" fill="#75bfe8"/>
+            <rect x="502" y="62" width="5" height="5" fill="#75bfe8" opacity=".45"/><rect x="520" y="70" width="5" height="5" fill="#75bfe8"/>
+            <circle cx="74.5" cy="64.5" r="11" fill="none" stroke="#42bfae" stroke-width="1.5" shape-rendering="auto"/><circle cx="292.5" cy="72.5" r="11" fill="none" stroke="#42bfae" stroke-width="1.5" shape-rendering="auto"/>
+            <path d="M508 64 L517 70" stroke="#f28c58" stroke-width="2" shape-rendering="auto"/><path d="M513 71 l5 0 l-1.5 -4.5" fill="none" stroke="#f28c58" stroke-width="2" shape-rendering="auto"/>
+            <g fill="none" stroke="#b4b8b2" stroke-width="2" shape-rendering="auto"><path d="M144 75 h52 m-8 -6 l8 6 l-8 6"/><path d="M344 75 h82 m-8 -6 l8 6 l-8 6"/></g>
+          </svg>
+          <figcaption id="fig-cap" class="muted">Same patch of sky, two dates. Flip between them and the star that moved seems to jump while the rest stay still. A jump is a clue, not a discovery: noise or misalignment can fake one, which is why the app shows compatibility checks and uncertainty.</figcaption>
+        </figure>
 
-        <p class="honest"><strong>Honest by design.</strong> Everything in this demo is sample content that shows how the tools work. Candidates are not discoveries, and nothing here is real SPHEREx data.</p>
-        <p><a class="btn-pixel dark" href="app.html#/investigate">[ Begin exploring → ]</a></p>
+        <section class="m-how" aria-labelledby="how">
+          <div class="m-how-head"><h2 class="pixel" id="how">How it works</h2><span class="navi-zone m-zone-how" data-navi-zone aria-hidden="true"></span></div>
+          <ol class="steps">
+            <li><strong>Pick a target</strong><span>Search a name or coordinates.</span></li>
+            <li><strong>Watch it change</strong><span>Play the dates and look for things that jump.</span></li>
+            <li><strong>Check the evidence</strong><span>Blink or overlay two dates, then read the checks and caveats.</span></li>
+            <li><strong>Keep notes</strong><span>Save what you found and pick it up later.</span></li>
+          </ol>
+        </section>
+
+        <div class="m-close">
+          <p class="honest"><strong>Honest by design.</strong> Everything in this demo is sample content that shows how the tools work. Candidates are not discoveries, and nothing here is real SPHEREx data.</p>
+          <p><a class="btn-pixel" href="app.html#/investigate">[ Begin exploring → ]</a></p>
+        </div>
       </div>
+      <span class="navi-zone m-zone-bottom" data-navi-zone aria-hidden="true"></span>
+      <div id="scene" class="scene" aria-hidden="true"></div>
     </section>
   </main>
 

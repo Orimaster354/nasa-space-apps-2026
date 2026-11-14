@@ -19,13 +19,14 @@ Done means: works in the browser against mock data, keyboard reachable, states h
 - [~] **Illustrative labelling**: page badge + viewer HUD badge whenever mocks are on.
 
 ## P1 Important
-- [~] **Compare**: blink, side-by-side (linked zoom/pan), overlay (opacity), difference; verdict and every check always visible.
-- [~] **Compare not_comparable**: images hidden, failing check explained (WISE 0855 dates 1 vs 2).
-- [~] **Spectrum**: band strip from `expectedBandCount`, gaps hatched, chart with error bars only where provided, second-band comparison.
-- [~] **Navi companion**: panel, suggestions, thinking, error + retry, references, caveats, next-step actions, beginner/advanced.
+- [x] **Comparison modes in Investigate**: view / blink / side-by-side (linked) / overlay (fade) / difference in one workspace; object, candidate, dates and zoom kept; verdict and every check visible. (browser-tested)
+- [x] **not_comparable**: images removed, failing check explained (WISE 0855 dates 1 vs 2). (browser-tested)
+- [x] **Spectrum band selector**: 102 bands at real (non-uniform) wavelength positions, µm readout + axis, hover, keyboard, prev/next, hatched gaps, chart marker synced. (browser-tested)
+- [x] **Navi companion**: present on every page incl. after Begin exploring (handoff); wanders between safe zones, hops instead of crossing imagery, retreats while you inspect; personality reactions (predefined); contextual skippable/replayable tour; Comments On/Fewer/Off; reduced motion. (browser-tested)
+- [x] **Image-first workspace**: drawers instead of permanent side panels; context bar; viewer toolbar with verdict badge, Fullscreen, Focus; side by side with collapsed drawers, resizable divider, linked/independent panes; zoom kept across tools. (browser-tested)
 - [x] **Navi mock replies**: scripted answers, modes, references, caveats, actions, error hook (`simulate error`).
 - [~] **Guided "Spot the shift"**: 3 steps driven by workspace events, hints, feedback, progress.
-- [~] **Landing page**: cover close to the concept, skippable intro, mission section.
+- [x] **Landing + Mission**: Navi beside (not over) the spacecraft; dark Mission with diagram, CTA and pixel landscape. (browser-tested)
 
 ## P2 Optional
 - [~] **Notes / bookmarks / history** persisted in the store (survive reload).
@@ -41,10 +42,10 @@ Done means: works in the browser against mock data, keyboard reachable, states h
 3. Press play: viewer image and timeline dot change together; change speed; pause; click a date.
 4. Barnard date 5 shows "image being prepared" then loads; R Draconis date 4 shows "unavailable".
 5. Zoom with wheel, drag to pan, press `0` to reset, `F` for fullscreen; hover shows RA/Dec.
-6. Compare: try all four views; pick WISE 0855 dates 1 and 2 → "Not comparable", no images.
-7. Spectrum: click a hatched band (no data); click the chart; tick "Compare a second band".
-8. Navi: open Chat, ask a suggested question, type `simulate error` and use Try again; click a next-step button.
-9. Guided: Start → step through dates → click the moving source → blink in Compare → complete.
+6. Investigate: switch View → Blink → Side by side → Overlay → Difference; pick WISE 0855 dates A=1, B=2 → "Not comparable", no images.
+7. Spectrum: arrow keys / PageUp / Home on the band selector; hover for the tooltip; click a hatched band (no data); open the chart and check its marker follows; tick "Compare a second band".
+8. Navi: click her (no Chat button exists), ask a suggested question, type `simulate error` and use Try again; set Tips to Off and check no whispers appear; scroll the landing page and watch her move between spots.
+9. Guided: Start → step through dates → click the moving source → "Blink two dates" → complete.
 10. Notes: add note, bookmark, save, reload page, load saved investigation.
 11. Resize to ~900 px and ~390 px; enable "reduce motion" in the OS and reload.
 

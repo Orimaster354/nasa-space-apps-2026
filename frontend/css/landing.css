@@ -45,18 +45,12 @@ body.landing { background: var(--bg-page) fixed, #070b10; overflow-x: hidden; }
   font-family: var(--font-pixel); font-weight: 700; font-size: var(--fs-lg); letter-spacing: 0.04em; text-transform: uppercase;
   border: 3px solid var(--warm-ivory); box-shadow: 0 0 0 3px var(--midnight-charcoal), 0 0 0 5px var(--slate-blue), var(--shadow-hard); }
 .btn-pixel:hover { background: var(--warm-ivory); color: var(--midnight-charcoal); }
-.btn-pixel.dark { background: var(--midnight-charcoal); }
 .skip { color: var(--text); font-size: var(--fs-sm); letter-spacing: var(--tracking-label); text-transform: uppercase; font-weight: 600; }
 .demo-note { margin-top: var(--sp-5); }
 
-.navi-hero { position: absolute; z-index: 2; right: 16%; top: 38%; display: flex; align-items: flex-end; gap: var(--sp-2); }
-.navi-hero img { image-rendering: pixelated; animation: bob 3.2s ease-in-out infinite; }
-.navi-hero .navi-bubble { position: static; margin: 0 0 var(--sp-4); max-width: 200px; padding: var(--sp-2) var(--sp-4); background: var(--midnight-charcoal); border: 2px solid var(--warm-ivory);
-  font-family: var(--font-pixel); font-weight: 500; font-size: var(--fs-md); box-shadow: var(--shadow-hard); }
-@keyframes bob { 50% { transform: translateY(-6px); } }
 @media (max-width: 900px) {
   .ship { left: 38%; top: 52%; width: 55vw; opacity: 0.8; } .planet { width: 38vw; opacity: 0.7; }
-  .navi-hero { right: 6%; top: auto; bottom: 36%; } .hero-copy { max-width: none; }
+  .hero-copy { max-width: none; }
 }
 
 .skip-intro { position: absolute; z-index: 4; right: var(--gutter); bottom: var(--sp-4); background: rgba(16, 24, 32, 0.75); color: var(--text); border: 1px solid var(--border); padding: var(--sp-2) var(--sp-4); cursor: pointer; font-size: var(--fs-xs); letter-spacing: var(--tracking-label); text-transform: uppercase; }
@@ -64,22 +58,59 @@ body.landing { background: var(--bg-page) fixed, #070b10; overflow-x: hidden; }
 .down { position: absolute; z-index: 3; left: 50%; bottom: var(--sp-3); transform: translateX(-50%); color: var(--warm-ivory); text-decoration: none; font-size: var(--fs-md); text-shadow: 2px 2px 0 rgba(0,0,0,.6); }
 
 /* Intro: staged fade-in; skipped by .no-intro (button, any key) or reduced motion. */
-.hero:not(.no-intro) .hero-copy > *, .hero:not(.no-intro) .navi-hero, .hero:not(.no-intro) .ship, .hero:not(.no-intro) .planet { animation-fill-mode: both; }
+.hero:not(.no-intro) .hero-copy > *, .hero:not(.no-intro) .ship, .hero:not(.no-intro) .planet { animation-fill-mode: both; }
 .hero:not(.no-intro) .hero-copy h1 { animation: rise 0.8s var(--ease) both; }
 .hero:not(.no-intro) .lede { animation: rise 0.8s 0.25s var(--ease) both; }
 .hero:not(.no-intro) .cta-row, .hero:not(.no-intro) .skip { animation: rise 0.8s 0.5s var(--ease) both; }
-.hero:not(.no-intro) .navi-hero { animation: rise 0.8s 0.9s var(--ease) both; }
 @keyframes rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
 
-/* Mission: warm-ivory ground as in the cover concept's lower band. */
-.mission { background: var(--warm-ivory); color: var(--midnight-charcoal); padding: var(--sp-8) var(--gutter); }
-.mission .wrap { max-width: 1000px; margin: 0 auto; display: grid; gap: var(--sp-6); }
-.mission h2 { font-size: var(--fs-xl); }
-.mission a { color: var(--midnight-charcoal); }
-.cards { display: grid; gap: var(--sp-4); grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
-.cards article { border: 2px solid var(--midnight-charcoal); padding: var(--sp-5); background: rgba(255, 255, 255, 0.5); box-shadow: var(--shadow-hard); }
-.cards h3 { font-family: var(--font-pixel); font-size: var(--fs-lg); margin-bottom: var(--sp-3); }
-.steps { list-style: none; counter-reset: s; margin: 0; padding: 0; display: grid; gap: var(--sp-3); grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); }
-.steps li { counter-increment: s; border-top: 3px solid var(--midnight-charcoal); padding-top: var(--sp-3); display: grid; gap: var(--sp-1); }
-.steps li::before { content: counter(s, decimal-leading-zero); font-family: var(--font-pixel); font-size: var(--fs-lg); color: #2a6f8f; }
-.honest { border-left: 4px solid var(--solar-orange); padding-left: var(--sp-4); max-width: 60ch; }
+/* Navi's safe zones on the landing page: beside the spacecraft (below the planet, above Earth),
+   beside the Mission intro, next to "How it works", and the sky above the Mission scenery. */
+.navi-zone { display: block; pointer-events: none; }
+.hero-zone { position: absolute; z-index: 1; left: calc(46% + min(34vw, 420px) + 12px); right: 2%; top: calc(30% + 70px); height: 190px; }
+@media (max-width: 900px) { .hero-zone { left: 55%; right: 3%; top: calc(52% - 110px); height: 100px; } }
+@media (max-width: 560px) { .hero-zone { left: 62%; top: calc(52% - 70px); height: 64px; } }
+.m-zone { flex: 0 0 240px; align-self: stretch; min-height: 110px; }
+.m-how-head { display: flex; align-items: center; gap: var(--sp-5); }
+.m-zone-how { flex: 1; min-height: 90px; }
+.m-zone-bottom { position: absolute; left: 35%; right: 10%; bottom: 40px; height: 100px; z-index: 1; }
+@media (max-width: 560px) { .m-zone { flex-basis: 60px; } }
+
+/* ---- Mission: same dark palette and page gradient as the rest of the app ------------------------ */
+.mission { position: relative; background: var(--bg-page); border-top: var(--line) solid var(--border-soft);
+  padding: var(--sp-8) var(--gutter) calc(128px + var(--sp-7)); }
+.mission .wrap { max-width: 1040px; margin: 0 auto; display: grid; gap: var(--sp-8); position: relative; z-index: 1; }
+.mission h2 { font-size: var(--fs-xl); color: var(--warm-ivory); }
+.m-intro { display: flex; align-items: flex-end; justify-content: space-between; gap: var(--sp-5); }
+.m-lede { max-width: 60ch; font-size: var(--fs-lg); color: var(--text-muted); margin: var(--sp-4) 0 0; }
+.m-points { display: grid; gap: var(--sp-6); grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+.m-point { display: grid; gap: var(--sp-2); align-content: start; }
+.m-point h3 { font-family: var(--font-pixel); font-size: var(--fs-lg); font-weight: 700; color: var(--glacier-blue); }
+.m-point p { margin: 0; color: var(--text-muted); max-width: 38ch; }
+.m-icon { image-rendering: pixelated; margin-bottom: var(--sp-2); }
+.m-figure { margin: 0; padding: var(--sp-6); border: var(--line) solid var(--border-soft); border-radius: var(--radius-lg); background: rgba(16, 24, 32, 0.45); display: grid; gap: var(--sp-4); justify-items: center; }
+.m-diagram { width: 100%; max-width: 640px; height: auto; }
+.m-figure figcaption { max-width: 62ch; text-align: center; font-size: var(--fs-sm); }
+.m-how { display: grid; gap: var(--sp-5); }
+.steps { list-style: none; counter-reset: s; margin: 0; padding: 0; display: grid; gap: var(--sp-5); grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
+.steps li { counter-increment: s; border-top: 2px solid var(--border); padding-top: var(--sp-3); display: grid; gap: var(--sp-1); color: var(--text-muted); }
+.steps li strong { color: var(--text); }
+.steps li::before { content: counter(s, decimal-leading-zero); font-family: var(--font-pixel); font-size: var(--fs-lg); color: var(--aurora-teal); }
+.m-close { display: grid; gap: var(--sp-5); justify-items: start; }
+.honest { border-left: 3px solid var(--solar-orange); padding-left: var(--sp-4); max-width: 60ch; color: var(--text-muted); margin: 0; }
+.honest strong { color: var(--text); }
+.mission .scene { z-index: 0; }
+@media (max-width: 560px) { .m-figure { padding: var(--sp-4); } }
+
+/* Phones: drop the decorative rule and tighten the nav so "The Mission" fits. */
+@media (max-width: 560px) {
+  .hero-nav { gap: var(--sp-3); }
+  .hero-nav .rule { display: none; }
+  .hero-nav nav { margin-left: auto; gap: var(--sp-2); white-space: nowrap; }
+  .hero-nav .brand { font-size: var(--fs-md); gap: var(--sp-2); }
+}
+@media (max-width: 400px) {
+  .hero-nav nav { letter-spacing: 0.04em; }
+  .hero-nav nav .spark { display: none; }
+}
+@media (max-width: 340px) { .hero-nav nav a:first-of-type { display: none; } }   /* "Begin exploring" sits right below */

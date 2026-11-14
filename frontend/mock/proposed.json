@@ -105,7 +105,7 @@
           "correct": "Yes, that is the one. Candidate SX-0017 shifts between dates.",
           "incorrect": "Not quite. That source stays put. Try another, or ask for a hint." },
         { "id": "confirm", "title": "Confirm with a blink comparison",
-          "prompt": "Open Compare, pick two dates and blink them. Does the source jump?",
+          "prompt": "Switch the viewer to Blink, pick two dates and watch. Does the source jump?",
           "done": "Blinking is a classic way to spot movement." }
       ],
       "explanation": "Sources that appear to move are candidates, not discoveries. Real confirmation needs alignment checks, uncertainty estimates and follow-up outside this app. All content here is illustrative."
@@ -141,11 +141,11 @@
       { "keywords": ["difference", "false", "cause", "noise", "uncertain"],
         "beginner": ["A difference image can light up for real changes, but also for noise, small alignment errors, or differences in how the images were calibrated."],
         "advanced": ["Residuals can arise from registration error, resampling, PSF or calibration differences between epochs, and noise. Check the compatibility checks and the stated uncertainty."],
-        "caveats": ["A difference alone is not evidence of real change."], "actions": [{ "kind": "open_comparison", "label": "Open Compare", "params": { "mode": "difference" } }] },
+        "caveats": ["A difference alone is not evidence of real change."], "actions": [{ "kind": "open_comparison", "label": "Show the difference", "params": { "mode": "difference" } }] },
       { "keywords": ["compar", "two dates"],
-        "beginner": ["Two observations are comparable if they cover similar wavelengths, overlap on the sky and were calibrated the same way. The Compare page lists each check."],
+        "beginner": ["Two observations are comparable if they cover similar wavelengths, overlap on the sky and were calibrated the same way. While comparing, each check is listed beside the viewer."],
         "advanced": ["The backend gates comparison on footprint, wavelength overlap at the position, calibration, alignment residual, quality and data release. `notEvaluated` is not a pass."],
-        "caveats": ["Verdicts here are mock."], "actions": [{ "kind": "open_comparison", "label": "Open Compare", "params": { "mode": "blink" } }] },
+        "caveats": ["Verdicts here are mock."], "actions": [{ "kind": "open_comparison", "label": "Blink two dates", "params": { "mode": "blink" } }] },
       { "keywords": ["spectrum", "band", "missing", "error bar", "wavelength"],
         "beginner": ["A spectrum shows how bright something is at different infrared colours. Missing bands are gaps where no usable observation exists. Error bars appear only when an uncertainty is available."],
         "advanced": ["The spectrum is assembled from several observations, so points can come from different dates. Gaps are not interpolated; error bars are drawn only where the backend supplied an uncertainty."],

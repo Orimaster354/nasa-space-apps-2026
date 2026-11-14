@@ -2,7 +2,7 @@
 /**
  * Shared investigation state (Phase H).
  *
- * ONE store feeds Investigate, Compare, Spectrum and Notes, so switching tools
+ * ONE store feeds Investigate (incl. comparison modes), Spectrum and Notes, so switching tools
  * never loses the selected object, coordinates, dates, band, bookmarks or notes.
  * Views read with getState() and subscribe(); they change state only via update().
  *
@@ -19,11 +19,15 @@ import { loadJson, saveJson } from "./storage.js";
  * @property {string|null} observationId  Current observation shown in the viewer.
  * @property {string|null} compareBaseId  Comparison base observation.
  * @property {string|null} compareTargetId Comparison target observation.
- * @property {"blink"|"sidebyside"|"overlay"|"difference"} compareMode  How Compare shows the pair.
+ * @property {"view"|"blink"|"sidebyside"|"overlay"|"difference"} compareMode  Workspace viewer mode: "view" plays observations; the others compare compareBaseId/compareTargetId.
  * @property {string|null} candidateId    Selected candidate (mock-only until contract agreed).
  * @property {number|null} bandIndex      Selected spectral band (1-based) in the Spectral Explorer.
  * @property {"beginner"|"advanced"} naviMode
  * @property {boolean} naviOpen
+ * @property {"all"|"fewer"|"off"} naviHints  How often Navi makes unsolicited comments ("off" = muted; questions still work).
+ * @property {{ seen: string[], done: boolean }|null} naviTour  Guided tour progress (null = never started).
+ * @property {{ left: boolean, right: boolean }} panels  Workspace drawers open on wide screens (candidates / details).
+ * @property {{ objectId: string, zoom: number, cx: number, cy: number }|null} viewState  Last zoom/pan, restored when returning to the object.
  * @property {Array<Object>} notes        Contract `Note[]` shape.
  * @property {Array<Object>} bookmarks    Contract `Bookmark[]` shape.
  * @property {Array<Object>} history      Contract `InvestigationEvent[]` shape.
@@ -39,11 +43,15 @@ const DEFAULTS = {
   observationId: null,
   compareBaseId: null,
   compareTargetId: null,
-  compareMode: "blink",
+  compareMode: "view",
   candidateId: null,
   bandIndex: null,
   naviMode: "beginner",
   naviOpen: false,
+  naviHints: "all",
+  naviTour: null,
+  panels: { left: true, right: false },
+  viewState: null,
   notes: [],
   bookmarks: [],
   history: [],

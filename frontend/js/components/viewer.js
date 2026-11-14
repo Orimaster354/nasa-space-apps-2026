@@ -43,8 +43,14 @@ export function createViewer(root, opts = {}) {
       <button class="btn btn-icon" data-act="out" aria-label="Zoom out" title="Zoom out (−)">−</button>
       <button class="btn btn-icon" data-act="reset" aria-label="Reset view" title="Reset view (0)">⌂</button>
       <button class="btn btn-icon" data-act="markers" aria-label="Candidate markers" aria-pressed="true" title="Toggle candidate markers">◎</button>
-      <details class="viewer-adjust"><summary class="btn btn-icon" aria-label="Brightness and contrast" title="Brightness and contrast">☼</summary>
+      <details class="viewer-adjust"><summary class="btn btn-icon" aria-label="Field of view, brightness and contrast" title="Field of view, brightness and contrast">☼</summary>
         <div class="viewer-adjust-body">
+          <span class="label">Field of view</span>
+          <div class="fov" role="group" aria-label="Field of view">
+            <button type="button" class="chip" data-act="fit" title="Whole image in view">Fit</button>
+            <button type="button" class="chip" data-act="px1" title="One image pixel per screen pixel">1:1</button>
+            <button type="button" class="chip" data-act="px2" title="Two screen pixels per image pixel">2:1</button>
+          </div>
           <label class="label" for="${root.id || "v"}-bri">Brightness</label>
           <input class="range" id="${root.id || "v"}-bri" data-act="bri" type="range" min="0.5" max="2.5" step="0.05" value="1">
           <label class="label" for="${root.id || "v"}-con">Contrast</label>
@@ -67,6 +73,7 @@ export function createViewer(root, opts = {}) {
   let userMoved = false;           // false => keep the image fitted when the container resizes
   /** @type {Marker[]} */ let markers = [];
   let markersVisible = true;
+  let gen = 0;                     // bumps on every new image/state, so a slow decode can't overwrite newer state
 
   const fit = () => (iw && ih ? Math.min(stage.clientWidth / iw, stage.clientHeight / ih) : 1);
 
@@ -170,7 +177,9 @@ export function createViewer(root, opts = {}) {
     switch (/** @type {HTMLElement} */ (t).dataset.act) {
       case "in": zoomAt(1.4, cx, cy); break;
       case "out": zoomAt(1 / 1.4, cx, cy); break;
-      case "reset": reset(); emitView(); break;
+      case "reset": case "fit": reset(); emitView(); break;
+      case "px1": zoomAt(1 / scale, cx, cy); break;          // absolute scale 1 (zoomAt clamps to the allowed range)
+      case "px2": zoomAt(2 / scale, cx, cy); break;
       case "full": toggleFullscreen(); break;
       case "markers": setMarkersVisible(!markersVisible); break;
     }
@@ -199,20 +208,27 @@ export function createViewer(root, opts = {}) {
   return {
     /** Show an image. Keeps the user's zoom/pan when only the picture changes (same size), so blinking stays steady. */
     async setImage(/** @type {{url: string, width: number, height: number}} */ im) {
+      const g = ++gen;
       const sameSize = im.width === iw && im.height === ih;
       iw = im.width; ih = im.height;
       img.width = iw; img.height = ih; layer.style.width = `${iw}px`; layer.style.height = `${ih}px`;
       img.src = im.url;
-      try { await img.decode(); } catch { /* shown anyway */ }
+      layer.style.visibility = "";
+      // Wait for decoding so blinking never flashes an empty frame, but never stall on it.
+      try { await Promise.race([img.decode(), new Promise(r => setTimeout(r, 800))]); } catch { /* shown anyway */ }
+      if (g !== gen) return;               // a newer image or state arrived while decoding; don't overwrite it
       img.alt = "Sky image";
       this.setState({ kind: "ready" });
       if (!sameSize || !userMoved) reset(); else apply();
       drawMarkers();
     },
+    /** Remove the picture entirely (e.g. a "not comparable" pair must not be shown, not even dimmed). Zoom/pan state is kept. */
+    clear() { gen++; img.removeAttribute("src"); img.alt = ""; markers = []; drawMarkers(); stage.classList.remove("dim"); layer.style.visibility = "hidden"; },
     /** @param {Marker[]} m */ setMarkers(m) { markers = m; drawMarkers(); },
     setMarkersVisible,
     /** @param {{ kind: "ready"|"loading"|"processing"|"unavailable"|"failed"|"empty", message?: string, onRetry?: () => void }} s */
     setState(s) {
+      if (s.kind !== "ready") gen++;       // supersedes any image still decoding
       stateEl.hidden = s.kind === "ready";
       stage.classList.toggle("dim", s.kind !== "ready" && !!iw);
       if (s.kind === "ready") { stateEl.innerHTML = ""; return; }
