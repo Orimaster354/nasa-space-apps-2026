@@ -125,7 +125,7 @@ Not adopted: the frontend's proposed frame-sequence operation (#20), because the
 
 Still open: anonymous client ID for server-side investigations (OD-7; the frontend currently saves investigations in the browser), co-adding/stacking images (OD-16), and overlays from other catalogues (OD-17).
 
-Small optional contract additions found while building, **not yet in the contract** (needs the frontend developer): a `bandpass` query filter on `GET /objects/{id}/observations` (implemented in the backend), and optional `centerRa` / `centerDec` / `fovArcmin` on `GET /observations/{id}/pixel-to-sky` (implemented; defaults match the image defaults, so the frontend's current calls work unchanged).
+Small optional contract additions found while building, **not yet in the contract** (needs the frontend developer): a `bandpass` query filter on `GET /objects/{id}/observations`; optional `centerRa` / `centerDec` / `fovArcmin` on `GET /observations/{id}/pixel-to-sky`; and the default field of view, which is now **10 arcmin** (was 3; 10 arcmin is about 98 native 6.15-arcsec pixels across). All are implemented in the backend. The frontend data layer reads `?fov=` and `?band=` from the page URL (default band `SPHEREx-D3`).
 
 ---
 

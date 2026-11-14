@@ -63,9 +63,9 @@ Priorities: **P0** essential for a functioning submission · **P1** important di
 
 - [ ] **P0-21 Validate image alignment between two observations.**
   Dep: P0-16, P0-04. Done: reprojection of target onto base grid; residual (arcsec) computed from reference sources or stated as unmeasured; synthetic test with a known shift recovers it within a stated tolerance.
-- [ ] **P0-22 Compatibility checks and verdicts.**
+- [x] **P0-22 Compatibility checks and verdicts.** *(Done in `processing/compare.py` with 8 tests. `alignment` and `calibration` stay `notEvaluated`, so a comparison is at best `comparable_with_caveats`. The zodi threshold, 5%, is our heuristic.)*
   Dep: P0-21, P0-19. Done: checks for footprint, wavelength/bandpass, calibration/release, background (zodi), alignment, quality; verdict mapping implemented as in the pipeline doc; `notEvaluated` never counts as pass (unit tests for every verdict).
-- [ ] **P0-23 Scientifically valid comparison workflow.**
+- [x] **P0-23 Scientifically valid comparison workflow.** *(`POST /comparisons`, `GET /comparisons/{id}`; blink/overlay/difference; cross-band differences refused; tested with a synthetic moved star.)*
   Dep: P0-22. Done: `POST /comparisons` and `GET /comparisons/{id}` return a `ComparisonResult`; `not_comparable` returns no difference image; shared grid dimensions verified; `comparisonKind` is set (`cross_band` is never presented as a temporal change).
 - [ ] **P0-24 Return brightness measurements with uncertainty.**
   Dep: P0-16, P0-21. Done: `POST /measurements` returns `aperture_flux` with value, unit, uncertainty and `uncertaintyBasis`, method string (aperture, background, unit conversion); synthetic test matches the injected flux; a masked or non-detected region reports that, not zero.
@@ -167,8 +167,8 @@ Priorities: **P0** essential for a functioning submission · **P1** important di
 
 ## Added from the first real-data run (2026-11-14)
 
-- [ ] **P0-22b Pre-warm script for the curated demo targets.** Dep: P0-15. Done: one command downloads and renders images for the five challenge targets at the default field of view into the cache (cold frames take 3-8 s each; 4 MB per cutout).
-- [ ] **P0-22c Same-band timeline.** Dep: P0-13. Done: backend supports `bandpass` filtering (implemented) and contract/frontend agree that a blink series is requested per bandpass (contract addition pending).
+- [x] **P0-22b Pre-warm script for the curated demo targets.** *(`backend/scripts/prewarm.py`.)* Dep: P0-15. Done: one command downloads and renders images for the five challenge targets at the default field of view into the cache (cold frames take 3-8 s each; 4 MB per cutout).
+- [x] **P0-22c Same-band timeline.** *(Frontend data layer now requests one band, default SPHEREx-D3; `?band=` overrides. Still pending in the contract.)* Dep: P0-13. Done: backend supports `bandpass` filtering (implemented) and contract/frontend agree that a blink series is requested per bandpass (contract addition pending).
 - [ ] **P0-22d Pagination guard.** Dep: P0-13. Done: confirmed the frontend pages through observations (Barnard's Star has 363, R Draconis 2514; the API caps a page at 200).
 
 ## Cross-cutting acceptance
