@@ -1,0 +1,85 @@
+/* Landing / cover page. Same page gradient as every page (tokens.css), with a slightly
+   stronger atmosphere. Art is cropped from the approved cover concept and feathered
+   into the background with masks. Intro motion is subtle and skippable. */
+
+body.landing { background: var(--bg-page) fixed, #070b10; overflow-x: hidden; }
+.hero { position: relative; min-height: 100vh; min-height: 100svh; overflow: hidden; isolation: isolate;
+  background: radial-gradient(90% 70% at 70% 30%, rgba(40, 70, 120, 0.35), transparent 70%), linear-gradient(180deg, #05070d 0%, #0b1424 55%, #0f2233 100%); }
+
+/* Starfield from layered radial gradients (no extra image). */
+.stars { position: absolute; inset: 0; z-index: -1; opacity: 0.9;
+  background-image:
+    radial-gradient(1.5px 1.5px at 12% 22%, #fff, transparent), radial-gradient(1px 1px at 28% 64%, #cfe6ff, transparent),
+    radial-gradient(2px 2px at 46% 12%, #fff, transparent), radial-gradient(1px 1px at 61% 48%, #fff, transparent),
+    radial-gradient(1.5px 1.5px at 77% 71%, #cfe6ff, transparent), radial-gradient(1px 1px at 88% 18%, #fff, transparent),
+    radial-gradient(1px 1px at 8% 80%, #fff, transparent), radial-gradient(2px 2px at 36% 38%, #ffd9bf, transparent),
+    radial-gradient(1px 1px at 54% 82%, #fff, transparent), radial-gradient(1.5px 1.5px at 94% 52%, #fff, transparent);
+  background-size: 420px 340px; }
+.hero::after { content: ""; position: absolute; inset: auto 0 0 0; height: 40%; z-index: -1; pointer-events: none;
+  background: radial-gradient(80% 100% at 50% 110%, rgba(66, 191, 174, 0.25), transparent 70%); }
+
+.hero-nav { display: flex; align-items: center; gap: var(--sp-5); padding: var(--sp-4) var(--gutter); position: relative; z-index: 3; }
+.hero-nav .rule { flex: 1; height: 1px; background: var(--border); }
+.hero-nav nav { display: flex; gap: var(--sp-3); align-items: center; font-size: var(--fs-sm); letter-spacing: var(--tracking-label); text-transform: uppercase; }
+.hero-nav nav a { color: var(--text); text-decoration: none; font-weight: 600; }
+.hero-nav nav a:hover { color: var(--accent); }
+.spark { color: var(--solar-orange); }
+@media (max-width: 700px) { .hero-nav nav a:nth-of-type(3), .hero-nav nav .spark:nth-of-type(2) { display: none; } }
+
+/* Cropped art, feathered into the sky. */
+.art { position: absolute; image-rendering: pixelated; pointer-events: none; z-index: 0; }
+.planet { right: 0; top: 56px; width: min(26vw, 340px); height: auto;
+  -webkit-mask-image: radial-gradient(closest-side, #000 60%, transparent 100%); mask-image: radial-gradient(closest-side, #000 60%, transparent 100%); }
+.ship { left: 46%; top: 30%; width: min(34vw, 420px); height: auto; animation: drift 7s ease-in-out infinite;
+  -webkit-mask-image: radial-gradient(closest-side, #000 62%, transparent 100%); mask-image: radial-gradient(closest-side, #000 62%, transparent 100%); }
+.earth { left: 0; bottom: 0; width: 100%; height: 30vh; object-fit: cover; object-position: top;
+  -webkit-mask-image: linear-gradient(180deg, transparent 0, #000 35%); mask-image: linear-gradient(180deg, transparent 0, #000 35%); }
+@keyframes drift { 50% { transform: translate(8px, -10px); } }
+
+.hero-copy { position: relative; z-index: 2; padding: var(--sp-6) var(--gutter) 0; max-width: 640px; }
+.hero-copy h1 { font-size: var(--fs-hero); line-height: 1.02; text-shadow: 4px 4px 0 rgba(0, 0, 0, 0.45); }
+.hero-copy .hl { color: var(--glacier-blue); }
+.lede { max-width: 34ch; font-size: var(--fs-lg); margin: var(--sp-5) 0; }
+.cta-row { margin: var(--sp-5) 0 var(--sp-3); }
+.btn-pixel { display: inline-block; padding: var(--sp-3) var(--sp-5); background: var(--midnight-charcoal); color: var(--warm-ivory); text-decoration: none;
+  font-family: var(--font-pixel); font-weight: 700; font-size: var(--fs-lg); letter-spacing: 0.04em; text-transform: uppercase;
+  border: 3px solid var(--warm-ivory); box-shadow: 0 0 0 3px var(--midnight-charcoal), 0 0 0 5px var(--slate-blue), var(--shadow-hard); }
+.btn-pixel:hover { background: var(--warm-ivory); color: var(--midnight-charcoal); }
+.btn-pixel.dark { background: var(--midnight-charcoal); }
+.skip { color: var(--text); font-size: var(--fs-sm); letter-spacing: var(--tracking-label); text-transform: uppercase; font-weight: 600; }
+.demo-note { margin-top: var(--sp-5); }
+
+.navi-hero { position: absolute; z-index: 2; right: 16%; top: 38%; display: flex; align-items: flex-end; gap: var(--sp-2); }
+.navi-hero img { image-rendering: pixelated; animation: bob 3.2s ease-in-out infinite; }
+.navi-hero .navi-bubble { position: static; margin: 0 0 var(--sp-4); max-width: 200px; padding: var(--sp-2) var(--sp-4); background: var(--midnight-charcoal); border: 2px solid var(--warm-ivory);
+  font-family: var(--font-pixel); font-weight: 500; font-size: var(--fs-md); box-shadow: var(--shadow-hard); }
+@keyframes bob { 50% { transform: translateY(-6px); } }
+@media (max-width: 900px) {
+  .ship { left: 38%; top: 52%; width: 55vw; opacity: 0.8; } .planet { width: 38vw; opacity: 0.7; }
+  .navi-hero { right: 6%; top: auto; bottom: 36%; } .hero-copy { max-width: none; }
+}
+
+.skip-intro { position: absolute; z-index: 4; right: var(--gutter); bottom: var(--sp-4); background: rgba(16, 24, 32, 0.75); color: var(--text); border: 1px solid var(--border); padding: var(--sp-2) var(--sp-4); cursor: pointer; font-size: var(--fs-xs); letter-spacing: var(--tracking-label); text-transform: uppercase; }
+.skip-intro[hidden] { display: none; }
+.down { position: absolute; z-index: 3; left: 50%; bottom: var(--sp-3); transform: translateX(-50%); color: var(--warm-ivory); text-decoration: none; font-size: var(--fs-md); text-shadow: 2px 2px 0 rgba(0,0,0,.6); }
+
+/* Intro: staged fade-in; skipped by .no-intro (button, any key) or reduced motion. */
+.hero:not(.no-intro) .hero-copy > *, .hero:not(.no-intro) .navi-hero, .hero:not(.no-intro) .ship, .hero:not(.no-intro) .planet { animation-fill-mode: both; }
+.hero:not(.no-intro) .hero-copy h1 { animation: rise 0.8s var(--ease) both; }
+.hero:not(.no-intro) .lede { animation: rise 0.8s 0.25s var(--ease) both; }
+.hero:not(.no-intro) .cta-row, .hero:not(.no-intro) .skip { animation: rise 0.8s 0.5s var(--ease) both; }
+.hero:not(.no-intro) .navi-hero { animation: rise 0.8s 0.9s var(--ease) both; }
+@keyframes rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+
+/* Mission: warm-ivory ground as in the cover concept's lower band. */
+.mission { background: var(--warm-ivory); color: var(--midnight-charcoal); padding: var(--sp-8) var(--gutter); }
+.mission .wrap { max-width: 1000px; margin: 0 auto; display: grid; gap: var(--sp-6); }
+.mission h2 { font-size: var(--fs-xl); }
+.mission a { color: var(--midnight-charcoal); }
+.cards { display: grid; gap: var(--sp-4); grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+.cards article { border: 2px solid var(--midnight-charcoal); padding: var(--sp-5); background: rgba(255, 255, 255, 0.5); box-shadow: var(--shadow-hard); }
+.cards h3 { font-family: var(--font-pixel); font-size: var(--fs-lg); margin-bottom: var(--sp-3); }
+.steps { list-style: none; counter-reset: s; margin: 0; padding: 0; display: grid; gap: var(--sp-3); grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); }
+.steps li { counter-increment: s; border-top: 3px solid var(--midnight-charcoal); padding-top: var(--sp-3); display: grid; gap: var(--sp-1); }
+.steps li::before { content: counter(s, decimal-leading-zero); font-family: var(--font-pixel); font-size: var(--fs-lg); color: #2a6f8f; }
+.honest { border-left: 4px solid var(--solar-orange); padding-left: var(--sp-4); max-width: 60ch; }

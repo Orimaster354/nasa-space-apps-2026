@@ -4,7 +4,7 @@
 > Per [DEVELOPMENT_OWNERSHIP.md](../DEVELOPMENT_OWNERSHIP.md#changing-the-contract), nothing here changes
 > `FRONTEND_BACKEND_CONTRACT.md` or `DATA_MODELS.md` until the backend developer agrees.
 > Every change below is an **optional addition**, so it is non-breaking (MINOR bump, 0.1.0 → 0.2.0).
-> Until agreed, the frontend keeps mock-only equivalents in one file (`frontend/js/api/mock/proposed.js`),
+> Until agreed, the frontend keeps mock-only equivalents in one file (`frontend/mock/proposed.json`, served by `js/api/mock/mockApi.js`),
 > clearly labelled "ILLUSTRATIVE", and never presents them as real detections.
 
 ## Why
@@ -91,5 +91,5 @@ The returned `ObservationImage` already carries `wcs`, which describes the deliv
 
 ## 6. Frontend impact if agreed
 
-Mocks gain the new shapes (already modelled in `proposed.js`), then move into the normal mock fixtures. No other
+Mocks gain the new shapes (already modelled in `proposed.json`), then move into the normal mock fixtures. No other
 frontend code changes, because views consume the API client's return types only.

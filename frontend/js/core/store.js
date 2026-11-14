@@ -19,6 +19,7 @@ import { loadJson, saveJson } from "./storage.js";
  * @property {string|null} observationId  Current observation shown in the viewer.
  * @property {string|null} compareBaseId  Comparison base observation.
  * @property {string|null} compareTargetId Comparison target observation.
+ * @property {"blink"|"sidebyside"|"overlay"|"difference"} compareMode  How Compare shows the pair.
  * @property {string|null} candidateId    Selected candidate (mock-only until contract agreed).
  * @property {number|null} bandIndex      Selected spectral band (1-based) in the Spectral Explorer.
  * @property {"beginner"|"advanced"} naviMode
@@ -26,6 +27,9 @@ import { loadJson, saveJson } from "./storage.js";
  * @property {Array<Object>} notes        Contract `Note[]` shape.
  * @property {Array<Object>} bookmarks    Contract `Bookmark[]` shape.
  * @property {Array<Object>} history      Contract `InvestigationEvent[]` shape.
+ * @property {Array<{role: "user"|"assistant", content: string, response?: Object, at: string}>} messages  Companion conversation.
+ * @property {{id: string, step: number, hints: number, done: boolean, base?: number}|null} guided  Guided investigation progress.
+ * @property {string} title               Working investigation title.
  */
 
 /** @type {InvestigationState} */
@@ -35,6 +39,7 @@ const DEFAULTS = {
   observationId: null,
   compareBaseId: null,
   compareTargetId: null,
+  compareMode: "blink",
   candidateId: null,
   bandIndex: null,
   naviMode: "beginner",
@@ -42,12 +47,15 @@ const DEFAULTS = {
   notes: [],
   bookmarks: [],
   history: [],
+  messages: [],
+  guided: null,
+  title: "Untitled investigation",
 };
 
 /** State keys that survive reloads (localStorage). */
 const PERSIST_KEYS = Object.keys(DEFAULTS);
 /** Shareable subset mirrored into the URL (short query names). */
-const URL_KEYS = { objectId: "o", observationId: "obs", compareBaseId: "a", compareTargetId: "b", candidateId: "c", bandIndex: "band" };
+const URL_KEYS = { objectId: "o", observationId: "obs", compareBaseId: "a", compareTargetId: "b", compareMode: "m", candidateId: "c", bandIndex: "band" };
 const STORAGE_KEY = "spherex.investigation.v1";
 
 let state = { ...DEFAULTS, ...pick(loadJson(STORAGE_KEY, {}), PERSIST_KEYS) };
@@ -102,4 +110,17 @@ export function fromQuery(/** @type {string} */ query) {
     patch[key] = key === "bandIndex" ? Number(raw) : raw;
   }
   if (Object.keys(patch).length) update(/** @type {any} */ (patch));
+}
+
+/**
+ * Append a contract `InvestigationEvent` (object_opened, observation_viewed, ...).
+ * Consecutive duplicates are skipped so autoplay does not flood the history.
+ * @param {"object_opened"|"observation_viewed"|"comparison_created"|"spectrum_viewed"|"measurement_created"} type
+ * @param {string} [targetId]
+ */
+export function logEvent(type, targetId) {
+  const last = state.history[state.history.length - 1];
+  if (last && last.type === type && last.targetId === targetId) return;
+  const ev = { eventId: `evt-${Date.now().toString(36)}-${state.history.length}`, type, ...(targetId ? { targetId } : {}), at: new Date().toISOString() };
+  update({ history: [...state.history.slice(-199), ev] });
 }

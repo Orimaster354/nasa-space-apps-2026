@@ -10,20 +10,68 @@
       "raDeg": 269.452,
       "decDeg": 4.6934
     },
-    "objectType": "High proper motion star",
+    "objectType": "Star (red dwarf)",
     "resolver": {
       "name": "Illustrative sample (not a real resolver)"
     }
   },
   {
-    "objectId": "mock-obj-field-b",
-    "name": "Sample field B",
-    "aliases": [],
+    "objectId": "mock-obj-wise0855",
+    "name": "WISE 0855-0714",
+    "aliases": [
+      "WISE J085510.83-071442.5"
+    ],
     "coordinates": {
-      "raDeg": 150.1,
-      "decDeg": 2.2
+      "raDeg": 133.795,
+      "decDeg": -7.245
     },
-    "objectType": "Extragalactic field",
+    "objectType": "Brown dwarf",
+    "resolver": {
+      "name": "Illustrative sample (not a real resolver)"
+    }
+  },
+  {
+    "objectId": "mock-obj-rwaur",
+    "name": "RW Aurigae",
+    "aliases": [
+      "RW Aur A"
+    ],
+    "coordinates": {
+      "raDeg": 76.957,
+      "decDeg": 30.401
+    },
+    "objectType": "Young variable star",
+    "resolver": {
+      "name": "Illustrative sample (not a real resolver)"
+    }
+  },
+  {
+    "objectId": "mock-obj-rdra",
+    "name": "R Draconis",
+    "aliases": [
+      "R Dra"
+    ],
+    "coordinates": {
+      "raDeg": 248.173,
+      "decDeg": 66.755
+    },
+    "objectType": "Variable star (Mira type)",
+    "resolver": {
+      "name": "Illustrative sample (not a real resolver)"
+    }
+  },
+  {
+    "objectId": "mock-obj-epsindib",
+    "name": "Epsilon Indi B",
+    "aliases": [
+      "eps Ind B",
+      "Epsilon Indi Ba"
+    ],
+    "coordinates": {
+      "raDeg": 331.044,
+      "decDeg": -56.786
+    },
+    "objectType": "Brown dwarf",
     "resolver": {
       "name": "Illustrative sample (not a real resolver)"
     }
