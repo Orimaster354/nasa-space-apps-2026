@@ -1,0 +1,31 @@
+[project]
+name = "spherex-backend"
+version = "0.1.0"
+description = "Backend for the NASA Space Apps 2026 SPHEREx project"
+requires-python = ">=3.11"
+dependencies = [
+  "fastapi",
+  "uvicorn[standard]",
+  "pydantic",
+  "pydantic-settings",
+  "httpx",
+  "astropy",
+  "astroquery",
+  "numpy",
+  "scipy",
+]
+
+[project.optional-dependencies]
+dev = ["pytest"]
+
+[tool.setuptools]
+packages = []
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+  "synthetic: runs offline on generated data",
+  "recorded: runs offline on saved archive responses",
+  "realdata: hits the real IRSA archive (slow, opt-in)",
+]
+addopts = "-m 'not realdata'"
