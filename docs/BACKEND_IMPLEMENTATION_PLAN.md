@@ -2,7 +2,7 @@
 
 > Owner: Backend developer. Branch: `back-end`. Written 2026-11-14 for a 48-hour hackathon.
 > Companion: [BACKEND_CHECKLIST.md](BACKEND_CHECKLIST.md). Shared source of truth: [ARCHITECTURE.md](ARCHITECTURE.md), [FRONTEND_BACKEND_CONTRACT.md](FRONTEND_BACKEND_CONTRACT.md) (v0.1.0), [DATA_MODELS.md](DATA_MODELS.md), [DEVELOPMENT_OWNERSHIP.md](DEVELOPMENT_OWNERSHIP.md), [INTEGRATION_PLAN.md](INTEGRATION_PLAN.md), [SCIENTIFIC_DATA_PIPELINE.md](SCIENTIFIC_DATA_PIPELINE.md).
-> This plan does **not** change the contract. Needed additions are in [§4 as a proposed v0.2 addendum](#4-proposed-contract-v02-addendum) and require the frontend developer's approval first.
+> Contract status: **v0.2.0** (merged 2026-11-14 from the frontend developer's proposal plus backend needs; see the contract changelog). §4 below summarizes what is agreed and what is still open. Real-data findings so far: [backend/scripts/PROBE_FINDINGS.md](../backend/scripts/PROBE_FINDINGS.md).
 
 ## 0. How to read the evidence in this document
 
@@ -24,8 +24,8 @@ Limits of this research: the official challenge page `spaceappschallenge.org/202
 
 | # | Finding | Impact | Resolution |
 |---|---|---|---|
-| G1 | The contract has no models/endpoints for **candidates**, **proper motion**, or **guided investigations**, all in the product scope. | Frontend and backend would invent incompatible shapes. | Proposed in §4; needs approval. |
-| G2 | `GET /observations/{id}/image` has no **cutout center/size**. IRSA serves ~70 MB full MEFs [Verified: IRSA data products] but supports sky **cutouts** [Verified: IRSA data access]. A usable viewer needs a cutout around the object. | Image would be either huge or ambiguous. | Add optional `sizeArcmin` and (implicit) center = object (§4). |
+| G1 | The contract had no models/endpoints for **candidates** or **proper motion**. | Frontend and backend would invent incompatible shapes. | **Resolved in contract 0.2.0** (§4). Guided investigations stay frontend-scripted. |
+| G2 | **Resolved in 0.2.0.** `GET /observations/{id}/image` had no **cutout center/size**. IRSA serves ~70 MB full MEFs [Verified: IRSA data products] but supports sky **cutouts** [Verified: IRSA data access]. A usable viewer needs a cutout around the object. | Image would be either huge or ambiguous. | Field-of-view parameters and common pixel grid (§4). |
 | G3 | `Observation` has no **bandpass** and the compatibility check enum has no **background** check. IRSA IMAGE is **not zodiacal-light subtracted** [Verified]; the ZODI HDU holds a modeled background. Zodi level varies with epoch/sky position [Unverified], so an epoch-to-epoch difference can include a background change. | Difference images/flux changes could be misinterpreted. | Add `bandpass` to `Observation`, `"background"` to check names (§4). |
 | G4 | `Measurement.kind` has no position/motion kinds. | Proper motion would be unrepresentable. | §4. |
 | G5 | The contract's `SpectralData` assumes assembling a spectrum from many observations. IRSA also publishes a **DR1 All-Sky Cube** (HEALPix tiles, 102 channels) [Verified: IRSA data products]. | A much simpler spectral route may exist. | Open decision D-5 (§13). |
@@ -106,98 +106,24 @@ Foundation tasks: settings via environment variables (`.env` git-ignored; `.env.
 
 ---
 
-## 4. Proposed contract v0.2 addendum
+## 4. Contract v0.2.0: what is agreed and what is open
 
-> **Proposal only. Not applied to the contract.** Requires frontend developer approval under [DEVELOPMENT_OWNERSHIP.md](DEVELOPMENT_OWNERSHIP.md#changing-the-contract). All additions are optional/new, so non-breaking. Field names here are ours, not NASA's.
+Agreed (in `FRONTEND_BACKEND_CONTRACT.md` and `DATA_MODELS.md`):
 
-### 4.1 Changes to existing models/endpoints
-
-| Change | Reason |
+| Addition | Where |
 |---|---|
-| `Observation.bandpass?: string` (source: IRSA bandpass name when provided) and `Observation.detectorNumber?: number` | Group same-band frames; G3 |
-| `CompatibilityCheck.name` += `"background"` | Zodi/background comparability; G3 |
-| `ComparisonResult.comparisonKind: "same_band_epochs" \| "cross_band"` | Label temporal vs spectral comparison clearly |
-| `GET /observations/{id}/image` optional params `sizeArcmin` (cutout width) and `objectId` (cutout center) | G2 |
-| `Measurement.kind` += `"position_centroid"`, `"derived_motion"` | G4 |
-| `AstronomicalObject.properMotion?: ProperMotion` | Object info |
-| Request header `X-Client-Id: <random string>` on investigation and chat operations; investigations are scoped to it | G6; no accounts |
+| `Candidate` model and `GET /objects/{objectId}/candidates` (#19). Field names are the frontend's (`track`, `score`, `scoreBasis`, `warnings`, `status: "candidate"`) plus `description`, `evidence`, `isProbability: false`, optional `evidenceRefs`/`limitations`/`properMotion` | contract §3, §5; data models §10 |
+| `ProperMotion` (`value`, `unit`, `source`, required `provenanceKind`: catalogue / derived / unvalidated displacement) on `AstronomicalObject.properMotion` and `Candidate` | data models §11 |
+| `Observation.bandpass` | data models §2 |
+| Image field-of-view parameters (`centerRa`, `centerDec`, `fovArcmin`) and the **common pixel grid** guarantee with `ObservationImage.gridId`, replacing a separate frame-sequence operation | contract §5 |
+| `ComparisonResult.comparisonKind` (`same_band_epochs` / `cross_band`), compatibility check `background`, `Measurement.kind` `position_centroid` / `derived_motion` | contract §3 |
+| `ChatContext.candidateId` and `mode` (`beginner` / `advanced`); `"candidate"` as AI-reference and bookmark target | contract §3 |
 
-### 4.2 New models
+Not adopted: the frontend's proposed frame-sequence operation (#20), because the common-grid guarantee gives the same blink behavior with per-observation image requests.
 
-```ts
-export interface ProperMotion {
-  pmRaMasPerYr?: number;            // convention (pmRA*cos(dec) or not) stated in `convention`
-  pmDecMasPerYr?: number;
-  convention?: string;
-  referenceEpoch?: string;          // as stated by the source
-  uncertaintyRaMasPerYr?: number;
-  uncertaintyDecMasPerYr?: number;
-  provenance: {
-    kind: "catalog" | "derived_from_observations" | "unvalidated_displacement";
-    catalogName?: string;           // when kind === "catalog"
-    catalogId?: string;
-    note?: string;
-  };
-}
+**Guided investigations are frontend-scripted** and are not part of the contract. The backend's job is to supply real candidates and evidence; the earlier idea of backend `GuidedChallenge` endpoints is dropped (P2 only if time remains).
 
-export interface CandidateEvidence {
-  kind: "catalog_proper_motion" | "measured_position_change" | "measured_brightness_change" | "quality_note";
-  summary: string;                  // backend-generated factual text
-  measurementIds: Id[];
-  observationIds: Id[];
-}
-
-export interface Candidate {
-  candidateId: Id;                  // stable for the same object + field + method version
-  objectId?: Id;
-  coordinates: SkyCoordinate;
-  label: string;
-  properMotion?: ProperMotion;
-  evidence: CandidateEvidence[];
-  ranking: {
-    rank: number;
-    method: string;                 // short description of the heuristic
-    criteria: { name: string; value: number | string; note?: string }[];
-    isProbability: false;           // literal: never a probability
-  };
-  status: "unvalidated_candidate";  // literal: never "confirmed"
-  limitations: string[];
-}
-
-export interface GuidedChallenge {
-  challengeId: Id;
-  kind: "spot_the_shift" | "compare_brightness" | "explore_spectrum";
-  objectId: Id;
-  observationIds: Id[];
-  level: "beginner" | "advanced";
-  prompt: string;
-  hints: string[];
-  /** true when the challenge is a teaching exercise not backed by a detected change. */
-  illustrative: boolean;
-  evidenceRefs: { targetType: "measurement" | "comparison" | "observation"; targetId: Id }[];
-}
-
-export interface GuidedFeedback {
-  challengeId: Id;
-  message: string;                  // grounded in measurements
-  references: AIReference[];
-  caveats: string[];
-}
-```
-
-### 4.3 New endpoints
-
-| Operation | Method & path | Notes |
-|---|---|---|
-| List candidates near an object | `GET /objects/{objectId}/candidates` | `Page<Candidate>`; `limit`, `offset`; empty page + `coverageNote` if none |
-| Get candidate | `GET /candidates/{candidateId}` | `Candidate` |
-| List guided challenges | `GET /objects/{objectId}/guided-challenges?level=` | `Page<GuidedChallenge>` |
-| Answer a challenge | `POST /guided-challenges/{challengeId}/responses` | body `{ answer: unknown }` -> `GuidedFeedback` |
-| Get object motion | included in `AstronomicalObject.properMotion` | no separate endpoint |
-
-### 4.4 Frontend decisions to settle
-
-Approve §4.1-4.3; confirm `X-Client-Id` approach; confirm how to render `comparisonKind`; confirm that `Candidate.status` is always unvalidated and `ranking.isProbability` is always false (UI must not imply otherwise).
+Still open: anonymous client ID for server-side investigations (OD-7; the frontend currently saves investigations in the browser), co-adding/stacking images (OD-16), and overlays from other catalogues (OD-17).
 
 ---
 
@@ -249,7 +175,7 @@ For each cutout MEF [Verified structure: HDU0 header-only, then IMAGE, FLAGS, VA
 1. **Seed:** objects near the field with catalog proper motion from a catalog service (which catalog is D-8; do not assume availability; record catalog name and ID).
 2. **Check:** for each seed with adequate coverage, measure position (centroid) and brightness in available same-band frames, with uncertainty. Reject seeds with insufficient coverage/quality rather than guessing.
 3. **Evidence:** attach `CandidateEvidence` entries pointing to real `Measurement`/`Observation` IDs. Expected catalog displacement over the observed baseline is compared to the **measured position uncertainty**; if the expected shift is below measurement capability, say so.
-4. **Rank:** a transparent heuristic using stated criteria (e.g. expected displacement / position uncertainty, measurement significance, data quality, number of usable epochs). Show criteria values; `isProbability: false`; `status: "unvalidated_candidate"`; `limitations` lists what was not validated (calibration, blending, etc.).
+4. **Rank:** a transparent heuristic using stated criteria (e.g. expected displacement / position uncertainty, measurement significance, data quality, number of usable epochs). Show criteria values; `isProbability: false`; `status: "candidate"`; `limitations` lists what was not validated (calibration, blending, etc.).
 5. **Stable IDs:** `candidateId` = hash of (catalog ID or position key, field key, method version).
 
 **Not done:** blind automated source differencing (P2, only if time remains); no probabilities; no "discovery" language anywhere.
@@ -290,14 +216,14 @@ Probe all five listed targets (Barnard's Star, WISE 0855, RW Aurigae, R Draconis
 - **Grounding (decided: structured output + numeric check):** the model must return JSON: `{ answer, citedResultIds[], claims[], hypotheses[], suggestedActions[] }`. The backend verifies every number in `answer` appears in a cited result (after unit/format normalization). Failure -> one retry, then fall back to the deterministic templated summary labeled "automated summary". `caveats` are generated by the backend from result warnings and always returned. Evidence and hypotheses are separate fields; hypotheses are labeled as such.
 - **Never:** invent numbers/metadata, claim a discovery, treat `notEvaluated` as pass, or describe pixel content.
 - **Investigation summaries:** generated from stored notes/measurements via the same grounded path.
-- **Guided investigations (decided: deterministic templates):** the backend builds `GuidedChallenge`s from measured results (e.g. offers `spot_the_shift` only when a measured position change exceeds its uncertainty; otherwise offers an `illustrative: true` exercise clearly labeled, or none). Feedback is computed from measurements; the LLM only phrases hints/feedback and is subject to the same numeric check. Difficulty adapts via `level`.
+- **Guided investigations (frontend-scripted, decided with the frontend developer):** the guided script lives in the frontend. The backend supports it by supplying real candidates, evidence and measurements, and by never producing a candidate the data does not support. The AI companion explains guided steps from the same structured results and is subject to the same numeric check. Backend-generated challenges are P2 only.
 - **Failure behavior:** LLM unavailable/over quota -> deterministic summary; the contract's AI-unavailable state is used only when nothing can be produced.
 
 ---
 
 ## 10. Phase 7 and 8: Persistence and API integration
 
-- **Persistence:** SQLite on the persistent volume; tables for investigations (JSON document per investigation scoped by `X-Client-Id`), cache index. No accounts. Messages are server-managed per the contract. Concurrent edits: last write wins (OD-15).
+- **Persistence:** SQLite on the persistent volume for the cache index and, once OD-7 is settled, investigations. The frontend currently saves investigations in the browser, so server-side storage is only needed if both developers agree; if so, scope them by an anonymous client ID. Messages are server-managed per the contract. Concurrent edits: last write wins (OD-15).
 - **API:** implement the 18 existing operations plus approved §4 additions. All responses validated against Pydantic models equal to the contract; optional fields omitted, never `null`.
 - **Integration tests:** schema validation of every endpoint; missing fields; `processing`/`202` polling; `unavailable`/`failed`; real image delivery from a browser origin (CORS); AI response structure; candidate ranking explanation present; proper-motion provenance present.
 
@@ -338,7 +264,7 @@ Probe all five listed targets (Barnard's Star, WISE 0855, RW Aurigae, R Draconis
 | ID | Decision | Status |
 |---|---|---|
 | D-1 | Which two free LLM providers/models, and their limits | **You decide** (needs a check of current free tiers and tool-calling) |
-| D-2 | Contract v0.2 addendum (§4) | **Needs frontend developer approval** |
+| D-2 | Contract v0.2.0 | **Resolved** (merged 2026-11-14, frontend data layer updated). Remaining open: OD-7 (server-side investigations/client ID), OD-16 (co-add), OD-17 (overlays) |
 | D-3 | Cloud host choice (persistent disk required) | **You decide** |
 | D-4 | Blink frame definition | Recommended: same-band-epoch primary, cross-band labeled, finalized after the coverage probe |
 | D-5 | Spectrum source: spectral images vs All-Sky Cube | Open until A10 checked |
@@ -348,7 +274,7 @@ Probe all five listed targets (Barnard's Star, WISE 0855, RW Aurigae, R Draconis
 | D-9 | Submission freeze clock time | **You decide** (plan only protects a relative freeze) |
 | D-10 | Challenge page resource links | **You provide** |
 
-Decided in interview: FastAPI + pyproject/pip; Python 3.11; cloud + persistent disk + curated pre-cache + live fallback; free-tier LLM with a chain of two providers; anonymous per-browser client ID; catalog-seeded candidates; deterministic guided templates; structured-output + numeric-check grounding; WISEView as reference only; contract changes proposed as an addendum, not applied; two `docs/` files plus a `.plans` spec.
+Decided in interview: FastAPI + pyproject/pip; Python 3.11; cloud + persistent disk + curated pre-cache + live fallback; free-tier LLM with a chain of two providers; catalog-seeded candidates; structured-output + numeric-check grounding; WISEView as reference only; data-driven target choice; two `docs/` files plus a `.plans` spec. Superseded after the frontend branch review: guided investigations are frontend-scripted (not backend templates), and the contract changes were merged as v0.2.0 rather than kept as an addendum.
 
 ---
 
@@ -356,11 +282,11 @@ Decided in interview: FastAPI + pyproject/pip; Python 3.11; cloud + persistent d
 
 | What the backend can do now (no frontend dependency) | Needs the contract/addendum agreed | The frontend can do independently |
 |---|---|---|
-| IRSA TAP probe, cutout download, HDU inspection, WCS, flag decoding, photometry, alignment, comparison logic, candidate/proper-motion logic, AI tools and provider adapter, SQLite store | Final response shapes for candidates, guided challenges, `X-Client-Id`, image `sizeArcmin`/`objectId`, `comparisonKind`, `bandpass` | Everything in their own area, including mocks that conform to the contract |
+| IRSA TAP probe, cutout download, HDU inspection, WCS, flag decoding, photometry, alignment, comparison logic, candidate/proper-motion logic, AI tools and provider adapter, SQLite store | Candidate, proper-motion, field-of-view and common-grid shapes (now agreed in contract 0.2.0); OD-7, OD-16, OD-17 still open | Everything in their own area, including mocks that conform to the contract |
 
 Shared files requiring communication before change: the contract, data models, `ARCHITECTURE.md`, this plan's §4, `README.md`, `.gitignore`, `.github/workflows/`, boundary configuration (API base URL, CORS origins, `X-Client-Id`). Per [DEVELOPMENT_OWNERSHIP.md](DEVELOPMENT_OWNERSHIP.md): no duplicated business logic; no scientific calculations in the frontend; no backend logic in UI code; no uncoordinated model changes; no coupling to the other side's internals. The frontend developer owns how mocks and service access are organized; the only requirement is exact schema conformity so switching to the real API needs no shared-model change.
 
-**Must be complete before integration:** blocking decisions in INTEGRATION_PLAN (OD-3, 5, 6, 7, 12, 14) plus D-2; every endpoint contract-valid; image URLs loadable from the frontend origin; one real target working end to end.
+**Must be complete before integration:** blocking decisions in INTEGRATION_PLAN (OD-3, 5, 6, 7, 12, 14) plus OD-7; every endpoint contract-valid; image URLs loadable from the frontend origin; one real target working end to end.
 
 ---
 
@@ -375,7 +301,7 @@ Keep **synthetic**, **recorded**, and **real-data** tests separate by pytest mar
 | Processing | Synthetic star fields: alignment residual, photometry vs known flux, uncertainty propagation, quality rules, compatibility verdicts, centroid/position estimation | n/a | Repeatability of position/flux between epochs |
 | Spectra | Synthetic bands with gaps | n/a | One real spectrum |
 | Candidates/proper motion | Known injected shifts; catalog-vs-derived provenance; ranking criteria | Saved catalog responses | The probed targets |
-| AI | Fake provider: tool invocation, context correctness, numeric-check rejection of invented numbers, evidence vs hypothesis fields, fallback path, guided challenge gating (no challenge without evidence) | Saved provider responses | Smoke test with real provider |
+| AI | Fake provider: tool invocation, context correctness, numeric-check rejection of invented numbers, evidence vs hypothesis fields, fallback path, AI explanations of guided steps use only supplied results | Saved provider responses | Smoke test with real provider |
 | Integration | Pydantic/contract validation on every endpoint; error envelope; omitted-not-null | Shared example JSON (OD-3) | Full workflow: search -> observations -> image -> compare -> measure -> ask AI |
 
 ---
@@ -390,9 +316,9 @@ Order by dependency; no hour estimates because the data-access outcome changes e
 
 **Parallel after the TAP probe works:** (a) provider adapter + fallback + fake-provider tests; (b) SQLite store + investigation endpoints; (c) candidate data model + catalog lookup; (d) deployment skeleton; (e) target feasibility probe.
 
-**Defer:** All-Sky Cube spectra beyond one demo; cross-observation spectral comparison; automated source differencing; CWAVE/CBAND science wavelength; guided challenges beyond one kind.
+**Defer:** All-Sky Cube spectra beyond one demo; cross-observation spectral comparison; automated source differencing; CWAVE/CBAND science wavelength; backend-generated guided challenges.
 
-**Abandon if they threaten the core demo:** the candidate panel for live-fetched targets; guided challenges for non-curated targets; second LLM provider polish; full 102-band support.
+**Abandon if they threaten the core demo:** the candidate panel for live-fetched targets; candidates for non-curated targets beyond what time allows; second LLM provider polish; full 102-band support.
 
 **Protected window:** a relative freeze before the submission deadline (clock time is D-9), reserved for integration fixes, demo rehearsals, and a backup recording; no new features inside it.
 

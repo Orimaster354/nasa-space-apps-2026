@@ -12,15 +12,15 @@ Priorities: **P0** essential for a functioning submission · **P1** important di
 
 ### Data access and inspection (critical path)
 
-- [ ] **P0-01 🛰 Query IRSA for observations at a test coordinate.**
+- [x] **P0-01 🛰 Query IRSA for observations at a test coordinate.**
   Dep: none. Done: a script runs the TAP join (`spherex.plane` + `spherex.artifact`, `CONTAINS(POINT('ICRS',ra,dec), p.poly)`) for one coordinate and prints rows with `uri`, `time_bounds_lower`, `energy_bandpassname`; result count and any error are recorded in a note.
-- [ ] **P0-02 🛰 Inspect the TAP table schemas.**
+- [x] **P0-02 🛰 Inspect the TAP table schemas.**
   Dep: P0-01. Done: columns of both tables are listed in a note; release identifier and observation ID columns are identified or confirmed absent (closes A1).
-- [ ] **P0-03 🛰 Retrieve one actual SPHEREx FITS cutout and inspect its HDU structure.**
+- [x] **P0-03 🛰 Retrieve one actual SPHEREx FITS cutout and inspect its HDU structure.**
   Dep: P0-01. Done: a cutout is downloaded via `?center=<ra>,<dec>d&size=<deg>`; script prints every HDU name, shape, dtype, units and key headers; findings written down, including any difference from the IRSA docs (closes A4, A12).
-- [ ] **P0-04 🛰 Extract valid WCS metadata and observation timestamps.**
+- [ ] **P0-04 🛰 Extract valid WCS metadata and observation timestamps.** *(WCS built and observation time source confirmed in `backend/scripts/PROBE_FINDINGS.md`; wavelength-at-pixel via WCS-WAVE still to do.)*
   Dep: P0-03. Done: `astropy` builds a celestial WCS from the IMAGE header; pixel↔sky round-trip error is reported; the observation time source (TAP column vs header) is confirmed against the file (closes A2); wavelength obtained at a pixel via the WCS-WAVE method.
-- [ ] **P0-05 Backend skeleton and health endpoint.**
+- [x] **P0-05 Backend skeleton and health endpoint.**
   Dep: none. Done: FastAPI app starts from a clean venv using `pyproject.toml`; `GET /api/v1/health` returns `{status:"ok", contractVersion:"0.1.0"}`; settings read from env; `.env.example` lists variable names only; one passing test.
 - [ ] **P0-06 🛰 Coverage probe of the five candidate targets.**
   Dep: P0-01. Done: for Barnard's Star, WISE 0855, RW Aurigae, R Draconis, Epsilon Indi B: number of observations, bands, distinct epochs, same-band epoch counts, and whether the target is detected are tabulated; a written feasibility verdict per target and a recommended primary target (closes A3, informs D-4/D-7).
@@ -50,8 +50,8 @@ Priorities: **P0** essential for a functioning submission · **P1** important di
   Dep: P0-03. Done: cutouts are cached under `backend/data/` keyed by URL+center+size; second request does not hit IRSA (test with a stub); concurrent requests for one key share one download; timeouts and retries with backoff.
 - [ ] **P0-16 FITS reader with defensive parsing.**
   Dep: P0-03. Done: reads IMAGE/FLAGS/VARIANCE/ZODI when present; missing HDUs produce warnings not crashes; malformed file returns `failed` availability (synthetic tests for each case).
-- [ ] **P0-17 Generate a frontend-displayable image.**
-  Dep: P0-16, P0-04. Done: `GET /observations/{id}/image` returns `ObservationImage` with a loadable PNG URL, `width/height`, `stretch`, `wcs` (`approximate` set honestly), optional mask URL; image opens in a browser from the frontend origin (CORS verified).
+- [ ] **P0-17 Generate a frontend-displayable image on a common pixel grid.**
+  Dep: P0-16, P0-04. Done: `GET /observations/{id}/image` accepts `centerRa`, `centerDec`, `fovArcmin`, reprojects the cutout onto a north-up grid with a fixed pixel scale, returns the same `gridId` for the same parameters (test: two observations from different pointings share width, height and grid), and returns `ObservationImage` with a loadable PNG URL, `width/height`, `stretch`, `wcs` (`approximate` set honestly), optional mask URL; image opens in a browser from the frontend origin (CORS verified).
 - [ ] **P0-18 `GET /observations/{id}/pixel-to-sky`.**
   Dep: P0-04. Done: returns sky coordinate; round-trip error under a stated tolerance in a synthetic-WCS test.
 - [ ] **P0-19 Quality flags decoded.**
@@ -66,7 +66,7 @@ Priorities: **P0** essential for a functioning submission · **P1** important di
 - [ ] **P0-22 Compatibility checks and verdicts.**
   Dep: P0-21, P0-19. Done: checks for footprint, wavelength/bandpass, calibration/release, background (zodi), alignment, quality; verdict mapping implemented as in the pipeline doc; `notEvaluated` never counts as pass (unit tests for every verdict).
 - [ ] **P0-23 Scientifically valid comparison workflow.**
-  Dep: P0-22. Done: `POST /comparisons` and `GET /comparisons/{id}` return a `ComparisonResult`; `not_comparable` returns no difference image; shared grid dimensions verified; `comparisonKind` labeling applied if D-2 approved.
+  Dep: P0-22. Done: `POST /comparisons` and `GET /comparisons/{id}` return a `ComparisonResult`; `not_comparable` returns no difference image; shared grid dimensions verified; `comparisonKind` is set (`cross_band` is never presented as a temporal change).
 - [ ] **P0-24 Return brightness measurements with uncertainty.**
   Dep: P0-16, P0-21. Done: `POST /measurements` returns `aperture_flux` with value, unit, uncertainty and `uncertaintyBasis`, method string (aperture, background, unit conversion); synthetic test matches the injected flux; a masked or non-detected region reports that, not zero.
 - [ ] **P0-25 Unit conversion documented and tested.**
@@ -83,7 +83,7 @@ Priorities: **P0** essential for a functioning submission · **P1** important di
 - [ ] **P0-29 AI companion receives structured measurement results.**
   Dep: P0-28. Done: for a context with a comparison, the prompt contains the `Measurement`/`ComparisonResult` objects (verified by a test that inspects the prompt), and no raw arrays or FITS.
 - [ ] **P0-30 Chat endpoint.**
-  Dep: P0-27, P0-29. Done: `POST /chat/messages` returns a valid `AIResponse` with `references`, `caveats`, `suggestedActions`; `X-Client-Id` scoping if D-2 approved; messages persisted when `investigationId` given.
+  Dep: P0-27, P0-29. Done: `POST /chat/messages` returns a valid `AIResponse` with `references`, `caveats`, `suggestedActions`; honors `ChatContext.mode` and `candidateId`; messages persisted when `investigationId` given.
 - [ ] **P0-31 Grounding: structured output + numeric check.**
   Dep: P0-30. Done: model output parsed as `{answer, citedResultIds, hypotheses}`; any number in `answer` not found in cited results triggers retry then the templated fallback; tested with fake-provider outputs that invent a number (must be rejected).
 - [ ] **P0-32 Verify AI explanations distinguish evidence from hypotheses.**
@@ -92,7 +92,7 @@ Priorities: **P0** essential for a functioning submission · **P1** important di
 ### Persistence, deploy, demo
 
 - [ ] **P0-33 Investigation persistence.**
-  Dep: P0-09. Done: SQLite store; create/get/list/update/delete per the contract; `messages` server-managed and ignored on PUT; survives restart; scoped by client ID if approved.
+  Dep: P0-09. Done: SQLite store; create/get/list/update/delete per the contract; `messages` server-managed and ignored on PUT; survives restart. (Per-user scoping only if OD-7 is settled.)
 - [ ] **P0-34 Contract-validation tests for every implemented endpoint.**
   Dep: each endpoint. Done: one test per operation validates the response model; runs offline.
 - [ ] **P0-35 Deploy with a persistent disk.**
@@ -108,10 +108,16 @@ Priorities: **P0** essential for a functioning submission · **P1** important di
 
 ## P1: Differentiators
 
-- [ ] **P1-01 Propose and agree contract v0.2 with the frontend developer (D-2).**
-  Dep: none. Done: frontend developer approval recorded; contract + data models updated together on `main` with version bump and changelog.
-- [ ] **P1-02 Define the candidate data model and strategy.**
-  Dep: P1-01. Done: `Candidate`, `CandidateEvidence` finalized; the catalog-seeded strategy and ranking criteria are written in code docs; limitations list defined; `isProbability: false` and `status: "unvalidated_candidate"` enforced by types.
+- [ ] **P1-19 Co-add (stack) images per detector/bandpass (challenge "extra" item).**
+  Dep: P0-17, OD-16. Done: contract addition agreed; stacking of same-bandpass aligned frames improves measured noise on a synthetic test, and the result is labelled as a derived stack with its input observation IDs.
+- [ ] **P1-20 Per-position spectrum on the fly.**
+  Dep: P1-13. Done: `GET /objects/{id}/spectrum` accepts `ra`/`dec` and returns a spectrum for that position within a documented time budget.
+- [ ] **P1-21 Release-agnostic data discovery.**
+  Dep: P0-13. Done: collections/releases are configuration (not hard-coded); a new release name added to config is searchable without code changes.
+
+- [x] **P1-01 Agree contract v0.2 with the frontend developer (D-2).** Done 2026-11-14: contract 0.2.0 merged into `main`, frontend data layer updated.
+- [ ] **P1-02 Define the candidate-generation strategy.**
+  Dep: P1-01. Done: the `Candidate` model is already fixed in the contract; the catalog-seeded strategy and ranking criteria (what goes in `score` and `scoreBasis`) are written in code docs; `limitations` content defined; `isProbability: false` and `status: "candidate"` enforced by Pydantic literals.
 - [ ] **P1-03 Proper-motion catalog lookup.**
   Dep: P0-11, D-8. Done: catalog PM with name/ID/epoch/units/uncertainty returned with `provenance.kind = "catalog"` for at least one target; objects without PM omit the field.
 - [ ] **P1-04 Position measurement (centroid) with uncertainty.**
@@ -121,13 +127,13 @@ Priorities: **P0** essential for a functioning submission · **P1** important di
 - [ ] **P1-06 Distinguish catalog-provided proper motion from application-derived motion.**
   Dep: P1-03, P1-05. Done: API returns each with its own `provenance.kind`; a candidate cannot display a derived value labeled as catalog (test); the AI is told the provenance.
 - [ ] **P1-07 `GET /objects/{id}/candidates` and `GET /candidates/{id}`.**
-  Dep: P1-02, P1-03, P1-04. Done: candidates with evidence (real measurement IDs), ranking criteria, limitations; stable IDs across calls; empty list with `coverageNote` when none.
+  Dep: P1-02, P1-03, P1-04. Done: candidates matching contract §3 (`track` with sky and pixel positions on the image grid, `score` + `scoreBasis`, `evidence`, `warnings`, `limitations`), with real measurement IDs in `evidenceRefs`; stable IDs across calls; empty list with `coverageNote` when none.
 - [ ] **P1-08 Ranking is defensible.**
-  Dep: P1-07. Done: ranking criteria values are exposed; no field named or described as probability/confidence; unit tests prove ordering follows the stated criteria; documentation states ranking = prioritization, not validation.
-- [ ] **P1-09 Guided challenge generator (deterministic).**
-  Dep: P1-07 or P0-26, P1-01. Done: at least one kind (`spot_the_shift`) generated only when measured evidence exists; otherwise an `illustrative: true` exercise or none (tests for both); supports `beginner` and `advanced`.
-- [ ] **P1-10 Implement at least one guided investigation interaction.**
-  Dep: P1-09. Done: `GET .../guided-challenges` and `POST .../responses` return grounded `GuidedFeedback` using real measurement references; LLM phrasing passes the numeric check or falls back.
+  Dep: P1-07. Done: `scoreBasis` explains the heuristic; `isProbability` is always `false`; no field named or described as probability/confidence; unit tests prove ordering follows the stated criteria; documentation states ranking = prioritization, not validation.
+- [ ] **P1-09 Support the frontend-scripted guided investigation with real data.**
+  Dep: P1-07. Done: for the chosen demo target the backend returns at least one real candidate whose `track` shows a measured shift above its uncertainty (or states clearly that none exists), so the frontend's "Spot the shift" can run on real data; coordinated with the frontend developer.
+- [ ] **P1-10 AI companion explains guided steps from structured results.**
+  Dep: P1-09, P0-31. Done: given a guided-step question with `mode: "beginner"`, the answer uses only supplied results, passes the numeric check, and avoids implying a phenomenon the data does not support.
 - [ ] **P1-11 AI tools for candidates and proper motion.**
   Dep: P1-07, P0-28. Done: companion can answer “why is this a candidate?” citing candidate evidence IDs; never uses “confirmed”/“discovered” (test with forbidden-phrase checks).
 - [ ] **P1-12 Investigation summary generation.**
@@ -136,8 +142,8 @@ Priorities: **P0** essential for a functioning submission · **P1** important di
   Dep: P0-16, D-5, A10. Done: `GET /objects/{id}/spectrum` returns `SpectralData` for one target from the chosen source; gaps are `available: false`; units stated; bands count honestly reported vs `expectedBandCount`.
 - [ ] **P1-14 Selected band/wavelength in AI context.**
   Dep: P1-13, P0-29. Done: `ChatContext` selection reaches tools; test shows a band-specific question uses that band's data.
-- [ ] **P1-15 Image cutout parameters (`sizeArcmin`, `objectId`).**
-  Dep: P1-01. Done: cutout size/center honored and cached by key.
+- [ ] **P1-15 Larger field-of-view requests.**
+  Dep: P0-17. Done: `fovArcmin` up to a documented maximum works with caching and time budget; larger values return `INVALID_REQUEST` with a clear message.
 - [ ] **P1-16 Science-grade wavelength (CWAVE/CBAND) if the WCS-WAVE accuracy is not enough.**
   Dep: A9. Done: comparison between the two methods is recorded; decision documented.
 - [ ] **P1-17 Rate/backoff guard for IRSA.**
@@ -147,10 +153,12 @@ Priorities: **P0** essential for a functioning submission · **P1** important di
 
 ## P2: If time permits
 
+- [ ] **P2-08 Catalogue overlays (e.g. Gaia, WISE).** Dep: OD-17, P0-17. Done: contract addition agreed; sources inside the field returned with positions on the image grid and clear provenance.
+
 - [ ] **P2-01 Difference-image mode quality.** Dep: P0-23, P0-22. Done: zodi handling explicit and warned; difference image shown only with caveats.
 - [ ] **P2-02 Automated source differencing for extra candidates.** Dep: P1-07. Done: documented false-positive behavior on synthetic data; candidates flagged with extra limitations; disabled by default if not validated.
 - [ ] **P2-03 Cross-observation spectral comparison.** Dep: P1-13. Done: compatibility-gated spectrum comparison.
-- [ ] **P2-04 More guided challenge kinds** (`compare_brightness`, `explore_spectrum`). Dep: P1-10. Done: each gated on evidence.
+- [ ] **P2-04 Backend-generated guided challenges** (only if both developers want them). Dep: P1-10. Done: contract addition agreed first; each challenge gated on evidence.
 - [ ] **P2-05 Streaming chat (OD-8).** Dep: P0-30. Done: agreed contract change and tested.
 - [ ] **P2-06 Larger curated target set and cache warming script.** Dep: P0-37.
 - [ ] **P2-07 Basic CI** running `pytest -m "not realdata"`. Dep: P0-10. Done: workflow passes on the branch.
