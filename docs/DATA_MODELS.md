@@ -1,6 +1,6 @@
 # Data Models
 
-> Contract version **0.1.0 (draft)**. The canonical TypeScript definitions are in [FRONTEND_BACKEND_CONTRACT.md §3](FRONTEND_BACKEND_CONTRACT.md#3-models). This document explains them. If the two ever disagree, the contract wins and this file is a bug.
+> Contract version **0.2.0 (draft)**. The canonical TypeScript definitions are in [FRONTEND_BACKEND_CONTRACT.md §3](FRONTEND_BACKEND_CONTRACT.md#3-models). This document explains them. If the two ever disagree, the contract wins and this file is a bug.
 
 ## How to read this document
 
@@ -60,6 +60,7 @@ Describes whether a resource is ready. Origin: **derived**/**app** (our backend'
 | `aliases` | string[] | R | external |
 | `coordinates` | SkyCoordinate | R | external |
 | `objectType` | string | O | external (free text, not an enum) |
+| `properMotion` | ProperMotion (see §11) | O | catalogue, or derived; `provenanceKind` says which |
 | `resolver` | `{ name: string; identifier?: string }` | R | app (records which service answered) |
 | `observationSummary` | `{ count: number; firstObservedAt?: ISODateTime; lastObservedAt?: ISODateTime }` | O | derived from IRSA query results |
 
@@ -93,6 +94,7 @@ Describes whether a resource is ready. Origin: **derived**/**app** (our backend'
 | `center` | SkyCoordinate | R | source (normalized) | Image center |
 | `footprint` | SkyCoordinate[] | O | derived | Polygon from WCS + image size |
 | `detector` | string | O | source | As reported |
+| `bandpass` | string | O | source | Archive bandpass name as reported; use it to group same-band frames |
 | `wavelengthRangeUm` | `{min, max}` | O | derived | From header/spectral calibration information; see pipeline doc |
 | `image` | Availability | R | derived | Is a viewable image obtainable |
 | `qualityFlags` | QualityFlag[] | R | source/derived | |
@@ -132,6 +134,7 @@ Describes whether a resource is ready. Origin: **derived**/**app** (our backend'
 | `wcs` | WcsSummary | O | source (FITS WCS keywords, reduced) + derived (`pixelScaleArcsec`, `approximate`) |
 | `qualityMaskUrl` | string | O | derived |
 | `fitsDownloadUrl` | string | O | derived (points to the cached raw file) |
+| `gridId` | string | O | derived (equal for images that share one pixel grid) |
 | `generatedAt` | ISODateTime | R | app |
 
 `WcsSummary`: `ctype1?`, `ctype2?` (source), `crval`, `crpix`, `cd` (source), `pixelScaleArcsec?` (derived), `approximate` (derived; `true` if the full solution has terms not represented here).
@@ -221,7 +224,7 @@ Describes whether a resource is ready. Origin: **derived**/**app** (our backend'
 | Field | Type | Req | Origin |
 |---|---|---|---|
 | `measurementId` | string | R | app |
-| `kind` | `"aperture_flux" \| "flux_change" \| "angular_separation" \| "region_statistics"` | R | derived |
+| `kind` | `"aperture_flux" \| "flux_change" \| "angular_separation" \| "region_statistics" \| "position_centroid" \| "derived_motion"` | R | derived |
 | `value` | number | R | derived |
 | `unit` | string | R | derived |
 | `uncertainty` | number | O | derived |
@@ -259,6 +262,7 @@ Describes whether a resource is ready. Origin: **derived**/**app** (our backend'
 | `comparisonId` | string | R | app |
 | `mode` | `"blink" \| "overlay" \| "difference"` | R | app (user choice) |
 | `baseObservationId`, `targetObservationId` | string | R | app |
+| `comparisonKind` | `"same_band_epochs" \| "cross_band"` | O | derived (cross-band differences are spectral, not temporal) |
 | `availability` | Availability | R | derived |
 | `compatibility.verdict` | `"comparable" \| "comparable_with_caveats" \| "not_comparable" \| "unknown"` | R | derived |
 | `compatibility.checks[]` | `{ name, result, detail }` | R | derived |
@@ -269,7 +273,7 @@ Describes whether a resource is ready. Origin: **derived**/**app** (our backend'
 | `warnings` | string[] | R | derived |
 | `createdAt` | ISODateTime | R | app |
 
-Check `name` values: `wavelength`, `calibration`, `alignment`, `quality`, `dataRelease`, `footprint`. `result` values: `pass`, `warn`, `fail`, `notEvaluated`.
+Check `name` values: `wavelength`, `calibration`, `alignment`, `quality`, `dataRelease`, `footprint`, `background`. `result` values: `pass`, `warn`, `fail`, `notEvaluated`.
 
 ```json
 {
@@ -341,7 +345,7 @@ Check `name` values: `wavelength`, `calibration`, `alignment`, `quality`, `dataR
 | `createdAt` | ISODateTime | R | app |
 | `context` | ChatContext | O (user messages) | app (frontend describes what the user is looking at) |
 
-**ChatContext** (all optional): `activeView`, `objectId`, `observationIds`, `comparisonId`, `spectrumId`, `measurementIds`, `selection { observationId, sky?, radiusArcsec? }`.
+**ChatContext** (all optional): `activeView`, `objectId`, `observationIds`, `comparisonId`, `spectrumId`, `measurementIds`, `candidateId`, `mode` (`"beginner"` or `"advanced"`; a hint the backend may ignore), `selection { observationId, sky?, radiusArcsec? }`.
 
 ```json
 {
@@ -385,10 +389,93 @@ Check `name` values: `wavelength`, `calibration`, `alignment`, `quality`, `dataR
 }
 ```
 
+## 10. Candidate
+
+**Purpose.** A source the backend surfaces as worth a closer look because it may move or vary. It is a **ranking for human follow-up, not a detection and not validation**. Field names match the frontend developer's proposal so the viewer needs no change.
+
+| Field | Type | Req | Origin |
+|---|---|---|---|
+| `candidateId` | string | R | app (stable for the same object + field + method version) |
+| `label` | string | R | app |
+| `objectId` | string | O | app |
+| `observationIds` | string[] | R | app |
+| `kind` | `"positional_change" \| "brightness_change" \| "both"` | R | derived |
+| `description` | string | R | derived (plain language, backend-generated) |
+| `evidence` | string[] | R | derived (display text) |
+| `evidenceRefs` | `{ targetType, targetId }[]` | O | derived (links to stored results) |
+| `track` | `{ observationId, sky, pixel? }[]` | R | derived (one entry per observation; `pixel` is on the pixel grid of that observation's returned image, see `gridId`) |
+| `motion` | `{ value, unit, uncertainty?, method }` | O | derived |
+| `properMotion` | ProperMotion | O | catalogue, with its own provenance |
+| `score` | number in [0, 1] | R | derived heuristic |
+| `scoreBasis` | string | R | derived |
+| `isProbability` | `false` | R | literal |
+| `qualityFlags` | QualityFlag[] | R | source/derived |
+| `warnings` | string[] | R | derived |
+| `limitations` | string[] | O | derived |
+| `status` | `"candidate"` | R | literal; never "confirmed" |
+| `createdAt` | ISODateTime | R | app |
+
+```json
+{
+  "candidateId": "cand_5a2f90",
+  "label": "SX-0017",
+  "objectId": "obj_8f3a21",
+  "observationIds": ["obs_00a91c", "obs_00b02e"],
+  "kind": "positional_change",
+  "description": "Source whose measured position differs between the two observations.",
+  "evidence": ["Position differs by more than its measurement uncertainty in this example."],
+  "track": [
+    { "observationId": "obs_00a91c", "sky": { "raDeg": 202.4700, "decDeg": 47.1950 }, "pixel": { "x": 14.2, "y": 15.1 } },
+    { "observationId": "obs_00b02e", "sky": { "raDeg": 202.4703, "decDeg": 47.1951 }, "pixel": { "x": 15.0, "y": 14.9 } }
+  ],
+  "motion": { "value": 0.9, "unit": "arcsec", "uncertainty": 0.4, "method": "Centroid difference between aligned frames (example)." },
+  "score": 0.62,
+  "scoreBasis": "Ratio of measured shift to its uncertainty, with a quality penalty (example heuristic).",
+  "isProbability": false,
+  "qualityFlags": [],
+  "warnings": ["Shift is only about two times its uncertainty."],
+  "limitations": ["Calibration and blending were not validated."],
+  "status": "candidate",
+  "createdAt": "2026-11-14T10:20:00Z"
+}
+```
+
+## 11. ProperMotion
+
+**Purpose.** Proper motion for an object or candidate, always carrying where the number came from. Catalogue values and values derived by our app are never mixed.
+
+| Field | Type | Req | Origin |
+|---|---|---|---|
+| `value` | number | R | catalogue or derived (total proper motion) |
+| `unit` | string | R | as stated by the source |
+| `source` | string | R | human-readable origin |
+| `provenanceKind` | `"catalog" \| "derived_from_observations" \| "unvalidated_displacement"` | R | derived (classification of where the value came from) |
+| `catalogName`, `catalogId` | string | O | external catalogue |
+| `pmRaMasPerYr`, `pmDecMasPerYr` | number | O | catalogue or derived |
+| `convention` | string | O | states whether the RA component includes cos(dec) |
+| `referenceEpoch` | string | O | as stated by the source |
+| `uncertainty` | number | O | same unit as `value` |
+
+`unvalidated_displacement` means an apparent shift that has not been validated as proper motion; clients must not present it as such.
+
+```json
+{
+  "value": 10.3,
+  "unit": "arcsec/yr",
+  "source": "Example catalogue (illustrative value)",
+  "provenanceKind": "catalog",
+  "catalogName": "example-catalogue",
+  "catalogId": "EXAMPLE-0001",
+  "referenceEpoch": "J2000"
+}
+```
+
 ## Cross-model integrity rules
 
 1. Any ID appearing in a `references`, `observationIds`, `targetId`, `objectIds`, or `ChatContext` must be resolvable by the corresponding GET endpoint.
 2. `ComparisonResult.baseImage`/`targetImage`/`differenceImage` have the same `width` and `height` when all are present.
 3. `SpectralPoint.flux` is present if and only if `available` is `true`.
 4. `Observation.image.status` and the `availability.status` returned by `GET /observations/{id}/image` agree (aside from transient `processing`).
-5. Units: a `Measurement` taken from a `SpectralData` or a `ComparisonResult` uses the same unit string as the data it came from.
+5. Images returned with the same `gridId` share width, height and pixel grid; `Candidate.track[].pixel` is expressed on that grid.
+6. A `ProperMotion` with `provenanceKind: "catalog"` is never produced by our own measurements, and vice versa.
+7. Units: a `Measurement` taken from a `SpectralData` or a `ComparisonResult` uses the same unit string as the data it came from.

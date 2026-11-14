@@ -1,6 +1,6 @@
 # Frontend / Backend Contract
 
-> **Contract version: 0.1.0 (draft)**. This is the most important shared document.
+> **Contract version: 0.2.0 (draft)**. This is the most important shared document.
 > The TypeScript interfaces here are **canonical**. [DATA_MODELS.md](DATA_MODELS.md) explains each model and gives examples and must always agree with this file.
 > Any change follows the process in [DEVELOPMENT_OWNERSHIP.md](DEVELOPMENT_OWNERSHIP.md#changing-the-contract).
 
@@ -78,6 +78,7 @@ export interface AstronomicalObject {
   aliases: string[];
   coordinates: SkyCoordinate;
   objectType?: string;                   // free-text from resolver, e.g. "Galaxy"; not a closed enum
+  properMotion?: ProperMotion;           // catalogue value if available (see ProperMotion)
   resolver: { name: string; identifier?: string }; // where name/coords came from
   observationSummary?: {                 // derived; omitted if not computed yet
     count: number;
@@ -95,6 +96,7 @@ export interface Observation {
   center: SkyCoordinate;
   footprint?: SkyCoordinate[];           // polygon corners, if derivable
   detector?: string;                     // as reported, if available
+  bandpass?: string;                     // archive bandpass name as reported; lets clients group same-band frames
   wavelengthRangeUm?: { min: number; max: number }; // range covered by this image, if derivable
   image: Availability;                   // availability of the viewable image
   qualityFlags: QualityFlag[];
@@ -127,6 +129,8 @@ export interface ObservationImage {
   wcs?: WcsSummary;                      // maps pixels of imageUrl to sky (approximate)
   qualityMaskUrl?: string;               // optional transparent overlay marking flagged pixels
   fitsDownloadUrl?: string;              // optional raw file download; frontend does not parse it
+  /** Images requested with the same grid parameters share one pixel grid and have equal gridId (see "Common pixel grid"). */
+  gridId?: string;
   generatedAt: ISODateTime;              // app
 }
 
@@ -162,7 +166,7 @@ export interface SpectralData {
 
 export interface Measurement {
   measurementId: Id;
-  kind: "aperture_flux" | "flux_change" | "angular_separation" | "region_statistics";
+  kind: "aperture_flux" | "flux_change" | "angular_separation" | "region_statistics" | "position_centroid" | "derived_motion";
   value: number;
   unit: string;
   uncertainty?: number;                  // same unit as value
@@ -178,7 +182,7 @@ export interface Measurement {
 export type CheckResult = "pass" | "warn" | "fail" | "notEvaluated";
 
 export interface CompatibilityCheck {
-  name: "wavelength" | "calibration" | "alignment" | "quality" | "dataRelease" | "footprint";
+  name: "wavelength" | "calibration" | "alignment" | "quality" | "dataRelease" | "footprint" | "background";
   result: CheckResult;
   detail: string;
 }
@@ -188,6 +192,8 @@ export interface ComparisonResult {
   mode: "blink" | "overlay" | "difference";
   baseObservationId: Id;
   targetObservationId: Id;
+  /** "same_band_epochs": same bandpass at different times (temporal). "cross_band": different bands (spectral, NOT a time change). */
+  comparisonKind?: "same_band_epochs" | "cross_band";
   availability: Availability;
   compatibility: {
     verdict: "comparable" | "comparable_with_caveats" | "not_comparable" | "unknown";
@@ -203,6 +209,47 @@ export interface ComparisonResult {
   createdAt: ISODateTime;
 }
 
+/** Total proper motion with provenance. `value`/`unit`/`source` are the display fields; the rest is optional detail. */
+export interface ProperMotion {
+  value: number;                         // total proper motion
+  unit: string;                          // e.g. "arcsec/yr"; always stated
+  source: string;                        // human-readable origin, e.g. a catalogue name
+  /** Where the number comes from. Catalogue values and values derived by our app are never mixed. */
+  provenanceKind: "catalog" | "derived_from_observations" | "unvalidated_displacement";
+  catalogName?: string;
+  catalogId?: string;
+  pmRaMasPerYr?: number;                 // whether this includes cos(dec) is stated in `convention`
+  pmDecMasPerYr?: number;
+  convention?: string;
+  referenceEpoch?: string;               // as stated by the source
+  uncertainty?: number;                  // same unit as `value`
+}
+
+/** A source worth a closer look. A ranking for human follow-up, NOT a detection and NOT validation. */
+export interface Candidate {
+  candidateId: Id;                       // app; stable for the same object + field + method version
+  label: string;                         // short human-readable tag, e.g. "SX-0017"
+  objectId?: Id;
+  observationIds: Id[];                  // observations it is based on (>= 2 for motion)
+  kind: "positional_change" | "brightness_change" | "both";
+  description: string;                   // plain-language summary, backend-generated
+  evidence: string[];                    // display text
+  evidenceRefs?: AIReference[];          // optional links to the stored results behind the evidence
+  /** One entry per observation, in `observationIds` order, so a client can draw a track without computing anything. */
+  track: { observationId: Id; sky: SkyCoordinate; pixel?: { x: number; y: number } }[];
+  motion?: { value: number; unit: string; uncertainty?: number; method: string };
+  properMotion?: ProperMotion;           // catalogue value for this source, if known
+  /** Ranking heuristic in [0, 1]. NOT a probability. Always shown with scoreBasis. */
+  score: number;
+  scoreBasis: string;
+  isProbability: false;                  // literal
+  qualityFlags: QualityFlag[];
+  warnings: string[];
+  limitations?: string[];                // what was not validated (calibration, blending, ...)
+  status: "candidate";                   // literal; the API never reports "confirmed"
+  createdAt: ISODateTime;
+}
+
 export interface Note {
   noteId: Id;
   text: string;
@@ -213,7 +260,7 @@ export interface Note {
 
 export interface Bookmark {
   bookmarkId: Id;
-  targetType: "object" | "observation" | "comparison" | "spectrum" | "measurement";
+  targetType: "object" | "observation" | "comparison" | "spectrum" | "measurement" | "candidate";
   targetId: Id;
   label?: string;
   createdAt: ISODateTime;
@@ -228,6 +275,9 @@ export interface InvestigationEvent {
 
 export interface ChatContext {
   activeView?: "viewer" | "timeline" | "comparison" | "spectrum" | "workspace";
+  candidateId?: Id;
+  /** Hint for explanation depth; the backend may ignore it. */
+  mode?: "beginner" | "advanced";
   objectId?: Id;
   observationIds?: Id[];
   comparisonId?: Id;
@@ -246,7 +296,7 @@ export interface ChatMessage {
 }
 
 export interface AIReference {
-  targetType: "observation" | "comparison" | "spectrum" | "measurement" | "object";
+  targetType: "observation" | "comparison" | "spectrum" | "measurement" | "object" | "candidate";
   targetId: Id;
 }
 
@@ -324,7 +374,7 @@ All paths are under `/api/v1`. Query parameters are strings on the wire.
 | 3 | Get object | `GET /objects/{objectId}` | n/a | `AstronomicalObject` |
 | 4 | List observations of an object | `GET /objects/{objectId}/observations` | `from`, `to` (ISO date), `dataRelease`, `minWavelengthUm`, `maxWavelengthUm`, `limit` (default 50, max 200), `offset`, `sort` = `observedAt` or `-observedAt` (default `observedAt`) | `Page<Observation>` |
 | 5 | Get observation | `GET /observations/{observationId}` | n/a | `Observation` |
-| 6 | Get observation image | `GET /observations/{observationId}/image` | `stretch` (`linear`\|`log`\|`sqrt`\|`asinh`, default `asinh`), `lowPercentile`, `highPercentile` | `ObservationImage` |
+| 6 | Get observation image | `GET /observations/{observationId}/image` | `stretch` (`linear`\|`log`\|`sqrt`\|`asinh`, default `asinh`), `lowPercentile`, `highPercentile`, optional field of view: `centerRa`, `centerDec` (deg; default the object centre), `fovArcmin` | `ObservationImage` |
 | 7 | Pixel to sky | `GET /observations/{observationId}/pixel-to-sky` | `x`, `y` (pixels of the image returned in #6) | `{ sky: SkyCoordinate }` |
 | 8 | Create comparison | `POST /comparisons` | `{ baseObservationId, targetObservationId, mode }` | `ComparisonResult` (status 200 if finished, 202 if `processing`) |
 | 9 | Get comparison | `GET /comparisons/{comparisonId}` | n/a | `ComparisonResult` |
@@ -337,6 +387,7 @@ All paths are under `/api/v1`. Query parameters are strings on the wire.
 | 16 | Update investigation | `PUT /investigations/{investigationId}` | `InvestigationInput` (full replace; `messages` ignored) | `Investigation` |
 | 17 | Delete investigation | `DELETE /investigations/{investigationId}` | n/a | 204, no body |
 | 18 | Health | `GET /health` | n/a | `{ status: "ok", contractVersion: string }` |
+| 19 | List candidates | `GET /objects/{objectId}/candidates` | `limit` (default 20), `offset`, `minScore`, `sort` = `-score` (default) or `score` | `Page<Candidate>` |
 
 ### Request bodies
 
@@ -363,6 +414,7 @@ export interface SendChatMessageRequest {
 ### Semantics worth being explicit about
 
 - **Image delivery.** `GET .../image` returns metadata and a URL. The backend renders the display raster. The frontend draws the raster and never opens FITS. `imageUrl` is fetched with a normal `<img>`/canvas load and needs no special headers. (Tiling/size policy: OD-5.)
+- **Common pixel grid.** The backend resamples each image onto a north-up grid centred on `centerRa/centerDec`, sized by `fovArcmin`, with a fixed pixel scale, and returns the same `gridId` for every image requested with the same parameters. So blinking through observations and drawing `Candidate.track[].pixel` markers need no client-side alignment. There is no separate "frame sequence" operation.
 - **Stretch.** The backend applies the stretch. The frontend changes it by re-requesting `/image` with different parameters. Any purely cosmetic client-side adjustment is the client's business; it is not a measurement.
 - **Pixel coordinates.** `x`,`y` are pixel positions in the raster at `imageUrl`, origin top-left. The authoritative mapping to sky is #7; `wcs` is a convenience and may be approximate.
 - **Comparison alignment.** For `blink` and `overlay`, `baseImage` and `targetImage` share one pixel grid so the frontend can stack them without further math.
@@ -415,6 +467,8 @@ For every endpoint, the backend should have at least one test asserting the resp
 | ID | Decision | Default in this draft |
 |---|---|---|
 | OD-3 | Where canonical TS types and fixtures live | Types in this document until a shared location is agreed |
+| OD-16 | Co-adding/stacking images (per detector or band) and add/subtract beyond pairwise difference | Not in the contract yet |
+| OD-17 | Overlay of other catalogues (e.g. Gaia, WISE) | Not in the contract yet |
 | OD-4 | Name resolver | Unspecified; contract exposes `resolver` provenance only |
 | OD-5 | Image size/tiling policy | Single raster per request |
 | OD-6 | Pixel↔sky on client vs server | Server (#7); `wcs` is approximate |
@@ -428,3 +482,4 @@ For every endpoint, the backend should have at least one test asserting the resp
 | Version | Date | Change |
 |---|---|---|
 | 0.1.0 | 2026-11-14 | Initial draft |
+| 0.2.0 | 2026-11-14 | Merged the frontend developer's `CONTRACT_PROPOSAL_0.2.0` with backend needs. Added: `Candidate` and `GET /objects/{id}/candidates` (#19), `ProperMotion` and `AstronomicalObject.properMotion`, `Observation.bandpass`, `ObservationImage.gridId`, image field-of-view parameters, `ComparisonResult.comparisonKind`, `CompatibilityCheck.name` "background", `Measurement.kind` "position_centroid"/"derived_motion", `ChatContext.candidateId`/`mode`, "candidate" as reference and bookmark target. Not adopted: a separate frame-sequence operation (replaced by the common-grid guarantee). Guided investigations stay frontend-scripted and are not part of the contract. All additions are optional or new, so non-breaking. |

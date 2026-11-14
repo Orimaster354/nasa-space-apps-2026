@@ -1,6 +1,6 @@
 # Scientific Data Pipeline
 
-> Contract version **0.1.0 (draft)**. Owner: Backend. Describes the *intended* pipeline; nothing here is implemented yet.
+> Contract version **0.2.0 (draft)**. Owner: Backend. Describes the *intended* pipeline; nothing here is implemented yet.
 >
 > **Verification note.** Statements about SPHEREx data products (file layout, extension names, flag meanings, spectral calibration, release naming, access methods) are not asserted here as facts. They must be confirmed against IRSA's current SPHEREx documentation during the IRSA spike (OD-12). Where this document describes mission characteristics (e.g. 102 spectral bands), treat them as "to confirm".
 
@@ -60,6 +60,9 @@ Failure handling: archive unreachable → `UPSTREAM_UNAVAILABLE`; no coverage �
 | `alignment` | Can they be registered, and what is the residual? | Residual larger than a stated threshold ⇒ `warn`/`fail` |
 | `quality` | Are flags/masks affecting the region? | Masked region ⇒ `warn`/`fail` |
 | `dataRelease` | Same release? | Different ⇒ `warn` |
+| `background` | Is the background (e.g. the modelled zodiacal light, which is not subtracted from the archive image) comparable between the two? | Large background change ⇒ `warn`; not evaluated ⇒ `notEvaluated` |
+
+Candidates ([DATA_MODELS.md §10](DATA_MODELS.md)) come from the same compatibility-gated measurements; their `score` ranks sources for human follow-up and is never a probability or a validation.
 
 Verdict mapping: any `fail` ⇒ `not_comparable`; no `fail` but any `warn` or `notEvaluated` ⇒ `comparable_with_caveats`; all `pass` ⇒ `comparable`; insufficient information ⇒ `unknown`. Thresholds are implementation choices and must be documented in code and tested. **`notEvaluated` is shown to the user**, never treated as `pass`.
 
