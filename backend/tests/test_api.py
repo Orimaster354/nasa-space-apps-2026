@@ -215,3 +215,86 @@ def test_invalid_image_parameters(env):
     assert c.get(f"/api/v1/observations/{oid}/image", params={"fovArcmin": 500}).status_code == 400
     assert c.get(f"/api/v1/observations/{oid}/image", params={"centerRa": 10}).status_code == 400
     assert c.get(f"/api/v1/observations/{oid}/image", params={"lowPercentile": 90, "highPercentile": 10}).status_code == 400
+
+
+# ---- comparisons -----------------------------------------------------------------------------------------------------
+def _cmp(c, base, target, mode):
+    return c.post("/api/v1/comparisons", json={"baseObservationId": base, "targetObservationId": target, "mode": mode})
+
+
+def test_blink_comparison_same_band(env):
+    c, _, _ = env
+    _, obs = _observations(c)                                   # [D3 2025-05, D3 2025-11, D6 2026-03]
+    r = _cmp(c, obs[0]["observationId"], obs[1]["observationId"], "blink")
+    assert r.status_code == 200
+    cmp_ = r.json()
+    assert cmp_["comparisonKind"] == "same_band_epochs" and cmp_["availability"] == {"status": "available"}
+    assert cmp_["compatibility"]["verdict"] == "comparable_with_caveats"
+    by = {k["name"]: k["result"] for k in cmp_["compatibility"]["checks"]}
+    assert by["wavelength"] == "pass" and by["calibration"] == "notEvaluated" and by["alignment"] == "notEvaluated"
+    assert cmp_["baseImage"]["gridId"] == cmp_["targetImage"]["gridId"] and "differenceImage" not in cmp_
+    assert (cmp_["baseImage"]["width"], cmp_["baseImage"]["height"]) == (cmp_["targetImage"]["width"], cmp_["targetImage"]["height"])
+    _no_nulls(cmp_)
+    assert c.get(cmp_["baseImage"]["imageUrl"]).status_code == 200
+    assert c.get(f"/api/v1/comparisons/{cmp_['comparisonId']}").json() == cmp_
+    assert _cmp(c, obs[0]["observationId"], obs[1]["observationId"], "blink").json()["comparisonId"] == cmp_["comparisonId"]   # stable id
+
+
+def test_cross_band_difference_is_refused_with_reasons_and_no_images(env):
+    c, _, _ = env
+    _, obs = _observations(c)
+    cmp_ = _cmp(c, obs[0]["observationId"], obs[2]["observationId"], "difference").json()
+    assert cmp_["comparisonKind"] == "cross_band" and cmp_["compatibility"]["verdict"] == "not_comparable"
+    assert {k["name"]: k["result"] for k in cmp_["compatibility"]["checks"]}["wavelength"] == "fail"
+    assert not any(k in cmp_ for k in ("baseImage", "targetImage", "differenceImage"))
+
+
+def test_cross_band_blink_is_allowed_but_labelled(env):
+    c, _, _ = env
+    _, obs = _observations(c)
+    cmp_ = _cmp(c, obs[0]["observationId"], obs[2]["observationId"], "blink").json()
+    assert cmp_["comparisonKind"] == "cross_band" and cmp_["compatibility"]["verdict"] == "comparable_with_caveats"
+    assert "baseImage" in cmp_ and any("spectral" in w for w in cmp_["warnings"])
+
+
+def test_difference_image_shows_a_moved_star_as_a_bright_and_a_dark_lobe(env, tmp_path):
+    c, cut, _ = env
+    _, obs = _observations(c)
+    moved = (STAR[0], STAR[1] + 12 / 3600.0)                      # target star is 12 arcsec further north
+    uris = list(URIS)
+    cut.files[uris[1]] = make_cutout_fits(tmp_path / "moved.fits", *moved, rotation_deg=60.0, mjd=60990.2, flag_value=1 << 21)
+    cmp_ = _cmp(c, obs[0]["observationId"], obs[1]["observationId"], "difference").json()
+    d = cmp_["differenceImage"]
+    assert d["stretch"]["lowValue"] == -d["stretch"]["highValue"] and any("not a detection" in w for w in cmp_["warnings"])
+    png = Image.open(io.BytesIO(c.get(d["imageUrl"]).content))
+    assert png.mode == "LA"
+    lum = np.array(png)[..., 0].astype(float)
+    alpha = np.array(png)[..., 1]
+    assert alpha.min() == 0 and alpha.max() == 255                 # no-data margins are transparent, not "no change"
+    from processing.imaging import GridSpec, DEFAULT_FOV_ARCMIN
+    g = GridSpec(*CENTER, DEFAULT_FOV_ARCMIN)
+    new_x, new_y = g.sky_to_raster(*moved)
+    old_x, old_y = g.sky_to_raster(*STAR)
+    py, px = np.unravel_index(np.argmax(np.where(alpha > 0, lum, -1)), lum.shape)
+    ny, nx = np.unravel_index(np.argmin(np.where(alpha > 0, lum, 999)), lum.shape)
+    assert np.hypot(px - new_x, py - new_y) < 5 and np.hypot(nx - old_x, ny - old_y) < 5     # bright where it is now, dark where it was
+
+
+def test_comparison_input_errors(env):
+    c, _, _ = env
+    _, obs = _observations(c)
+    a = obs[0]["observationId"]
+    assert _cmp(c, a, a, "blink").status_code == 400
+    assert _cmp(c, a, "obs_nope", "blink").status_code == 404
+    assert c.post("/api/v1/comparisons", json={"baseObservationId": a, "targetObservationId": obs[1]["observationId"], "mode": "bogus"}).status_code == 400
+    assert c.get("/api/v1/comparisons/cmp_nope").status_code == 404
+
+
+def test_comparison_download_failure_is_reported_and_not_stored(env):
+    c, cut, _ = env
+    _, obs = _observations(c)
+    cut.fail = irsa.IrsaError("archive busy", retryable=True)
+    r = _cmp(c, obs[0]["observationId"], obs[1]["observationId"], "blink").json()
+    assert r["availability"]["status"] == "failed" and r["compatibility"]["verdict"] == "unknown"
+    cut.fail = None                                                # a retry now succeeds, so the failure was not cached
+    assert _cmp(c, obs[0]["observationId"], obs[1]["observationId"], "blink").json()["availability"]["status"] == "available"

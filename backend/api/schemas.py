@@ -116,3 +116,42 @@ class ObservationImage(_Model):
 
 class PixelToSky(_Model):
     sky: SkyCoordinate
+
+
+class CompatibilityCheck(_Model):
+    name: Literal["wavelength", "calibration", "alignment", "quality", "dataRelease", "footprint", "background"]
+    result: Literal["pass", "warn", "fail", "notEvaluated"]
+    detail: str
+
+
+class Compatibility(_Model):
+    verdict: Literal["comparable", "comparable_with_caveats", "not_comparable", "unknown"]
+    checks: list[CompatibilityCheck] = Field(default_factory=list)
+
+
+class Alignment(_Model):
+    method: str
+    residualArcsec: float | None = None
+
+
+class CreateComparisonRequest(_Model):
+    baseObservationId: str
+    targetObservationId: str
+    mode: Literal["blink", "overlay", "difference"]
+
+
+class ComparisonResult(_Model):
+    comparisonId: str
+    mode: Literal["blink", "overlay", "difference"]
+    baseObservationId: str
+    targetObservationId: str
+    comparisonKind: Literal["same_band_epochs", "cross_band"] | None = None
+    availability: Availability
+    compatibility: Compatibility
+    alignment: Alignment | None = None
+    baseImage: ObservationImage | None = None
+    targetImage: ObservationImage | None = None
+    differenceImage: ObservationImage | None = None
+    measurements: list = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+    createdAt: str

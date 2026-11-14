@@ -7,7 +7,10 @@ from fastapi import APIRouter, Query, Request
 
 from services.core import NotFound, Services
 
-from .schemas import AstronomicalObject, Observation, ObservationImage, Page, PixelToSky
+from processing.imaging import DEFAULT_FOV_ARCMIN
+
+from .schemas import (AstronomicalObject, ComparisonResult, CreateComparisonRequest, Observation, ObservationImage, Page,
+                      PixelToSky)
 
 router = APIRouter()
 _EXCLUDE = {"response_model_exclude_none": True}
@@ -59,7 +62,7 @@ def get_observation_image(
     request: Request, observation_id: str,
     stretch: Literal["linear", "log", "sqrt", "asinh"] = "asinh",
     lowPercentile: float = Query(1.0, ge=0, le=100), highPercentile: float = Query(99.5, ge=0, le=100),
-    centerRa: float | None = None, centerDec: float | None = None, fovArcmin: float = Query(3.0, gt=0),
+    centerRa: float | None = None, centerDec: float | None = None, fovArcmin: float = Query(DEFAULT_FOV_ARCMIN, gt=0),
 ):
     return svc(request).get_image(
         observation_id, stretch=stretch, low_pct=lowPercentile, high_pct=highPercentile,
@@ -69,6 +72,16 @@ def get_observation_image(
 @router.get("/observations/{observation_id}/pixel-to-sky", response_model=PixelToSky, **_EXCLUDE)
 def pixel_to_sky(
     request: Request, observation_id: str, x: float, y: float,
-    centerRa: float | None = None, centerDec: float | None = None, fovArcmin: float = Query(3.0, gt=0),
+    centerRa: float | None = None, centerDec: float | None = None, fovArcmin: float = Query(DEFAULT_FOV_ARCMIN, gt=0),
 ):
     return svc(request).pixel_to_sky(observation_id, x, y, center_ra=centerRa, center_dec=centerDec, fov_arcmin=fovArcmin)
+
+
+@router.post("/comparisons", response_model=ComparisonResult, **_EXCLUDE)
+def create_comparison(request: Request, body: CreateComparisonRequest):
+    return svc(request).create_comparison(body.baseObservationId, body.targetObservationId, body.mode)
+
+
+@router.get("/comparisons/{comparison_id}", response_model=ComparisonResult, **_EXCLUDE)
+def get_comparison(request: Request, comparison_id: str):
+    return svc(request).get_comparison(comparison_id)

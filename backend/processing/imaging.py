@@ -22,6 +22,7 @@ from . import quality
 from .fits_io import Cutout
 
 PIXEL_SCALE_ARCSEC = 2.0            # output grid scale (the archive's native scale is about 6.2 arcsec/pixel)
+DEFAULT_FOV_ARCMIN = 10.0          # about 98 native pixels across; the old 3 arcmin (29 pixels) was too small to be useful
 MAX_FOV_ARCMIN = 30.0               # IRSA cutouts are limited to 1 degree; 30 arcmin plus margin stays under it
 MARGIN = 1.5                        # request a larger cutout than the grid so rotated pointings still cover the corners
 
@@ -122,3 +123,21 @@ def render_png(arr: np.ndarray, stretch: str = "asinh", low_pct: float = 1.0, hi
     buf = io.BytesIO()
     img.save(buf, format="PNG")
     return buf.getvalue(), {"mode": stretch, "lowValue": lo, "highValue": hi, "unit": "MJy/sr"}
+
+
+def render_difference_png(diff: np.ndarray, pct: float = 99.0) -> tuple[bytes, dict]:
+    """Grey-scale PNG of (target - base): mid-grey means no change, lighter means brighter in the target, darker means fainter.
+
+    Pixels with no data (masked or outside coverage) are fully transparent, so they are not mistaken for "no change".
+    Symmetric scaling uses the `pct` percentile of |difference|, so one outlier does not wash out everything else.
+    """
+    finite = diff[np.isfinite(diff)]
+    scale = float(np.percentile(np.abs(finite), pct)) if finite.size else 0.0
+    if scale <= 0:
+        scale = 1e-12
+    lum = (np.clip(np.nan_to_num(diff, nan=0.0) / (2 * scale) + 0.5, 0.0, 1.0) * 255).astype(np.uint8)
+    alpha = np.where(np.isfinite(diff), 255, 0).astype(np.uint8)
+    img = Image.fromarray(np.stack([np.flipud(lum), np.flipud(alpha)], axis=-1), mode="LA")
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    return buf.getvalue(), {"mode": "linear", "lowValue": -scale, "highValue": scale, "unit": "MJy/sr"}

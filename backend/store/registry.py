@@ -19,6 +19,7 @@ class Registry:
         with self._conn() as c:
             c.execute("CREATE TABLE IF NOT EXISTS objects (id TEXT PRIMARY KEY, body TEXT NOT NULL)")
             c.execute("CREATE TABLE IF NOT EXISTS observations (id TEXT PRIMARY KEY, body TEXT NOT NULL)")
+            c.execute("CREATE TABLE IF NOT EXISTS comparisons (id TEXT PRIMARY KEY, body TEXT NOT NULL)")
 
     def _conn(self):
         return sqlite3.connect(self.path, timeout=30)
@@ -44,3 +45,9 @@ class Registry:
 
     def get_observation(self, observation_id: str) -> dict | None:
         return self._get("observations", observation_id)
+
+    def put_comparison(self, comparison_id: str, body: dict) -> None:
+        self._put("comparisons", comparison_id, body)
+
+    def get_comparison(self, comparison_id: str) -> dict | None:
+        return self._get("comparisons", comparison_id)

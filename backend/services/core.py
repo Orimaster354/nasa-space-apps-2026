@@ -19,7 +19,9 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Callable
 
-from processing import imaging, irsa, quality
+import numpy as np
+
+from processing import compare, imaging, irsa, quality
 from processing.fits_io import FitsReadError, read_cutout
 from store.registry import Registry
 
@@ -254,7 +256,7 @@ class Services:
             raise BadRequest(str(exc)) from exc
 
     def get_image(self, observation_id: str, *, stretch: str = "asinh", low_pct: float = 1.0, high_pct: float = 99.5,
-                  center_ra: float | None = None, center_dec: float | None = None, fov_arcmin: float = 3.0) -> dict:
+                  center_ra: float | None = None, center_dec: float | None = None, fov_arcmin: float = imaging.DEFAULT_FOV_ARCMIN) -> dict:
         rec = self.registry.get_observation(observation_id)
         if rec is None:
             raise NotFound("Unknown observation.")
@@ -291,10 +293,76 @@ class Services:
                 "width": grid.npix, "height": grid.npix, "stretch": st, "wcs": grid.wcs_summary(), "gridId": grid.grid_id}
 
     def pixel_to_sky(self, observation_id: str, x: float, y: float, *, center_ra: float | None = None,
-                     center_dec: float | None = None, fov_arcmin: float = 3.0) -> dict:
+                     center_dec: float | None = None, fov_arcmin: float = imaging.DEFAULT_FOV_ARCMIN) -> dict:
         rec = self.registry.get_observation(observation_id)
         if rec is None:
             raise NotFound("Unknown observation.")
         grid = self._grid(rec, center_ra, center_dec, fov_arcmin)
         ra, dec = grid.raster_to_sky(x, y)
         return {"sky": {"raDeg": ra, "decDeg": dec}}
+
+    # ---- comparisons ---------------------------------------------------------------------------------------------
+    def _grid_array(self, rec: dict, grid: imaging.GridSpec):
+        url = irsa.cutout_url(rec["file"]["uri"], grid.center_ra, grid.center_dec, grid.cutout_size_deg)
+        cutout = read_cutout(self.cutouts.get(url))
+        return imaging.to_grid(cutout, grid), cutout
+
+    @staticmethod
+    def _side(rec: dict, cutout) -> compare.Side:
+        obs = rec["observation"]
+        zodi = None
+        if cutout.zodi is not None and np.isfinite(cutout.zodi).any():
+            zodi = float(np.nanmedian(cutout.zodi))
+        q = quality.quality_summary(cutout.flags) if cutout.flags is not None else "unknown"
+        return compare.Side(obs.get("bandpass"), obs.get("dataRelease"), q, zodi)
+
+    def create_comparison(self, base_id: str, target_id: str, mode: str) -> dict:
+        if mode not in ("blink", "overlay", "difference"):
+            raise BadRequest("mode must be blink, overlay or difference.")
+        if base_id == target_id:
+            raise BadRequest("Choose two different observations.")
+        base, target = self.registry.get_observation(base_id), self.registry.get_observation(target_id)
+        if base is None or target is None:
+            raise NotFound("Unknown observation.")
+        grid = self._grid(base, None, None, imaging.DEFAULT_FOV_ARCMIN)
+        cid = "cmp_" + hashlib.sha1(f"{base_id}|{target_id}|{mode}|{grid.grid_id}".encode()).hexdigest()[:12]
+        existing = self.registry.get_comparison(cid)
+        if existing:
+            return existing
+
+        out = {"comparisonId": cid, "mode": mode, "baseObservationId": base_id, "targetObservationId": target_id,
+               "measurements": [], "warnings": [], "createdAt": now_iso()}
+        try:
+            arr_b, cut_b = self._grid_array(base, grid)
+            arr_t, cut_t = self._grid_array(target, grid)
+        except irsa.IrsaError as exc:      # failures are reported in the resource and NOT stored, so a retry can succeed
+            return {**out, "availability": {"status": "failed" if exc.retryable else "unavailable", "statusReason": str(exc),
+                                            **({"retryAfterSeconds": 30} if exc.retryable else {})},
+                    "compatibility": {"verdict": "unknown", "checks": []}}
+        except FitsReadError as exc:
+            return {**out, "availability": {"status": "failed", "statusReason": f"A data file could not be read: {exc}"},
+                    "compatibility": {"verdict": "unknown", "checks": []}}
+
+        a = compare.assess(self._side(base, cut_b), self._side(target, cut_t), mode)
+        out.update(availability={"status": "available"}, comparisonKind=a["comparisonKind"], warnings=a["warnings"],
+                   compatibility={"verdict": a["verdict"], "checks": a["checks"]},
+                   alignment={"method": "Each cutout was resampled (bilinear) onto a common north-up TAN grid using its own WCS."})
+        if a["verdict"] != "not_comparable":
+            out["baseImage"] = self.get_image(base_id)
+            out["targetImage"] = self.get_image(target_id)
+            if mode == "difference":
+                png, st = imaging.render_difference_png(arr_t - arr_b)
+                name = f"{cid}_diff"
+                (self.images_dir / f"{name}.png").write_bytes(png)
+                out["differenceImage"] = {
+                    "observationId": target_id, "availability": {"status": "available"}, "imageUrl": f"/media/images/{name}.png",
+                    "width": grid.npix, "height": grid.npix, "stretch": st, "wcs": grid.wcs_summary(), "gridId": grid.grid_id,
+                    "generatedAt": now_iso()}
+        self.registry.put_comparison(cid, out)
+        return out
+
+    def get_comparison(self, comparison_id: str) -> dict:
+        rec = self.registry.get_comparison(comparison_id)
+        if rec is None:
+            raise NotFound("Unknown comparison.")
+        return rec
