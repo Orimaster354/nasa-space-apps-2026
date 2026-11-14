@@ -34,7 +34,6 @@ docs/       Project documentation
 
 ## Team
 
-- Member 1: TBD
-- Member 2: TBD
-- Member 3: TBD
-- Member 4: TBD
+- Member 1: Asish Nakka
+- Member 2: Sonika Ravichandran
+
