@@ -31,7 +31,7 @@ Priorities: **P0** essential for a functioning submission · **P1** important di
   Dep: P0-05. Done: every error code in contract §4 can be produced in tests; unknown errors become `INTERNAL` with a request ID; no stack traces in responses.
 - [x] **P0-08 Logging with request IDs.**
   Dep: P0-05. Done: each request logs method, path, status, duration, request ID; secrets never logged (checked by a test).
-- [ ] **P0-09 Pydantic models mirroring contract §3.** *(Objects, observations, images done in `api/schemas.py`; the rest as endpoints are built.)*
+- [x] **P0-09 Pydantic models mirroring contract §3.** *(Objects, observations, images done in `api/schemas.py`; the rest as endpoints are built.)* *(Done: a model exists for every contract type and the error envelope (spectrum and candidate models exist before their endpoints). Every example in DATA_MODELS.md validates and round-trips (tests/test_contract_models.py). Optional fields are omitted, never null.)*
   Dep: P0-05. Done: a model exists for each contract type; example JSON from DATA_MODELS.md validates; omitted-not-null enforced by serialization settings (test).
 - [x] **P0-10 Test structure and markers.**
   Dep: P0-05. Done: `synthetic`, `recorded`, `realdata` markers; `pytest -m "not realdata"` runs offline.
@@ -93,7 +93,7 @@ Priorities: **P0** essential for a functioning submission · **P1** important di
 
 - [x] **P0-33 Investigation persistence.** *(Done: `GET/POST /investigations`, `GET/PUT/DELETE /investigations/{id}`, owner-scoped to an anonymous visitor (X-Client-Id header, else the caller address), messages server-managed and appended by the chat endpoint when `investigationId` is given, limits (100 per visitor, 200 notes, 500 events). Stored in SQLite. CAVEAT: on Cloud Run the disk is temporary, so a redeploy or instance restart loses saved investigations; avoid redeploying during judging. The UI sends no X-Client-Id yet, so visitors are keyed by address until the frontend data layer adds it.)*
   Dep: P0-09. Done: SQLite store; create/get/list/update/delete per the contract; `messages` server-managed and ignored on PUT; survives restart. (Per-user scoping only if OD-7 is settled.)
-- [ ] **P0-34 Contract-validation tests for every implemented endpoint.**
+- [x] **P0-34 Contract-validation tests for every implemented endpoint.** *(Done: one test per implemented operation validates the response against its model with no nulls, plus the error envelope. Operation 10 (spectrum) is not implemented yet and is asserted as such.)*
   Dep: each endpoint. Done: one test per operation validates the response model; runs offline.
 - [x] **P0-35 Deploy with a persistent disk.** *(Done on Google Cloud Run (project navilink, us-central1, 2 CPU, 4 GiB, ONE instance because each instance has its own disk). Not a persistent disk: see P0-33 caveat.)*
   Dep: P0-05, D-3. Done: public URL reachable from the frontend origin; `/health` OK; cache directory persists across restarts; env keys set on the host only.
@@ -169,7 +169,7 @@ Priorities: **P0** essential for a functioning submission · **P1** important di
 
 - [x] **P0-22b Pre-warm script for the curated demo targets.** *(`backend/scripts/prewarm.py`.)* Dep: P0-15. Done: one command downloads and renders images for the five challenge targets at the default field of view into the cache (cold frames take 3-8 s each; 4 MB per cutout).
 - [x] **P0-22c Same-band timeline.** *(Frontend data layer now requests one band, default SPHEREx-D3; `?band=` overrides. Still pending in the contract.)* Dep: P0-13. Done: backend supports `bandpass` filtering (implemented) and contract/frontend agree that a blink series is requested per bandpass (contract addition pending).
-- [ ] **P0-22d Pagination guard.** Dep: P0-13. Done: confirmed the frontend pages through observations (Barnard's Star has 363, R Draconis 2514; the API caps a page at 200).
+- [x] **P0-22d Pagination guard.** Dep: P0-13. Done: confirmed the frontend pages through observations (Barnard's Star has 363, R Draconis 2514; the API caps a page at 200). *(Finding: the frontend does NOT page. It calls the observation list once with no limit or offset, so it gets the first 50 observations of the band (oldest first). Barnard's Star has 60 in D3 and R Draconis 576, so the UI shows only the earliest 50. Not changed on the backend (raising the default would make the UI preload up to 200 frames). The backend now sets a `coverageNote` on any truncated page, e.g. 'Showing observations 1-50 of 576 matching this view (oldest first).')*
 
 ## Cross-cutting acceptance
 

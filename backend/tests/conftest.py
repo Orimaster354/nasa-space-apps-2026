@@ -12,7 +12,7 @@ import numpy as np
 from astropy.io import fits
 from astropy.wcs import WCS
 
-CENTER = (133.795129, -7.245147)       # WISE 0855, used only as a convenient sky position
+CENTER = (133.795129, -7.245147)       # near WISE 0855's challenge coordinate; used only as a convenient sky position for synthetic tests
 
 
 def make_cutout_fits(path: Path, star_ra: float, star_dec: float, rotation_deg: float = 0.0, n: int = 29,

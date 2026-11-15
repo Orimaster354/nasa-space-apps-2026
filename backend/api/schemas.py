@@ -1,7 +1,7 @@
 """Pydantic models mirroring the contract (docs/FRONTEND_BACKEND_CONTRACT.md §3, v0.2.0).
 
 Optional fields are OMITTED when absent, never null: endpoints use `response_model_exclude_none=True`.
-Only the models needed so far are defined; add the rest as endpoints are built.
+Every contract type has a model (P0-09). Spectrum and candidate models exist before their endpoints do.
 """
 from __future__ import annotations
 
@@ -43,12 +43,27 @@ class ObservationSummary(_Model):
     lastObservedAt: str | None = None
 
 
+class ProperMotion(_Model):
+    value: float
+    unit: str
+    source: str
+    provenanceKind: Literal["catalog", "derived_from_observations", "unvalidated_displacement"]
+    catalogName: str | None = None
+    catalogId: str | None = None
+    pmRaMasPerYr: float | None = None
+    pmDecMasPerYr: float | None = None
+    convention: str | None = None
+    referenceEpoch: str | None = None
+    uncertainty: float | None = None
+
+
 class AstronomicalObject(_Model):
     objectId: str
     name: str
     aliases: list[str] = Field(default_factory=list)
     coordinates: SkyCoordinate
     objectType: str | None = None
+    properMotion: ProperMotion | None = None
     resolver: Resolver
     observationSummary: ObservationSummary | None = None
 
@@ -265,6 +280,89 @@ class InvestigationSummary(_Model):
     title: str
     objectId: str | None = None
     updatedAt: str
+
+
+class SpectralPoint(_Model):
+    wavelengthUm: float
+    wavelengthMinUm: float | None = None
+    wavelengthMaxUm: float | None = None
+    bandIndex: int | None = None
+    available: bool
+    unavailableReason: str | None = None
+    flux: float | None = None
+    fluxUncertainty: float | None = None
+    qualityFlags: list[QualityFlag] = Field(default_factory=list)
+    observationId: str | None = None
+    observedAt: str | None = None
+
+
+class SpectralData(_Model):
+    spectrumId: str
+    objectId: str
+    availability: Availability
+    position: SkyCoordinate
+    apertureRadiusArcsec: float | None = None
+    extractionMethod: str
+    wavelengthUnit: Literal["um"]
+    fluxUnit: str
+    uncertaintyBasis: str | None = None
+    points: list[SpectralPoint] = Field(default_factory=list)
+    expectedBandCount: int | None = None
+    warnings: list[str] = Field(default_factory=list)
+    generatedAt: str
+
+
+class PixelXY(_Model):
+    x: float
+    y: float
+
+
+class TrackPoint(_Model):
+    observationId: str
+    sky: SkyCoordinate
+    pixel: PixelXY | None = None
+
+
+class CandidateMotion(_Model):
+    value: float
+    unit: str
+    uncertainty: float | None = None
+    method: str
+
+
+class Candidate(_Model):
+    candidateId: str
+    label: str
+    objectId: str | None = None
+    observationIds: list[str] = Field(default_factory=list)
+    kind: Literal["positional_change", "brightness_change", "both"]
+    description: str
+    evidence: list[str] = Field(default_factory=list)
+    evidenceRefs: list[AIReference] | None = None
+    track: list[TrackPoint] = Field(default_factory=list)
+    motion: CandidateMotion | None = None
+    properMotion: ProperMotion | None = None
+    score: float = Field(ge=0.0, le=1.0)
+    scoreBasis: str
+    isProbability: Literal[False] = False
+    qualityFlags: list[QualityFlag] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+    limitations: list[str] | None = None
+    status: Literal["candidate"] = "candidate"
+    createdAt: str
+
+
+class ApiErrorBody(_Model):
+    code: Literal["INVALID_REQUEST", "NOT_FOUND", "UPSTREAM_UNAVAILABLE", "DATA_UNAVAILABLE", "PROCESSING_FAILED", "AI_UNAVAILABLE",
+                  "RATE_LIMITED", "INTERNAL"]
+    message: str
+    retryable: bool
+    details: dict | None = None
+    requestId: str | None = None
+
+
+class ApiError(_Model):
+    error: ApiErrorBody
 
 
 class CreateComparisonRequest(_Model):

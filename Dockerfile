@@ -9,6 +9,7 @@ WORKDIR /app
 COPY backend/requirements.txt backend/requirements.txt
 RUN pip install -r backend/requirements.txt
 
+# backend/demo_bundle holds the pre-built demo data (see backend/services/bundle.py); it is the data directory. Empty is fine.
 COPY backend backend
 COPY frontend frontend
 
@@ -18,7 +19,7 @@ RUN sed -i 's/useMock: true/useMock: false/' frontend/js/config.js && grep -q "u
 
 ENV PYTHONPATH=/app/backend \
     SPX_FRONTEND_DIR=/app/frontend \
-    SPX_DATA_DIR=/app/data \
+    SPX_DATA_DIR=/app/backend/demo_bundle \
     SPX_CORS_ORIGINS=""
 
 WORKDIR /app/backend

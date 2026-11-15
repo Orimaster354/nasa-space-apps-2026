@@ -9,6 +9,8 @@ could use it. It is only there to keep casual visitors apart.
 """
 from __future__ import annotations
 
+import threading
+import time
 import uuid
 from datetime import datetime, timezone
 
@@ -22,9 +24,17 @@ def _now() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+_stamp_lock = threading.Lock()
+_last_stamp = [0]
+
+
 def _stamp() -> str:
-    """Microsecond-resolution sort key, so items saved within the same second keep a stable newest-first order."""
-    return datetime.now(timezone.utc).isoformat()
+    """Strictly increasing sort key (nanosecond clock, bumped by one if the clock has not moved), so items saved in quick succession
+    keep a stable newest-first order even on a coarse clock such as Windows'."""
+    with _stamp_lock:
+        n = max(time.time_ns(), _last_stamp[0] + 1)
+        _last_stamp[0] = n
+        return f"{n:020d}"
 
 
 class TooMany(Exception):

@@ -63,7 +63,7 @@ def env(tmp_path):
         return state["files"]
 
     def resolver(name):
-        if name.lower() == "wise 0855":
+        if name.lower() == "synthetic test field":
             return CENTER
         raise NotFound(f"No object found for '{name}'.")
 
@@ -80,7 +80,7 @@ def _no_nulls(v, path="$"):
 
 
 def _object(client):
-    r = client.get("/api/v1/objects/resolve", params={"q": "WISE 0855"})
+    r = client.get("/api/v1/objects/resolve", params={"q": "Synthetic Test Field"})
     assert r.status_code == 200
     return r.json()
 
@@ -94,7 +94,7 @@ def test_resolve_by_name_coordinates_and_search(env):
     assert c.get("/api/v1/objects/search", params={"q": "133.795 -7.245"}).json()["total"] == 1
     empty = c.get("/api/v1/objects/search", params={"q": "nothing here"}).json()
     assert empty["items"] == [] and "coverageNote" in empty
-    assert c.get(f"/api/v1/objects/{o['objectId']}").json()["name"] == "WISE 0855"
+    assert c.get(f"/api/v1/objects/{o['objectId']}").json()["name"] == "Synthetic Test Field"
     _no_nulls(o)
 
 
@@ -349,3 +349,17 @@ def test_candidates_endpoint_is_honestly_empty_until_detection_exists(env):
     page = c.get(f"/api/v1/objects/{oid}/candidates").json()
     assert page["items"] == [] and page["total"] == 0 and "not available yet" in page["coverageNote"]
     assert c.get("/api/v1/objects/obj_unknown/candidates").status_code == 404
+
+
+def test_a_truncated_listing_says_how_much_of_it_is_shown(env):
+    c, _, _ = env
+    oid = _object(c)["objectId"]
+    whole = c.get(f"/api/v1/objects/{oid}/observations").json()
+    assert whole["total"] == 3 and "coverageNote" not in whole                  # everything fits: no note
+    first = c.get(f"/api/v1/objects/{oid}/observations", params={"limit": 2}).json()
+    assert first["coverageNote"] == "Showing observations 1-2 of 3 matching this view (oldest first)."
+    last = c.get(f"/api/v1/objects/{oid}/observations", params={"limit": 2, "offset": 2, "sort": "-observedAt"}).json()
+    assert last["coverageNote"] == "Showing observations 3-3 of 3 matching this view (newest first)."
+    beyond = c.get(f"/api/v1/objects/{oid}/observations", params={"offset": 10}).json()
+    assert beyond["items"] == [] and "coverageNote" not in beyond                # nothing shown, nothing to describe
+    assert c.get(f"/api/v1/objects/{oid}/observations", params={"limit": 201}).status_code == 400   # the cap is 200

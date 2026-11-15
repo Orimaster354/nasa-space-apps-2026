@@ -28,6 +28,7 @@ from processing import alignment, compare, imaging, irsa, photometry, quality
 from processing.fits_io import FitsReadError, read_cutout
 from store.registry import Registry
 
+from . import targets
 from .investigations import InvestigationStore
 
 log = logging.getLogger("spx.core")
@@ -147,8 +148,22 @@ class Services:
         m = _COORD_RE.match(q)
         if m:
             return self.resolve(ra=float(m.group(1)), dec=float(m.group(2)))
+        t = targets.find(q)
+        if t is not None:
+            return self._make_curated(t)                  # works offline and for spellings the name resolver does not know
         r_ra, r_dec = self._resolver(q.strip())
         return self._make_object(q.strip(), r_ra, r_dec, "CDS Sesame via astropy", q.strip())
+
+    def _make_curated(self, t: targets.Target) -> dict:
+        oid = object_id_for(t.ra, t.dec)
+        vra, vdec = targets.view_center(t)
+        obj = {"objectId": oid, "name": t.name, "aliases": sorted({a for a in t.aliases if a != t.name}),
+               "coordinates": {"raDeg": t.ra, "decDeg": t.dec}, "objectType": t.object_type,
+               "properMotion": targets.proper_motion_model(t),
+               "resolver": {"name": "Curated demo target", "identifier": t.catalog_id}}
+        # `viewCenter` is internal (not in the contract model): images are centred where the object is expected during the survey.
+        self.registry.put_object(oid, {**obj, "viewCenter": {"raDeg": vra, "decDeg": vdec}})
+        return obj
 
     def get_object(self, object_id: str) -> dict:
         obj = self.registry.get_object(object_id)
@@ -264,6 +279,9 @@ class Services:
             note = "Observations exist here, but none match the filters."
         page = items[offset:offset + limit]
         out = {"items": page, "total": len(items), "limit": limit, "offset": offset}
+        if page and (offset > 0 or offset + len(page) < len(items)):          # the caller sees only part of the list: say so
+            note = (f"Showing observations {offset + 1}-{offset + len(page)} of {len(items)} matching this view "
+                    f"({'oldest' if sort == 'observedAt' else 'newest'} first).")
         note = " ".join(n for n in (note, archive_note) if n) or None
         if note:
             out["coverageNote"] = note
@@ -295,7 +313,8 @@ class Services:
             obj = self.registry.get_object(rec["observation"]["objectIds"][0])
             if obj is None:
                 raise NotFound("The object for this observation is unknown.")
-            center_ra, center_dec = obj["coordinates"]["raDeg"], obj["coordinates"]["decDeg"]
+            c = obj.get("viewCenter") or obj["coordinates"]
+            center_ra, center_dec = c["raDeg"], c["decDeg"]
         try:
             irsa.validate_position(center_ra, center_dec)
             return imaging.GridSpec(center_ra, center_dec, fov_arcmin)
