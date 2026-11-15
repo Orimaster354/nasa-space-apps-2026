@@ -43,3 +43,7 @@ backend/data/*
 .DS_Store
 Thumbs.db
 *.log
+
+# Demo bundle (about 100 MB of images and slim cutouts built by backend/scripts/build_demo_bundle.py): shipped in the container, not in git
+backend/demo_bundle/*
+!backend/demo_bundle/.keep

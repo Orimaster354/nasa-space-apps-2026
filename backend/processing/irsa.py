@@ -128,7 +128,8 @@ def sia_url(collection: str, ra: float, dec: float, radius_deg: float = SEARCH_R
     return f"{SIA_URL}?COLLECTION={collection}&POS=circle+{ra!r}+{dec!r}+{radius_deg!r}&RESPONSEFORMAT=votable"
 
 
-SIA_ATTEMPTS = 3
+SIA_ATTEMPTS = 2
+SIA_TIMEOUT_S = 20.0
 SIA_BACKOFF_S = 1.0
 
 
@@ -142,7 +143,7 @@ def _default_fetch(collection: str, ra: float, dec: float):
         if attempt:
             time.sleep(SIA_BACKOFF_S * attempt)
         try:
-            r = httpx.get(url, timeout=60.0, follow_redirects=True)
+            r = httpx.get(url, timeout=SIA_TIMEOUT_S, follow_redirects=True)
         except httpx.HTTPError as exc:
             last, r = IrsaError("The SPHEREx archive could not be reached."), None
             last.__cause__ = exc

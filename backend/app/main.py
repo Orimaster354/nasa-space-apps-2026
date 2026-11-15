@@ -47,7 +47,7 @@ def build_default_services() -> Services:
 
 def build_default_companion(services: Services) -> Companion:
     return Companion(services, ProviderChain(providers_from_settings(settings)),
-                     QuotaLimiter(settings.chat_limit_per_client, settings.chat_limit_global_daily))
+                     QuotaLimiter(settings.chat_limit_per_client, settings.chat_limit_global_daily, settings.chat_limit_per_minute))
 
 
 def create_app(services: Services | None = None, companion: Companion | None = None) -> FastAPI:

@@ -35,13 +35,15 @@ class FakeCutouts:
     """Stands in for CutoutCache: serves synthetic FITS files, counts fetches, can fail on demand."""
 
     def __init__(self, tmp_path):
-        self.tmp, self.calls, self.fail = tmp_path, 0, None
+        self.tmp, self.calls, self.fail, self.gate = tmp_path, 0, None, None     # gate: a threading.Event that holds downloads open
         self.files = {u: make_cutout_fits(tmp_path / f"{i}.fits", *STAR, rotation_deg=s["rotation"], mjd=s["mjd"], detector=s["detector"],
                                            flag_value=(1 << 21))
                       for i, (u, s) in enumerate(URIS.items())}
 
     def get(self, url):
         self.calls += 1
+        if self.gate is not None:
+            self.gate.wait(timeout=15)
         if self.fail:
             raise self.fail
         for uri, path in self.files.items():
@@ -61,7 +63,7 @@ def env(tmp_path):
         return state["files"]
 
     def resolver(name):
-        if name.lower() == "wise 0855":
+        if name.lower() == "synthetic test field":
             return CENTER
         raise NotFound(f"No object found for '{name}'.")
 
@@ -78,7 +80,7 @@ def _no_nulls(v, path="$"):
 
 
 def _object(client):
-    r = client.get("/api/v1/objects/resolve", params={"q": "WISE 0855"})
+    r = client.get("/api/v1/objects/resolve", params={"q": "Synthetic Test Field"})
     assert r.status_code == 200
     return r.json()
 
@@ -92,7 +94,7 @@ def test_resolve_by_name_coordinates_and_search(env):
     assert c.get("/api/v1/objects/search", params={"q": "133.795 -7.245"}).json()["total"] == 1
     empty = c.get("/api/v1/objects/search", params={"q": "nothing here"}).json()
     assert empty["items"] == [] and "coverageNote" in empty
-    assert c.get(f"/api/v1/objects/{o['objectId']}").json()["name"] == "WISE 0855"
+    assert c.get(f"/api/v1/objects/{o['objectId']}").json()["name"] == "Synthetic Test Field"
     _no_nulls(o)
 
 
@@ -152,7 +154,9 @@ def test_archive_down_serves_the_last_saved_listing_with_a_note(env):
     oid = _object(c)["objectId"]
     first = c.get(f"/api/v1/objects/{oid}/observations").json()
     assert first["total"] == 3 and "coverageNote" not in first
-    c.app.state.services._disc_cache.clear()                                    # forget the in-memory copy; the saved snapshot remains
+    svc = c.app.state.services
+    svc._disc_cache.clear()                                                     # forget the in-memory copy; the saved snapshot remains
+    svc.snapshot_max_age_s = 0                                                  # treat the snapshot as OLD, so the live archive is tried first
     state["discover_error"] = irsa.IrsaError("archive down")
     r = c.get(f"/api/v1/objects/{oid}/observations")
     assert r.status_code == 200
@@ -160,6 +164,68 @@ def test_archive_down_serves_the_last_saved_listing_with_a_note(env):
     assert page["total"] == 3 and "last saved listing" in page["coverageNote"] and "may be out of date" in page["coverageNote"]
     assert [i["observationId"] for i in page["items"]] == [i["observationId"] for i in first["items"]]
     assert all(i["footprint"] for i in page["items"])                           # polygons survive the save and reload
+
+
+def test_a_recent_saved_listing_is_served_at_once_and_refreshed_in_the_background(env):
+    import time
+    c, _, state = env
+    oid = _object(c)["objectId"]
+    calls = []
+    real = state["files"]
+    first = c.get(f"/api/v1/objects/{oid}/observations").json()
+    assert first["total"] == 3
+    svc = c.app.state.services
+    svc._disc_cache.clear()                                                     # no in-memory copy, but a fresh snapshot on disk
+    gate_open = False
+
+    def slow_discover(ra, dec):                                                 # a hanging archive: must NOT make the page wait
+        calls.append(time.monotonic())
+        t = time.monotonic()
+        while not gate_open and time.monotonic() - t < 5:
+            time.sleep(0.02)
+        return real[:2]                                                         # the archive now lists one fewer file
+
+    svc._discover = slow_discover
+    t0 = time.monotonic()
+    page = c.get(f"/api/v1/objects/{oid}/observations").json()
+    assert time.monotonic() - t0 < 2 and page["total"] == 3 and "coverageNote" not in page     # served at once, no scary note
+    gate_open = True
+    t = time.time()
+    while len(calls) == 0 and time.time() - t < 5:
+        time.sleep(0.02)
+    assert len(calls) == 1                                                      # the refresh did run, in the background
+    t = time.time()
+    while time.time() - t < 5:                                                  # ... and the NEXT listing reflects the archive's new answer
+        if c.get(f"/api/v1/objects/{oid}/observations").json()["total"] == 2:
+            break
+        time.sleep(0.05)
+    assert c.get(f"/api/v1/objects/{oid}/observations").json()["total"] == 2
+    assert len(calls) == 1                                                      # one refresh, not one per request
+
+
+def test_a_failed_background_refresh_leaves_the_saved_listing_working(env):
+    import time
+    c, _, state = env
+    oid = _object(c)["objectId"]
+    c.get(f"/api/v1/objects/{oid}/observations")
+    svc = c.app.state.services
+    svc._disc_cache.clear()
+    state["discover_error"] = irsa.IrsaError("archive down")
+    for _ in range(3):
+        page = c.get(f"/api/v1/objects/{oid}/observations").json()
+        assert page["total"] == 3 and "coverageNote" not in page
+        time.sleep(0.1)
+
+
+def test_an_expired_snapshot_is_not_trusted_when_the_archive_answers(env):
+    c, _, state = env
+    oid = _object(c)["objectId"]
+    c.get(f"/api/v1/objects/{oid}/observations")
+    svc = c.app.state.services
+    svc._disc_cache.clear()
+    svc.snapshot_max_age_s = 0
+    state["files"] = state["files"][:1]                                         # the archive's answer changed
+    assert c.get(f"/api/v1/objects/{oid}/observations").json()["total"] == 1
 
 
 def test_a_listing_missing_a_collection_is_flagged_and_never_saved(env):
@@ -347,3 +413,17 @@ def test_candidates_endpoint_is_honestly_empty_until_detection_exists(env):
     page = c.get(f"/api/v1/objects/{oid}/candidates").json()
     assert page["items"] == [] and page["total"] == 0 and "not available yet" in page["coverageNote"]
     assert c.get("/api/v1/objects/obj_unknown/candidates").status_code == 404
+
+
+def test_a_truncated_listing_says_how_much_of_it_is_shown(env):
+    c, _, _ = env
+    oid = _object(c)["objectId"]
+    whole = c.get(f"/api/v1/objects/{oid}/observations").json()
+    assert whole["total"] == 3 and "coverageNote" not in whole                  # everything fits: no note
+    first = c.get(f"/api/v1/objects/{oid}/observations", params={"limit": 2}).json()
+    assert first["coverageNote"] == "Showing observations 1-2 of 3 matching this view (oldest first)."
+    last = c.get(f"/api/v1/objects/{oid}/observations", params={"limit": 2, "offset": 2, "sort": "-observedAt"}).json()
+    assert last["coverageNote"] == "Showing observations 3-3 of 3 matching this view (newest first)."
+    beyond = c.get(f"/api/v1/objects/{oid}/observations", params={"offset": 10}).json()
+    assert beyond["items"] == [] and "coverageNote" not in beyond                # nothing shown, nothing to describe
+    assert c.get(f"/api/v1/objects/{oid}/observations", params={"limit": 201}).status_code == 400   # the cap is 200

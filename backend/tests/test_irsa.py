@@ -231,12 +231,13 @@ def test_default_fetch_retries_a_transient_502_then_succeeds(monkeypatch):
     monkeypatch.setattr(irsa.time, "sleep", lambda s: sleeps.append(s))
 
     def fake_get(url, **kw):
-        calls.append(url)
-        return httpx.Response(502) if len(calls) < 3 else httpx.Response(200, content=VOTABLE.encode())
+        calls.append(kw.get("timeout"))
+        return httpx.Response(502) if len(calls) < irsa.SIA_ATTEMPTS else httpx.Response(200, content=VOTABLE.encode())
 
     monkeypatch.setattr(irsa.httpx, "get", fake_get)
     t = irsa._default_fetch("spherex_dr1", 10.0, 10.0)
-    assert len(calls) == 3 and sleeps == [irsa.SIA_BACKOFF_S, 2 * irsa.SIA_BACKOFF_S] and float(t["t_min"][0]) == 60800.7
+    assert len(calls) == irsa.SIA_ATTEMPTS == 2 and sleeps == [irsa.SIA_BACKOFF_S] and float(t["t_min"][0]) == 60800.7
+    assert calls == [irsa.SIA_TIMEOUT_S] * 2 and irsa.SIA_TIMEOUT_S <= 20            # a hanging archive costs at most about 40 s, not minutes
 
 
 def test_default_fetch_does_not_retry_a_client_error(monkeypatch):

@@ -2,15 +2,17 @@
 from __future__ import annotations
 
 import re
+import uuid
 from typing import Literal
 
-from fastapi import APIRouter, Query, Request
+from fastapi import APIRouter, Query, Request, Response
 
-from services.core import NotFound, Services
+from services.core import BadRequest, NotFound, Services
+from services.investigations import TooMany
 
 from processing.imaging import DEFAULT_FOV_ARCMIN
 
-from .schemas import (AIResponse, AstronomicalObject, ComparisonResult, CreateComparisonRequest, CreateMeasurementRequest, Measurement,
+from .schemas import (AIResponse, Investigation, InvestigationInput, InvestigationSummary, AstronomicalObject, ComparisonResult, CreateComparisonRequest, CreateMeasurementRequest, Measurement,
                       Observation, ObservationImage, Page, PixelToSky, SendChatMessageRequest)
 
 router = APIRouter()
@@ -84,10 +86,14 @@ def get_observation_image(
     stretch: Literal["linear", "log", "sqrt", "asinh"] = "asinh",
     lowPercentile: float = Query(1.0, ge=0, le=100), highPercentile: float = Query(99.5, ge=0, le=100),
     centerRa: float | None = None, centerDec: float | None = None, fovArcmin: float = Query(DEFAULT_FOV_ARCMIN, gt=0),
+    response: Response = None,
 ):
-    return svc(request).get_image(
+    result = svc(request).get_image(
         observation_id, stretch=stretch, low_pct=lowPercentile, high_pct=highPercentile,
         center_ra=centerRa, center_dec=centerDec, fov_arcmin=fovArcmin)
+    if result["availability"]["status"] == "processing":
+        response.status_code = 202                    # contract 5 "Async work": 202 + processing, the client polls the same GET
+    return result
 
 
 @router.get("/observations/{observation_id}/pixel-to-sky", response_model=PixelToSky, **_EXCLUDE)
@@ -111,7 +117,53 @@ def create_measurement(request: Request, body: CreateMeasurementRequest):
 @router.post("/chat/messages", response_model=AIResponse, **_EXCLUDE)
 def send_chat_message(request: Request, body: SendChatMessageRequest):
     ctx = body.context.model_dump(exclude_none=True)
-    return request.app.state.companion.respond(body.message, ctx, client_id(request), body.investigationId)
+    owner = client_id(request)
+    store = svc(request).investigations
+    if body.investigationId and store.get(owner, body.investigationId) is None:
+        raise NotFound("Unknown investigation.")              # checked first so a bad id never spends an AI message
+    reply = request.app.state.companion.respond(body.message, ctx, owner, body.investigationId)
+    if body.investigationId:
+        now = reply["message"]["createdAt"]
+        user = {"messageId": "msg_" + uuid.uuid4().hex[:10], "role": "user", "content": body.message, "createdAt": now, "context": ctx}
+        store.append_messages(owner, body.investigationId, [user, reply["message"]])
+    return reply
+
+
+@router.get("/investigations", response_model=Page, **_EXCLUDE)
+def list_investigations(request: Request, limit: int = Query(20, ge=1, le=100), offset: int = Query(0, ge=0)):
+    items, total = svc(request).investigations.list(client_id(request), limit, offset)
+    return {"items": [InvestigationSummary(**i).model_dump(exclude_none=True) for i in items], "total": total, "limit": limit, "offset": offset}
+
+
+@router.post("/investigations", response_model=Investigation, status_code=201, **_EXCLUDE)
+def create_investigation(request: Request, body: InvestigationInput):
+    try:
+        return svc(request).investigations.create(client_id(request), body.model_dump(exclude_none=True))
+    except TooMany as exc:
+        raise BadRequest(str(exc)) from exc
+
+
+@router.get("/investigations/{investigation_id}", response_model=Investigation, **_EXCLUDE)
+def get_investigation(request: Request, investigation_id: str):
+    inv = svc(request).investigations.get(client_id(request), investigation_id)
+    if inv is None:
+        raise NotFound("Unknown investigation.")
+    return inv
+
+
+@router.put("/investigations/{investigation_id}", response_model=Investigation, **_EXCLUDE)
+def update_investigation(request: Request, investigation_id: str, body: InvestigationInput):
+    inv = svc(request).investigations.update(client_id(request), investigation_id, body.model_dump(exclude_none=True))
+    if inv is None:
+        raise NotFound("Unknown investigation.")
+    return inv
+
+
+@router.delete("/investigations/{investigation_id}", status_code=204)
+def delete_investigation(request: Request, investigation_id: str):
+    if not svc(request).investigations.delete(client_id(request), investigation_id):
+        raise NotFound("Unknown investigation.")
+    return Response(status_code=204)
 
 
 @router.get("/measurements/{measurement_id}", response_model=Measurement, **_EXCLUDE)

@@ -22,6 +22,8 @@ class Registry:
             c.execute("CREATE TABLE IF NOT EXISTS comparisons (id TEXT PRIMARY KEY, body TEXT NOT NULL)")
             c.execute("CREATE TABLE IF NOT EXISTS measurements (id TEXT PRIMARY KEY, body TEXT NOT NULL)")
             c.execute("CREATE TABLE IF NOT EXISTS discoveries (id TEXT PRIMARY KEY, body TEXT NOT NULL)")
+            c.execute("CREATE TABLE IF NOT EXISTS investigations (id TEXT PRIMARY KEY, owner TEXT NOT NULL, updated TEXT NOT NULL, body TEXT NOT NULL)")
+            c.execute("CREATE INDEX IF NOT EXISTS investigations_owner ON investigations (owner, updated)")
 
     def _conn(self):
         return sqlite3.connect(self.path, timeout=30)
@@ -65,3 +67,24 @@ class Registry:
 
     def get_discovery(self, key: str) -> dict | None:
         return self._get("discoveries", key)
+
+    # ---- investigations (owner-scoped; see services/investigations.py)
+    def inv_put(self, inv_id: str, owner: str, updated: str, body: dict) -> None:
+        with self._lock, self._conn() as c:
+            c.execute("INSERT INTO investigations (id, owner, updated, body) VALUES (?, ?, ?, ?) "
+                      "ON CONFLICT(id) DO UPDATE SET owner = excluded.owner, updated = excluded.updated, body = excluded.body",
+                      (inv_id, owner, updated, json.dumps(body)))
+
+    def inv_get(self, inv_id: str) -> tuple[str, dict] | None:
+        with self._conn() as c:
+            row = c.execute("SELECT owner, body FROM investigations WHERE id = ?", (inv_id,)).fetchone()
+        return None if row is None else (row[0], json.loads(row[1]))
+
+    def inv_list(self, owner: str) -> list[dict]:
+        with self._conn() as c:
+            rows = c.execute("SELECT body FROM investigations WHERE owner = ? ORDER BY updated DESC, id", (owner,)).fetchall()
+        return [json.loads(r[0]) for r in rows]
+
+    def inv_delete(self, inv_id: str) -> None:
+        with self._lock, self._conn() as c:
+            c.execute("DELETE FROM investigations WHERE id = ?", (inv_id,))

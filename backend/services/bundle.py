@@ -1,0 +1,72 @@
+"""Demo bundle: everything the curated demo targets need to work with the SPHEREx archive unreachable.
+
+A bundle is an ordinary data directory (registry.sqlite, images/, cutouts/) built once on a machine with network access, then shipped
+inside the container as the starting data directory. It contains, for each target:
+  * the target and its observation records (so lists and ids resolve),
+  * a saved archive listing (so the observation list works while IRSA is down),
+  * rendered images for the first N frames of the default band at the default field of view,
+  * SLIM copies of those frames' cutouts. A full cutout is about 4 MB, almost all of it a PSF table this app never reads; the slim copy
+    keeps only the planes the pipeline reads (IMAGE, FLAGS, VARIANCE, ZODI, WCS-WAVE), about 0.4 MB. With them, other stretches,
+    comparisons, difference images, alignment and photometry for those frames also work offline.
+Frames outside the bundle still need the archive and fail cleanly (a retryable error) when it is down.
+"""
+from __future__ import annotations
+
+import os
+import time
+from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
+
+from astropy.io import fits
+
+KEEP_EXTENSIONS = ("IMAGE", "FLAGS", "VARIANCE", "ZODI", "WCS-WAVE")
+
+
+def slim_fits(src: str | Path, dst: str | Path) -> tuple[int, int]:
+    """Write a copy of `src` with only the extensions the pipeline reads. Returns (size_before, size_after) in bytes."""
+    src, dst = Path(src), Path(dst)
+    with fits.open(src, memmap=False) as h:
+        out = fits.HDUList([fits.PrimaryHDU(header=h[0].header)])
+        for name in KEEP_EXTENSIONS:
+            try:
+                out.append(h[name].copy())
+            except KeyError:
+                continue
+        if "IMAGE" not in [x.name for x in out]:
+            raise ValueError(f"{src.name} has no IMAGE extension")
+        tmp = dst.with_name(dst.name + ".part")
+        out.writeto(tmp, overwrite=True)
+    before = src.stat().st_size
+    os.replace(tmp, dst)
+    return before, dst.stat().st_size
+
+
+def slim_directory(cutout_dir: str | Path) -> dict:
+    """Slim every cutout in a cache directory in place (same file names, so the cache keys still match)."""
+    sizes_before = sizes_after = n = 0
+    for f in sorted(Path(cutout_dir).glob("*.fits")):
+        b, a = slim_fits(f, f)
+        sizes_before, sizes_after, n = sizes_before + b, sizes_after + a, n + 1
+    return {"files": n, "bytesBefore": sizes_before, "bytesAfter": sizes_after}
+
+
+def warm_target(svc, query: str, band: str = "SPHEREx-D3", frames: int = 50, workers: int = 4, rounds: int = 4,
+                pause_s: float = 5.0, log=print) -> dict:
+    """Resolve a target, list its observations in `band`, and render the first `frames` images, retrying failures a few rounds."""
+    obj = svc.resolve(q=query)
+    page = svc.list_observations(obj["objectId"], bandpass=band, limit=200)
+    items = page["items"][:frames]
+    pending = [o["observationId"] for o in items]
+    log(f"{obj['name']}: {page['total']} {band} observations; warming {len(pending)} frames")
+    ok = 0
+    for rnd in range(1, rounds + 1):
+        if not pending:
+            break
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            results = list(pool.map(lambda oid: (oid, svc.get_image(oid, wait_s=300)["availability"]), pending))
+        pending = [oid for oid, a in results if a["status"] != "available"]
+        ok = len(items) - len(pending)
+        log(f"  round {rnd}: {ok}/{len(items)} frames ready" + (f"; retrying {len(pending)}" if pending and rnd < rounds else ""))
+        if pending and rnd < rounds:
+            time.sleep(pause_s)
+    return {"target": obj["name"], "objectId": obj["objectId"], "observations": page["total"], "frames": len(items), "ready": ok, "missing": pending}

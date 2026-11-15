@@ -31,7 +31,7 @@ Priorities: **P0** essential for a functioning submission · **P1** important di
   Dep: P0-05. Done: every error code in contract §4 can be produced in tests; unknown errors become `INTERNAL` with a request ID; no stack traces in responses.
 - [x] **P0-08 Logging with request IDs.**
   Dep: P0-05. Done: each request logs method, path, status, duration, request ID; secrets never logged (checked by a test).
-- [ ] **P0-09 Pydantic models mirroring contract §3.** *(Objects, observations, images done in `api/schemas.py`; the rest as endpoints are built.)*
+- [x] **P0-09 Pydantic models mirroring contract §3.** *(Objects, observations, images done in `api/schemas.py`; the rest as endpoints are built.)* *(Done: a model exists for every contract type and the error envelope (spectrum and candidate models exist before their endpoints). Every example in DATA_MODELS.md validates and round-trips (tests/test_contract_models.py). Optional fields are omitted, never null.)*
   Dep: P0-05. Done: a model exists for each contract type; example JSON from DATA_MODELS.md validates; omitted-not-null enforced by serialization settings (test).
 - [x] **P0-10 Test structure and markers.**
   Dep: P0-05. Done: `synthetic`, `recorded`, `realdata` markers; `pytest -m "not realdata"` runs offline.
@@ -56,7 +56,7 @@ Priorities: **P0** essential for a functioning submission · **P1** important di
   Dep: P0-04. Done: returns sky coordinate; round-trip error under a stated tolerance in a synthetic-WCS test.
 - [x] **P0-19 Quality flags decoded.** *(Done in `processing/quality.py` from IRSA online help; still to cross-check against the Explanatory Supplement.)*
   Dep: P0-16, A5. Done: flag decoder table sourced from the Explanatory Supplement (cited in code); unknown bits reported as `info` with raw value; `qualitySummary` rule documented and tested.
-- [ ] **P0-20 Async/“processing” behavior.**
+- [x] **P0-20 Async/“processing” behavior.** *(Done for images: a request waits up to 20 s for its image; slower downloads return HTTP 202 with `availability.status = processing` and `retryAfterSeconds = 3` while a background job continues, and the same GET later returns the image. Identical requests share one job; a failed job is reported as `failed`/`unavailable`, never stuck. The frontend already polls (frames.js, up to 6 tries). Comparisons are still synchronous: they wait for their images (up to 300 s) and never store a processing stub.)*
   Dep: P0-15. Done: slow fetch returns `processing` with `retryAfterSeconds`, then resolves; failure returns `failed` with a reason; tested with a slow stub.
 
 ### Comparison and measurement
@@ -82,7 +82,7 @@ Priorities: **P0** essential for a functioning submission · **P1** important di
   Dep: P0-13, P0-23, P0-24. Done: tools exist for object, observations, comparison, measurements (spectrum/candidates added later); each returns contract models.
 - [x] **P0-29 AI companion receives structured measurement results.** *(Done: the prompt is JSON of `{id, text}` facts; tests assert it contains the measurement values and no image keys, URLs or base64, and that Gemini and OpenAI-compatible request bodies hold text parts only.)*
   Dep: P0-28. Done: for a context with a comparison, the prompt contains the `Measurement`/`ComparisonResult` objects (verified by a test that inspects the prompt), and no raw arrays, FITS, or image bytes. The LLM adapter has no image input path at all (a test asserts requests are text-only). *(Design rule from 2026-11-14: scientific computation first, AI interpretation second; see plan §9.)*
-- [x] **P0-30 Chat endpoint.** *(Done: `POST /chat/messages` with per-visitor (default 15) and global daily (default 500) AI-message limits, then automated summaries. Visitor key = `X-Client-Id` header, else the caller address. NOT done: persisting messages to an investigation (no investigation endpoints yet, `investigationId` is accepted and ignored).)*
+- [x] **P0-30 Chat endpoint.** *(Done: `POST /chat/messages`. Limits (changed 2026-11-15): per visitor 60, site-wide 10 per minute (a rush waits up to 12 s for a slot) and 1500 per day, plus a 45 s cool-down after a provider 429; when a limit is hit the visitor gets the friendly plain-language summary. Visitor key = `X-Client-Id` header, else the caller address. NOT done: persisting messages to an investigation (no investigation endpoints yet, `investigationId` is accepted and ignored).)*
   Dep: P0-27, P0-29. Done: `POST /chat/messages` returns a valid `AIResponse` with `references`, `caveats`, `suggestedActions`; honors `ChatContext.mode` and `candidateId`; messages persisted when `investigationId` given.
 - [x] **P0-31 Grounding: structured output + numeric check.** *(Done: `ai/grounding.py`. Every digit-written number in answer and hypotheses must match a number in a cited fact (rounding accepted); one retry quoting the problems, then the automated summary. Known limit: numbers written as words are not caught (the prompt says to use digits).)*
   Dep: P0-30. Done: model output parsed as `{answer, citedResultIds, hypotheses}`; any number in `answer` not found in cited results triggers retry then the templated fallback; tested with fake-provider outputs that invent a number (must be rejected).
@@ -91,15 +91,15 @@ Priorities: **P0** essential for a functioning submission · **P1** important di
 
 ### Persistence, deploy, demo
 
-- [ ] **P0-33 Investigation persistence.**
+- [x] **P0-33 Investigation persistence.** *(Done: `GET/POST /investigations`, `GET/PUT/DELETE /investigations/{id}`, owner-scoped to an anonymous visitor (X-Client-Id header, else the caller address), messages server-managed and appended by the chat endpoint when `investigationId` is given, limits (100 per visitor, 200 notes, 500 events). Stored in SQLite. CAVEAT: on Cloud Run the disk is temporary, so a redeploy or instance restart loses saved investigations; avoid redeploying during judging. The UI sends no X-Client-Id yet, so visitors are keyed by address until the frontend data layer adds it.)*
   Dep: P0-09. Done: SQLite store; create/get/list/update/delete per the contract; `messages` server-managed and ignored on PUT; survives restart. (Per-user scoping only if OD-7 is settled.)
-- [ ] **P0-34 Contract-validation tests for every implemented endpoint.**
+- [x] **P0-34 Contract-validation tests for every implemented endpoint.** *(Done: one test per implemented operation validates the response against its model with no nulls, plus the error envelope. Operation 10 (spectrum) is not implemented yet and is asserted as such.)*
   Dep: each endpoint. Done: one test per operation validates the response model; runs offline.
-- [ ] **P0-35 Deploy with a persistent disk.**
+- [x] **P0-35 Deploy with a persistent disk.** *(Done on Google Cloud Run (project navilink, us-central1, 2 CPU, 4 GiB, ONE instance because each instance has its own disk). Not a persistent disk: see P0-33 caveat.)*
   Dep: P0-05, D-3. Done: public URL reachable from the frontend origin; `/health` OK; cache directory persists across restarts; env keys set on the host only.
-- [ ] **P0-36 🛰 Real IRSA retrieval works from the deployed host.**
+- [x] **P0-36 🛰 Real IRSA retrieval works from the deployed host.** *(Done: from the deployed host, name resolution, SIA2 discovery, cutout download, image rendering and Gemini chat all worked in a real browser test.)*
   Dep: P0-35, P0-15. Done: a live search → observations → image succeeds on the host; latency recorded; failure behaviors demonstrated.
-- [ ] **P0-37 Pre-cache the curated demo targets.**
+- [x] **P0-37 Pre-cache the curated demo targets.** *(Done and verified on the REAL bundle (built 2026-11-15 by `backend/scripts/build_demo_bundle.py`, not in git): 245 frames (50 each for Barnard's Star, RW Aurigae, R Draconis, Epsilon Indi B; 45 for WISE 0855), 100 MB with slimmed cutouts. With the server's outside network blocked: all five targets resolve (0-8 ms), list in about 0.5-1.3 s from the saved listing, every frame's image is ready in under 20 ms, the PNGs download, a brightness measurement (32.2 +- 0.27 mJy) and a difference comparison (alignment 0.1 arcsec) work, a frame outside the bundle fails cleanly and retryably, and in a browser the first frame shows in 1 s. Rebuild the bundle if the grid, field of view or centring changes (image names depend on them).)*
   Dep: P0-06, D-7, P0-35. Done: each curated target loads instantly with the host's network disabled for IRSA (simulated by stub).
 - [ ] **P0-38 🛰 Complete one real astronomical investigation end to end.**
   Dep: P0-06, P0-26, P0-32, P0-37. Done: chosen target: real observations retrieved; metadata interpreted; blink/comparison sequence rendered; at least one validated measurement with uncertainty; AI answers a user question citing those results; a short written account lists what is and isn't established.
@@ -169,7 +169,7 @@ Priorities: **P0** essential for a functioning submission · **P1** important di
 
 - [x] **P0-22b Pre-warm script for the curated demo targets.** *(`backend/scripts/prewarm.py`.)* Dep: P0-15. Done: one command downloads and renders images for the five challenge targets at the default field of view into the cache (cold frames take 3-8 s each; 4 MB per cutout).
 - [x] **P0-22c Same-band timeline.** *(Frontend data layer now requests one band, default SPHEREx-D3; `?band=` overrides. Still pending in the contract.)* Dep: P0-13. Done: backend supports `bandpass` filtering (implemented) and contract/frontend agree that a blink series is requested per bandpass (contract addition pending).
-- [ ] **P0-22d Pagination guard.** Dep: P0-13. Done: confirmed the frontend pages through observations (Barnard's Star has 363, R Draconis 2514; the API caps a page at 200).
+- [x] **P0-22d Pagination guard.** Dep: P0-13. Done: confirmed the frontend pages through observations (Barnard's Star has 363, R Draconis 2514; the API caps a page at 200). *(Finding: the frontend does NOT page. It calls the observation list once with no limit or offset, so it gets the first 50 observations of the band (oldest first). Barnard's Star has 60 in D3 and R Draconis 576, so the UI shows only the earliest 50. Not changed on the backend (raising the default would make the UI preload up to 200 frames). The backend now sets a `coverageNote` on any truncated page, e.g. 'Showing observations 1-50 of 576 matching this view (oldest first).')*
 
 ## Cross-cutting acceptance
 

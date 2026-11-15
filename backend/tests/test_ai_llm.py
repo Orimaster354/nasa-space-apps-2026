@@ -106,6 +106,10 @@ def test_providers_come_from_settings_and_blank_ones_are_skipped():
                  llm_provider_2="openai_compatible", llm_api_key_2=SecretStr("k2"), llm_model_2="m2", llm_base_url_2="https://x.test/v1")
     ps = providers_from_settings(s)
     assert [p.name for p in ps] == ["gemini", "openai_compatible"]
+    three = Settings(_env_file=None, llm_provider_1="gemini", llm_api_key_1=SecretStr(KEY), llm_model_1="a",
+                     llm_provider_2="gemini", llm_api_key_2=SecretStr(KEY), llm_model_2="b",
+                     llm_provider_3="gemini", llm_api_key_3=SecretStr(KEY), llm_model_3="c")
+    assert [p.model for p in providers_from_settings(three)] == ["a", "b", "c"]                      # one key can serve three models, in order
     missing_model = Settings(_env_file=None, llm_provider_1="gemini", llm_api_key_1=SecretStr(KEY))
     assert providers_from_settings(missing_model) == []
 
@@ -113,3 +117,36 @@ def test_providers_come_from_settings_and_blank_ones_are_skipped():
 def test_the_key_never_appears_in_settings_repr():
     s = Settings(_env_file=None, llm_provider_1="gemini", llm_api_key_1=SecretStr(KEY), llm_model_1="m")
     assert KEY not in repr(s) and KEY not in str(s) and KEY not in s.model_dump_json()
+
+
+def test_the_default_timeout_is_short_so_a_slow_model_fails_over_quickly():
+    assert Settings(_env_file=None).llm_timeout_s == 12.0 and GeminiProvider("k", "m")._client.timeout.read == 12.0
+    chain = ProviderChain([Fake("slow", error="gemini request failed (ReadTimeout)"), Fake("fast", reply="OK")])
+    assert chain.generate("s", "u") == ("OK", "fast")
+
+
+def test_the_test_environment_cannot_reach_a_real_provider():
+    """Guards the hermetic setup in conftest.py: no provider slot may be configured while tests run, whatever backend/.env contains."""
+    from app.config import settings
+    for i in (1, 2, 3, 4):
+        assert not getattr(settings, f"llm_provider_{i}", "") and not getattr(settings, f"llm_model_{i}", "")
+        key = getattr(settings, f"llm_api_key_{i}", None)
+        assert key is None or not key.get_secret_value()
+
+
+def test_the_chain_stops_trying_once_its_time_budget_is_spent():
+    t = [0.0]
+
+    class SlowFail:
+        def __init__(self, name): self.name, self.calls = name, 0
+        def generate(self, system, user):
+            self.calls += 1
+            t[0] += 12.0                                                              # each attempt burns its full timeout
+            raise LLMError("gemini request failed (ReadTimeout)")
+
+    a, b, c = SlowFail("a"), SlowFail("b"), SlowFail("c")
+    with pytest.raises(LLMUnavailable):
+        ProviderChain([a, b, c], max_total_s=20.0, clock=lambda: t[0]).generate("s", "u")
+    assert (a.calls, b.calls, c.calls) == (1, 1, 0)                                   # 12 s, 24 s: over budget, so the third is skipped
+    ok = Fake("ok", reply="fine")
+    assert ProviderChain([ok], max_total_s=20.0, clock=lambda: t[0]).generate("s", "u") == ("fine", "ok")

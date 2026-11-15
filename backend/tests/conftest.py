@@ -5,14 +5,14 @@ from pathlib import Path
 # Hermetic tests: never read real AI keys from backend/.env and never reach a live provider. Environment variables take priority
 # over the .env file, and this runs before app.config is imported by any test module.
 for _name in ("PROVIDER", "API_KEY", "MODEL", "BASE_URL"):
-    for _i in (1, 2):
+    for _i in (1, 2, 3):
         os.environ[f"SPX_LLM_{_name}_{_i}"] = ""
 
 import numpy as np
 from astropy.io import fits
 from astropy.wcs import WCS
 
-CENTER = (133.795129, -7.245147)       # WISE 0855, used only as a convenient sky position
+CENTER = (133.795129, -7.245147)       # near WISE 0855's challenge coordinate; used only as a convenient sky position for synthetic tests
 
 
 def make_cutout_fits(path: Path, star_ra: float, star_dec: float, rotation_deg: float = 0.0, n: int = 29,

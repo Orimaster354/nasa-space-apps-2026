@@ -16,6 +16,7 @@ import math
 import re
 import threading
 import time
+from concurrent.futures import Future, ThreadPoolExecutor, TimeoutError as FutureTimeout
 from dataclasses import asdict
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -26,6 +27,9 @@ import numpy as np
 from processing import alignment, compare, imaging, irsa, photometry, quality
 from processing.fits_io import FitsReadError, read_cutout
 from store.registry import Registry
+
+from . import targets
+from .investigations import InvestigationStore
 
 log = logging.getLogger("spx.core")
 
@@ -104,12 +108,21 @@ class Services:
     def __init__(self, registry: Registry, cutouts: irsa.CutoutCache, images_dir: str | Path,
                  discover: Callable[[float, float], list[irsa.ArchiveFile]] = irsa.discover,
                  resolver: Callable[[str], tuple[float, float]] = _astropy_resolver,
-                 discovery_ttl_s: float = 600.0):
+                 discovery_ttl_s: float = 600.0, image_wait_s: float = 20.0, render_workers: int = 6,
+                 snapshot_max_age_s: float = 3 * 86400.0):
         self.registry, self.cutouts = registry, cutouts
+        self.investigations = InvestigationStore(registry)
         self.images_dir = Path(images_dir)
         self.images_dir.mkdir(parents=True, exist_ok=True)
         self._discover, self._resolver = discover, resolver
         self._ttl = discovery_ttl_s
+        # Images render in a small worker pool. A request waits up to `image_wait_s` for its image; if it is not ready by then the
+        # response is 'processing' (the frontend polls) and the job keeps running. Identical requests share one job.
+        self.image_wait_s = image_wait_s
+        self._pool = ThreadPoolExecutor(max_workers=render_workers, thread_name_prefix="render")
+        self._jobs: dict[str, Future] = {}
+        self.snapshot_max_age_s = snapshot_max_age_s     # a saved archive listing this young is served at once (see _discover_cached)
+        self._refreshing: set[str] = set()
         self._disc_cache: dict[tuple[float, float], tuple[float, list[irsa.ArchiveFile]]] = {}
         self._lock = threading.Lock()
 
@@ -138,8 +151,22 @@ class Services:
         m = _COORD_RE.match(q)
         if m:
             return self.resolve(ra=float(m.group(1)), dec=float(m.group(2)))
+        t = targets.find(q)
+        if t is not None:
+            return self._make_curated(t)                  # works offline and for spellings the name resolver does not know
         r_ra, r_dec = self._resolver(q.strip())
         return self._make_object(q.strip(), r_ra, r_dec, "CDS Sesame via astropy", q.strip())
+
+    def _make_curated(self, t: targets.Target) -> dict:
+        oid = object_id_for(t.ra, t.dec)
+        vra, vdec = targets.view_center(t)
+        obj = {"objectId": oid, "name": t.name, "aliases": sorted({a for a in t.aliases if a != t.name}),
+               "coordinates": {"raDeg": t.ra, "decDeg": t.dec}, "objectType": t.object_type,
+               "properMotion": targets.proper_motion_model(t),
+               "resolver": {"name": "Curated demo target", "identifier": t.catalog_id}}
+        # `viewCenter` is internal (not in the contract model): images are centred where the object is expected during the survey.
+        self.registry.put_object(oid, {**obj, "viewCenter": {"raDeg": vra, "decDeg": vdec}})
+        return obj
 
     def get_object(self, object_id: str) -> dict:
         obj = self.registry.get_object(object_id)
@@ -148,12 +175,53 @@ class Services:
         return obj
 
     # ---- observations --------------------------------------------------------------------------------------------
+    @staticmethod
+    def _age_s(saved_at: str | None) -> float:
+        try:
+            return (datetime.now(timezone.utc) - datetime.fromisoformat(saved_at.replace("Z", "+00:00"))).total_seconds()
+        except (AttributeError, ValueError):
+            return float("inf")
+
+    @staticmethod
+    def _files_from_snapshot(snap: dict) -> list[irsa.ArchiveFile]:
+        return [irsa.ArchiveFile(**{**d, "footprint": tuple(tuple(p) for p in d["footprint"]) if d.get("footprint") else d.get("footprint")})
+                for d in snap["files"]]
+
+    def _live_discover(self, ra: float, dec: float, key: tuple[float, float], skey: str) -> list[irsa.ArchiveFile]:
+        """Ask the archive; on a complete answer save it as the snapshot and cache it in memory. May raise IrsaError."""
+        files = self._discover(ra, dec)
+        if getattr(files, "incomplete", []):
+            return files                                   # a partial listing is returned to the caller but never saved or cached
+        self.registry.put_discovery(skey, {"savedAt": now_iso(), "files": [asdict(f) for f in files]})
+        with self._lock:
+            self._disc_cache[key] = (time.monotonic(), list(files))
+        return files
+
+    def _refresh_in_background(self, ra: float, dec: float, key: tuple[float, float], skey: str) -> None:
+        with self._lock:
+            if skey in self._refreshing:
+                return
+            self._refreshing.add(skey)
+
+        def run():
+            try:
+                self._live_discover(ra, dec, key, skey)
+            except Exception as exc:                       # the saved listing keeps serving; nothing to tell the user
+                log.info("background refresh of %s failed: %s", skey, exc)
+            finally:
+                with self._lock:
+                    self._refreshing.discard(skey)
+
+        threading.Thread(target=run, name="discovery-refresh", daemon=True).start()
+
     def _discover_cached(self, ra: float, dec: float) -> tuple[list[irsa.ArchiveFile], str | None]:
         """Archive listing for a position, plus an optional note for the user.
 
-        Live results are cached for a few minutes and saved as a snapshot. If the archive is down, the last saved snapshot is used
-        (clearly noted) instead of failing; with no snapshot the error is raised. A listing that is missing a collection is never
-        cached or saved, so the next request retries, and it carries a note saying it may be incomplete.
+        1. A listing fetched in the last few minutes is reused.
+        2. Otherwise, a saved snapshot younger than `snapshot_max_age_s` is returned AT ONCE and refreshed in the background, so a slow or
+           broken archive never makes the page wait (the demo bundle ships such snapshots).
+        3. Otherwise the archive is asked; if it fails, an older snapshot is used (and the user is told) or the error is raised.
+        A listing that is missing a collection is never cached or saved, and carries a note.
         """
         key = (round(ra, 4), round(dec, 4))
         skey = f"{key[0]:.4f},{key[1]:.4f}"
@@ -161,23 +229,22 @@ class Services:
             hit = self._disc_cache.get(key)
         if hit and time.monotonic() - hit[0] < self._ttl:
             return hit[1], None
+        snap = self.registry.get_discovery(skey)
+        if snap and self._age_s(snap.get("savedAt")) < self.snapshot_max_age_s:
+            self._refresh_in_background(ra, dec, key, skey)
+            return self._files_from_snapshot(snap), None
         try:
-            files = self._discover(ra, dec)
+            files = self._live_discover(ra, dec, key, skey)
         except irsa.IrsaError as exc:
-            snap = self.registry.get_discovery(skey)
             if snap:
                 log.warning("archive unavailable (%s); serving the saved listing from %s", exc, snap.get("savedAt"))
-                return ([irsa.ArchiveFile(**{**d, "footprint": tuple(tuple(p) for p in d["footprint"]) if d.get("footprint") else d.get("footprint")})
-                         for d in snap["files"]],
+                return (self._files_from_snapshot(snap),
                         f"The SPHEREx archive is not responding right now, so this is the last saved listing ({snap.get('savedAt', 'earlier')}). It may be out of date.")
             raise Upstream(str(exc), exc.retryable) from exc
         incomplete = list(getattr(files, "incomplete", []))
         if incomplete:
             return list(files), (f"Some archive collections did not respond ({', '.join(incomplete)}), so this list may be incomplete. "
                                  "Reload in a moment to check again.")
-        self.registry.put_discovery(skey, {"savedAt": now_iso(), "files": [asdict(f) for f in files]})
-        with self._lock:
-            self._disc_cache[key] = (time.monotonic(), list(files))
         return list(files), None
 
     def _observation_dict(self, f: irsa.ArchiveFile, obj: dict, quality_info: dict | None) -> dict:
@@ -241,9 +308,11 @@ class Services:
             oid = observation_id_for(f.uri)
             prior = self.registry.get_observation(oid)
             observation = self._observation_dict(f, obj, (prior or {}).get("quality"))
+            self._with_wave(observation, prior or {})
             object_ids = sorted(set((prior or {}).get("observation", {}).get("objectIds", [])) | {object_id})
             observation["objectIds"] = object_ids
-            self.registry.put_observation(oid, {"observation": observation, "file": asdict(f), "quality": (prior or {}).get("quality")})
+            self.registry.put_observation(oid, {"observation": observation, "file": asdict(f), "quality": (prior or {}).get("quality"),
+                                                **({"wavelengthAtObject": prior["wavelengthAtObject"]} if prior and prior.get("wavelengthAtObject") else {})})
             items.append(observation)
 
         note = None
@@ -253,16 +322,28 @@ class Services:
             note = "Observations exist here, but none match the filters."
         page = items[offset:offset + limit]
         out = {"items": page, "total": len(items), "limit": limit, "offset": offset}
+        if page and (offset > 0 or offset + len(page) < len(items)):          # the caller sees only part of the list: say so
+            note = (f"Showing observations {offset + 1}-{offset + len(page)} of {len(items)} matching this view "
+                    f"({'oldest' if sort == 'observedAt' else 'newest'} first).")
         note = " ".join(n for n in (note, archive_note) if n) or None
         if note:
             out["coverageNote"] = note
         return out
+
+    @staticmethod
+    def _with_wave(obs: dict, rec: dict) -> None:
+        w = rec.get("wavelengthAtObject")
+        if w:
+            obs["wavelengthAtObjectUm"] = w["um"]
+            if w.get("bandwidthUm") is not None:
+                obs["bandwidthAtObjectUm"] = w["bandwidthUm"]
 
     def get_observation(self, observation_id: str) -> dict:
         rec = self.registry.get_observation(observation_id)
         if rec is None:
             raise NotFound("Unknown observation.")
         obs = dict(rec["observation"])
+        self._with_wave(obs, rec)
         if rec.get("quality"):
             obs["qualityFlags"], obs["qualitySummary"] = rec["quality"]["flags"], rec["quality"]["summary"]
         return obs
@@ -275,15 +356,46 @@ class Services:
             obj = self.registry.get_object(rec["observation"]["objectIds"][0])
             if obj is None:
                 raise NotFound("The object for this observation is unknown.")
-            center_ra, center_dec = obj["coordinates"]["raDeg"], obj["coordinates"]["decDeg"]
+            c = obj.get("viewCenter") or obj["coordinates"]
+            center_ra, center_dec = c["raDeg"], c["decDeg"]
         try:
             irsa.validate_position(center_ra, center_dec)
             return imaging.GridSpec(center_ra, center_dec, fov_arcmin)
         except ValueError as exc:
             raise BadRequest(str(exc)) from exc
 
+    @staticmethod
+    def _failure(base: dict, exc: Exception) -> dict:
+        if isinstance(exc, irsa.IrsaError):
+            status = "failed" if exc.retryable else "unavailable"
+            return {**base, "availability": {"status": status, "statusReason": str(exc), **({"retryAfterSeconds": 30} if exc.retryable else {})}}
+        return {**base, "availability": {"status": "failed", "statusReason": f"The data file could not be read: {exc}"}}
+
+    def _render_image(self, observation_id: str, rec: dict, grid: imaging.GridSpec, stretch: str, low_pct: float, high_pct: float,
+                      png_path: Path, meta_path: Path) -> dict:
+        """Fetch the cutout, resample, render and save. The PNG is written LAST (atomically): its existence means 'done'."""
+        import json
+        import os
+        url = irsa.cutout_url(rec["file"]["uri"], grid.center_ra, grid.center_dec, grid.cutout_size_deg)
+        cutout = read_cutout(self.cutouts.get(url))
+        arr = imaging.to_grid(cutout, grid)
+        png, st = imaging.render_png(arr, stretch, low_pct, high_pct)
+        if cutout.flags is not None:
+            rec["quality"] = {"flags": quality.summarize(cutout.flags), "summary": quality.quality_summary(cutout.flags)}
+        wl, bw = self._wave_at(cutout, grid.center_ra, grid.center_dec)
+        if wl is not None:
+            rec["wavelengthAtObject"] = {"um": wl, **({"bandwidthUm": bw} if bw is not None else {})}
+        self.registry.put_observation(observation_id, rec)
+        meta_path.write_text(json.dumps(st))
+        tmp = png_path.with_name(png_path.name + ".tmp")
+        tmp.write_bytes(png)
+        os.replace(tmp, png_path)
+        return st
+
     def get_image(self, observation_id: str, *, stretch: str = "asinh", low_pct: float = 1.0, high_pct: float = 99.5,
-                  center_ra: float | None = None, center_dec: float | None = None, fov_arcmin: float = imaging.DEFAULT_FOV_ARCMIN) -> dict:
+                  center_ra: float | None = None, center_dec: float | None = None, fov_arcmin: float = imaging.DEFAULT_FOV_ARCMIN,
+                  wait_s: float | None = None) -> dict:
+        import json
         rec = self.registry.get_observation(observation_id)
         if rec is None:
             raise NotFound("Unknown observation.")
@@ -294,30 +406,31 @@ class Services:
 
         name = f"{observation_id}_{grid.grid_id}_{stretch}_{low_pct:g}_{high_pct:g}"
         png_path, meta_path = self.images_dir / f"{name}.png", self.images_dir / f"{name}.json"
-        try:
-            if not png_path.exists():
-                url = irsa.cutout_url(rec["file"]["uri"], grid.center_ra, grid.center_dec, grid.cutout_size_deg)
-                cutout = read_cutout(self.cutouts.get(url))
-                arr = imaging.to_grid(cutout, grid)
-                png, st = imaging.render_png(arr, stretch, low_pct, high_pct)
-                png_path.write_bytes(png)
-                import json
-                meta_path.write_text(json.dumps(st))
-                if cutout.flags is not None:
-                    rec["quality"] = {"flags": quality.summarize(cutout.flags), "summary": quality.quality_summary(cutout.flags)}
-                    self.registry.put_observation(observation_id, rec)
-            else:
-                import json
-                st = json.loads(meta_path.read_text())
-        except irsa.IrsaError as exc:
-            status = "failed" if exc.retryable else "unavailable"
-            return {**base, "availability": {"status": status, "statusReason": str(exc),
-                                             **({"retryAfterSeconds": 30} if exc.retryable else {})}}
-        except FitsReadError as exc:
-            return {**base, "availability": {"status": "failed", "statusReason": f"The data file could not be read: {exc}"}}
-
+        if png_path.exists() and meta_path.exists():
+            st = json.loads(meta_path.read_text())
+        else:
+            created = False
+            with self._lock:
+                fut = self._jobs.get(name)
+                if fut is None:
+                    fut = self._pool.submit(self._render_image, observation_id, rec, grid, stretch, low_pct, high_pct, png_path, meta_path)
+                    self._jobs[name] = fut
+                    created = True
+            if created:                       # outside the lock: a finished future runs its callback immediately, and that takes the lock
+                fut.add_done_callback(lambda f, n=name: self._job_done(n))
+            try:
+                st = fut.result(timeout=self.image_wait_s if wait_s is None else wait_s)
+            except FutureTimeout:
+                return {**base, "availability": {"status": "processing", "retryAfterSeconds": 3,
+                                                 "statusReason": "Fetching this image from the SPHEREx archive and preparing it."}}
+            except (irsa.IrsaError, FitsReadError) as exc:
+                return self._failure(base, exc)
         return {**base, "availability": {"status": "available"}, "imageUrl": f"/media/images/{name}.png",
                 "width": grid.npix, "height": grid.npix, "stretch": st, "wcs": grid.wcs_summary(), "gridId": grid.grid_id}
+
+    def _job_done(self, name: str) -> None:
+        with self._lock:
+            self._jobs.pop(name, None)
 
     def pixel_to_sky(self, observation_id: str, x: float, y: float, *, center_ra: float | None = None,
                      center_dec: float | None = None, fov_arcmin: float = imaging.DEFAULT_FOV_ARCMIN) -> dict:
@@ -503,8 +616,8 @@ class Services:
                                         + (" Residual = median offset of matched bright stars between the two frames." if est.measured else ""),
                               **({"residualArcsec": est.residual_arcsec} if est.measured else {})})
         if a["verdict"] != "not_comparable":
-            out["baseImage"] = self.get_image(base_id)
-            out["targetImage"] = self.get_image(target_id)
+            out["baseImage"] = self.get_image(base_id, wait_s=300)      # wait: a 'processing' stub must never be stored
+            out["targetImage"] = self.get_image(target_id, wait_s=300)
             if mode == "difference":
                 png, st = imaging.render_difference_png(arr_t - arr_b)
                 name = f"{cid}_diff"
