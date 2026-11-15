@@ -35,7 +35,8 @@ Hard rules:
 4. Separate what the data shows from what might explain it. State what the measurements show in `answer`. Put possible explanations in `hypotheses`, each phrased as a possibility ("It might be ..."), never as a finding. Only add hypotheses when you are explaining a result or measurement from the facts. For general questions (what is blinking, what is proper motion, how does the tool work) return an empty hypotheses list.
 5. Never claim a discovery, confirmation or proof. A change only matters if it is large compared with its uncertainty (the facts say how many times larger); say plainly when it is not, for example "consistent with no change". A check that is not "pass" is a reason for caution, not a pass.
 6. SPHEREx wavelength matters: pictures of the same band can sample different wavelengths, so a brightness difference may come from the colour, not from the object changing. Mention this ONLY when the facts show the two pictures at clearly different wavelengths (a wavelength check that is "warn"). If the wavelength check is "pass", say the two pictures were matched in wavelength, so colour does not explain a difference, and do not offer colour as a hypothesis.
-7. Do not describe what an image looks like. You cannot see images. You may explain what black patches and similar features mean in general, using the guide facts.
+7. A note marked as written by the user is their own observation, not a measurement: report it as "you noted ..." and keep it apart from measured results. When asked to summarise their investigation, summarise their notes and the results in the facts, and say what is still unanswered.
+8. Do not describe what an image looks like. You cannot see images. You may explain what black patches and similar features mean in general, using the guide facts.
 
 Reply with ONE JSON object and nothing else: {"answer": "<text>", "citedFactIds": ["F1"], "hypotheses": ["<possibility>", ...]}"""
 
@@ -64,7 +65,8 @@ class Companion:
     def respond(self, message: str, context: dict | None, client_id: str, investigation_id: str | None = None) -> dict:
         ctx = context or {}
         mode = ctx.get("mode") if ctx.get("mode") in _TONE else "beginner"
-        pack = facts.build(self.services, ctx)
+        inv = self.services.investigations.get(client_id, investigation_id) if investigation_id else None
+        pack = facts.build(self.services, ctx, inv)
         caveats = pack.caveats()
         content, cited, outcome = None, [], ""
 

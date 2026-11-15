@@ -298,6 +298,8 @@ def build(svc, obj: dict, ra: float | None, dec: float | None, radius: float, si
                     + (f"; {len(skipped)} were not processed: {', '.join(why)}" if skipped else "") + ".")
     if ra is None and targets.find(obj.get("name")) is not None:
         warnings.append("The position was carried along the object's catalogue proper motion to each observation's date.")
+    warnings.append(f"Error bars are statistical only; between frames at the same wavelength the flux repeats to a few percent "
+                    f"(we assume {photometry.SYSTEMATIC_FRACTION * 100:g} percent) beyond them.")
     warnings.append("The flux scale is approximate: no aperture correction is applied and the telescope's blur changes with wavelength, so the spectrum's "
                     "overall shape is only as good as that assumption.")
     if archive_note:

@@ -125,9 +125,10 @@ def test_flux_change_measures_an_injected_brightening_with_propagated_uncertaint
     assert m["value"] == pytest.approx(_flux_of(150.0) - _flux_of(100.0), rel=0.06)
     one = c.post("/api/v1/measurements", json=_body(ids[0], *STAR, radius=20)).json()
     two = c.post("/api/v1/measurements", json=_body(ids[1], *STAR, radius=20)).json()
-    assert m["uncertainty"] == pytest.approx(math.hypot(one["uncertainty"], two["uncertainty"]))
+    floor = 0.03 * math.hypot(one["value"], two["value"])                                            # the systematic floor, 3 percent of each frame's flux
+    assert m["uncertainty"] == pytest.approx(math.sqrt(one["uncertainty"] ** 2 + two["uncertainty"] ** 2 + floor ** 2))
     assert m["signalToNoise"] == pytest.approx(m["value"] / m["uncertainty"]) and m["signalToNoise"] > 3
-    assert "Quadrature sum" in m["uncertaintyBasis"] and "matched within one bandwidth" in m["method"]
+    assert "Quadrature sum" in m["uncertaintyBasis"] and "systematic floor of 3 percent" in m["uncertaintyBasis"] and "matched to within a quarter of one bandwidth" in m["method"]
     assert any("does not by itself show the source varied" in w for w in m["warnings"])
     assert not any("detect" in w.lower() and "significantly detects" not in w and "does not" not in w for w in m["warnings"])   # no detection claims
     assert any(w.startswith("calibration:") for w in m["warnings"]) and any(w.startswith("alignment:") for w in m["warnings"])

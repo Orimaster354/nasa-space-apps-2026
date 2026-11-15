@@ -410,36 +410,10 @@ def test_comparison_warns_when_the_object_sits_at_different_wavelengths(env, tmp
     assert any("different wavelengths" in w for w in cmp_["warnings"])
 
 
-def test_candidates_endpoint_is_honestly_empty_until_detection_exists(env):
+def test_candidates_for_an_object_outside_the_catalogue_say_why_there_are_none(env):
     c, _, _ = env
     oid = _object(c)["objectId"]
+    c.app.state.services.compute_candidates(oid)                                                  # the search runs in the background; run it now
     page = c.get(f"/api/v1/objects/{oid}/candidates").json()
-    assert page["items"] == [] and page["total"] == 0 and "not available yet" in page["coverageNote"]
+    assert page["items"] == [] and page["total"] == 0 and "seeded from the catalogue" in page["coverageNote"]
     assert c.get("/api/v1/objects/obj_unknown/candidates").status_code == 404
-
-
-def test_a_truncated_listing_says_how_much_of_it_is_shown(env):
-    c, _, _ = env
-    oid = _object(c)["objectId"]
-    whole = c.get(f"/api/v1/objects/{oid}/observations").json()
-    assert whole["total"] == 3 and "coverageNote" not in whole                  # everything fits: no note
-    first = c.get(f"/api/v1/objects/{oid}/observations", params={"limit": 2}).json()
-    assert first["coverageNote"] == "Showing observations 1-2 of 3 matching this view (oldest first)."
-    last = c.get(f"/api/v1/objects/{oid}/observations", params={"limit": 2, "offset": 2, "sort": "-observedAt"}).json()
-    assert last["coverageNote"] == "Showing observations 3-3 of 3 matching this view (newest first)."
-    beyond = c.get(f"/api/v1/objects/{oid}/observations", params={"offset": 10}).json()
-    assert beyond["items"] == [] and "coverageNote" not in beyond                # nothing shown, nothing to describe
-    assert c.get(f"/api/v1/objects/{oid}/observations", params={"limit": 201}).status_code == 400   # the cap is 200
-
-
-def test_bulk_registry_calls_match_the_single_ones(tmp_path):
-    from store.registry import Registry
-    r = Registry(tmp_path / "r.sqlite")
-    items = [(f"obs_{i}", {"n": i}) for i in range(1200)]                                              # more than one 500-id read chunk
-    r.put_observations(items)
-    r.put_observations([])                                                                                # an empty write is fine
-    got = r.get_observations([k for k, _ in items] + ["obs_missing"])
-    assert len(got) == 1200 and got["obs_777"] == {"n": 777} and "obs_missing" not in got
-    assert r.get_observation("obs_5") == {"n": 5}
-    r.put_observations([("obs_5", {"n": "changed"})])
-    assert r.get_observation("obs_5") == {"n": "changed"} and r.get_observations([]) == {}

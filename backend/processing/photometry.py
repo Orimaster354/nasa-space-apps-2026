@@ -36,6 +36,11 @@ MIN_ANNULUS_PIXELS = 12               # our heuristic: fewer pixels cannot give 
 _SUBSAMPLE = 7                        # sub-pixels per axis for fractional aperture overlap
 _MEDIAN_ERR_FACTOR = 1.2533           # standard error of a median relative to the mean, for Gaussian noise
 _RESCALE_WARN = 1.5                   # warn when annulus scatter exceeds the archive sigma by this factor
+# Frame-to-frame repeatability floor for comparing the brightness of two frames. Measured on Epsilon Indi B (44 real frames): frames at the
+# SAME wavelength agree to 0 to 3 percent where the spectrum is flat, but three frames at 1.724 um (formal errors about 1 percent) spread by
+# 8 percent where it is steep, so the formal uncertainty alone makes real-world scatter look like change. 3 percent per frame is added in
+# quadrature for brightness comparisons; it is our heuristic, not a calibrated value.
+SYSTEMATIC_FRACTION = 0.03
 LOW_SNR = 3.0                         # wording threshold only; not a detection claim
 MJY_TO_MJY_SR = 1.0e9                 # 1 MJy = 1e9 mJy
 FLUX_UNIT = "mJy"

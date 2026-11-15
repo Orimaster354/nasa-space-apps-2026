@@ -184,8 +184,8 @@ def test_unavailable_candidates_and_missing_items_are_stated_not_invented(rich):
     svc, ctx, *_ = rich
     comp, p = companion(svc, j("I cannot say.", ["F0"]))
     r = comp.respond("Tell me about this candidate", {**ctx, "candidateId": "cand_1", "measurementIds": ["meas_nope"]}, "c:a")
-    assert "Candidate details are not available" in p.prompts[0]
-    assert any("could not be found: meas_nope" in c for c in r["caveats"])
+    assert "cand_1" not in p.prompts[0] and "Candidate" not in p.prompts[0].split("Measurement")[0].split('"facts"')[1][-300:]       # nothing about it is invented
+    assert any("could not be found: meas_nope" in c and "the selected candidate" in c for c in r["caveats"])
 
 
 def test_the_fallback_is_plain_language_not_a_data_dump(rich):
@@ -310,3 +310,32 @@ def test_the_softwares_notes_about_a_measurement_reach_the_model(env):
     text = next(f.text for f in pack.facts if f.target_type == "measurement")
     assert "Notes from the software:" in text and "times its uncertainty" in text
     assert "Base frame:" not in text and "Target frame:" not in text               # per-frame housekeeping notes stay out of the prompt
+
+
+# ---- candidates and saved investigations (P1-10, P1-11, P1-12) -------------------------------------------------------------------
+def test_a_saved_investigations_notes_reach_the_companion_as_the_users_own_words(env):
+    c, *_ = env
+    svc = c.app.state.services
+    oid = _object(c)["objectId"]
+    inv = svc.investigations.create("c:visitor-aaaaaaaa", {"title": "First look", "objectId": oid, "bookmarks": [],
+                                                           "notes": [{"noteId": "n1", "text": "The star sits left of centre on the April frame.", "createdAt": "2026-11-15T10:00:00Z"},
+                                                                     {"noteId": "n2", "text": "Check the 1.7 micrometre frames next.", "createdAt": "2026-11-15T10:05:00Z"}],
+                                                           "history": [{"eventId": "e1", "type": "object_opened", "at": "2026-11-15T09:59:00Z"}]})
+    comp, p = companion(svc, j("You noted that the star sits left of centre, and planned to check the 1.7 micrometre frames.", ["F1", "F2", "F3", "F4"]))
+    r = comp.respond("Summarise my investigation", {"objectId": oid, "mode": "beginner"}, "c:visitor-aaaaaaaa", inv["investigationId"])
+    prompt = p.prompts[0]
+    assert "WRITTEN BY THE USER" in prompt and "sits left of centre" in prompt and "First look" in prompt and "2 note(s)" in prompt
+    assert "you noted" in p.systems[0].lower() and "not a measurement" in p.systems[0].lower()
+    assert "you noted that the star" in r["message"]["content"].lower()
+    assert all(ref["targetType"] in ("observation", "comparison", "spectrum", "measurement", "object", "candidate") for ref in r["references"])   # contract types only
+    other = comp.respond("Summarise my investigation", {"objectId": oid}, "c:someone-else-xxxx", inv["investigationId"])
+    assert "sits left of centre" not in p.prompts[-1]                                                  # another visitor's notes are never shown
+
+
+def test_the_fallback_summary_includes_the_users_notes(env):
+    c, *_ = env
+    svc = c.app.state.services
+    inv = svc.investigations.create("c:v-aaaaaaaaa", {"title": "Mine", "notes": [{"noteId": "n1", "text": "A faint source near the edge.", "createdAt": "2026-11-15T10:00:00Z"}]})
+    comp = Companion(svc, ProviderChain([]), QuotaLimiter())
+    text = comp.respond("Summarise my investigation", {}, "c:v-aaaaaaaaa", inv["investigationId"])["message"]["content"]
+    assert "You noted:" in text and "A faint source near the edge." in text and "Your saved investigation 'Mine'" in text

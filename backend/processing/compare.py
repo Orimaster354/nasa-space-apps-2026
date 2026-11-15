@@ -15,6 +15,10 @@ from .alignment import AlignmentEstimate
 ZODI_WARN_FRACTION = 0.05
 # Measured star-position offset between the two frames above which we warn (about half a native 6.15 arcsec pixel). Our heuristic.
 ALIGN_WARN_ARCSEC = 3.0
+# Two frames of the same band count as matched in wavelength only when the object falls within this fraction of one bandwidth of the same
+# wavelength. One whole bandwidth is far too loose for a steep spectrum: Epsilon Indi B drops from 27 to 14 mJy across 0.056 um, so a
+# mismatch of 0.03 um alone would look like a large brightness change. A quarter keeps the error small for all but the steepest features.
+WAVELENGTH_MATCH_FRACTION = 0.25
 
 
 @dataclass(frozen=True)
@@ -41,7 +45,7 @@ def _check(name: str, result: str, detail: str) -> dict:
 def _wavelength_within_band(base: Side, target: Side) -> dict:
     """Same bandpass is NOT the same wavelength: each SPHEREx band spans a range and the object lands at a different wavelength
     on each pointing (measured on real data: a star's flux fell 45% across one band as its wavelength moved from 1.64 to 2.40 um).
-    We call the wavelengths matched when they differ by no more than one bandwidth. That threshold is our heuristic."""
+    We call the wavelengths matched when they differ by no more than WAVELENGTH_MATCH_FRACTION of a bandwidth (our heuristic, see there)."""
     head = f"Both use the same bandpass ({base.bandpass})."
     if base.wavelength_um is None or target.wavelength_um is None:
         return _check("wavelength", "notEvaluated", head + " The wavelength at the object was not available for both frames, so whether they match within the band is unknown.")
@@ -50,10 +54,13 @@ def _wavelength_within_band(base: Side, target: Side) -> dict:
     where = f"{base.wavelength_um:.3f} um and {target.wavelength_um:.3f} um"
     if bw is None:
         return _check("wavelength", "notEvaluated", head + f" The object falls at {where}; the bandwidth was not available to judge the difference.")
-    if delta <= bw:
-        return _check("wavelength", "pass", head + f" The object falls at {where}, within one bandwidth ({bw:.3f} um).")
-    return _check("wavelength", "warn", head + f" But the object falls at different wavelengths in the two frames ({where}; bandwidth about {bw:.3f} um). "
-                  "A brightness difference may be spectral (the source's flux changes with wavelength), not a change over time.")
+    limit = WAVELENGTH_MATCH_FRACTION * bw
+    if delta <= limit + 1e-9:
+        return _check("wavelength", "pass", head + f" The object falls at {where}, within a quarter of one bandwidth ({bw:.3f} um).")
+    close = "slightly different" if delta <= bw else "different"
+    return _check("wavelength", "warn", head + f" But the object falls at {close} wavelengths in the two frames ({where}; bandwidth about {bw:.3f} um, "
+                  f"matching needs a difference under {limit:.3f} um). A brightness difference may be spectral (the source's flux changes with wavelength, "
+                  "steeply for some objects), not a change over time.")
 
 
 def _alignment_check(est: AlignmentEstimate | None) -> dict:
