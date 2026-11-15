@@ -13,6 +13,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime
 
+from services import spectrum as spectrum_mod
 from services.core import NotFound, Services
 
 MAX_ITEMS = 6
@@ -254,13 +255,12 @@ def build(services: Services, ctx: dict | None, investigation: dict | None = Non
             plain = (f"{cd['label']} is flagged as worth a closer look. {cd['description']} Its heuristic ranking score is {cd['score']:.2f} out of 1; "
                      "that is a way to order leads, not a probability, and it is not an established finding.")
             add(text, "candidate", cd["candidateId"], nums, list(cd.get("warnings", [])), plain)
-    if ctx.get("spectrumId"):
-        try:
-            sp = services.get_stored_spectrum(ctx["spectrumId"])
-        except NotFound:
-            pack.missing.append("the selected spectrum")
-        else:
-            ok = [p for p in sp["points"] if p.get("available")]
+    sp = _stored_spectrum(services, ctx)
+    if sp is None and ctx.get("spectrumId"):
+        pack.missing.append("the selected spectrum")
+    if sp is not None:
+        ok = [p for p in sp["points"] if p.get("available")]
+        if ok:
             lo, hi = min(p["wavelengthUm"] for p in ok), max(p["wavelengthUm"] for p in ok)
             top, bottom = max(ok, key=lambda p: p["flux"]), min(ok, key=lambda p: p["flux"])
             nums = [len(ok), lo, hi, top["wavelengthUm"], top["flux"], bottom["wavelengthUm"], bottom["flux"]]
@@ -271,4 +271,55 @@ def build(services: Services, ctx: dict | None, investigation: dict | None = Non
             plain = (f"The spectrum has {len(ok)} measured bands from {lo:.2f} to {hi:.2f} micrometres. It is brightest near {top['wavelengthUm']:.2f} "
                      f"micrometres and faintest near {bottom['wavelengthUm']:.2f} micrometres.")
             add(text, "spectrum", sp["spectrumId"], nums, list(sp.get("warnings", [])), plain)
+        band = ctx.get("bandIndex")
+        if band:
+            _band_fact(add, sp, int(band))
     return pack
+
+
+def _stored_spectrum(services: Services, ctx: dict) -> dict | None:
+    """The spectrum the user is looking at: the one named in the context, or (on the Spectrum page, or with a band selected) the object's own
+    stored spectrum. Only ever READS what is already stored; it never starts a build."""
+    if ctx.get("spectrumId"):
+        try:
+            return services.get_stored_spectrum(ctx["spectrumId"])
+        except NotFound:
+            return None
+    if ctx.get("objectId") and (ctx.get("bandIndex") or ctx.get("activeView") == "spectrum"):
+        rec = services.registry.get_spectrum(spectrum_mod.spectrum_id(ctx["objectId"], None, None, spectrum_mod.DEFAULT_RADIUS_ARCSEC))
+        return rec["result"] if rec else None
+    return None
+
+
+def _band_fact(add, sp: dict, band: int) -> None:
+    """One fact about the band selected on the Spectrum page: its wavelength range, its measurement or why there is none, and the two
+    neighbouring bands for context. Every number here is quoted from the stored spectrum."""
+    p = next((q for q in sp["points"] if q["bandIndex"] == band), None)
+    if p is None:
+        add(f"Band {band} is not part of this object's stored spectrum (it lists {len(sp['points'])} bands).", "spectrum", sp["spectrumId"],
+            plain=f"Band {band} is not part of this spectrum.")
+        return
+    rng = (f" (the band spans {p['wavelengthMinUm']:.3f} to {p['wavelengthMaxUm']:.3f} micrometres)"
+           if p.get("wavelengthMinUm") is not None and p.get("wavelengthMaxUm") is not None else "")
+    if not p.get("available"):
+        why = p.get("unavailableReason") or "no usable measurement"
+        add(f"SELECTED BAND {band}, centred near {p['wavelengthUm']:.3f} micrometres{rng}: there is NO measurement for this band. Reason: {why}",
+            "spectrum", sp["spectrumId"], [band, p["wavelengthUm"]], plain=f"Band {band} (near {p['wavelengthUm']:.2f} micrometres) has no measurement: {why}")
+        return
+    unc = p.get("fluxUncertainty")
+    flux = f"{_g(p['flux'])}" + (f" with an uncertainty of {_g(unc)}" if unc is not None else " (no uncertainty available)")
+    by_idx = {q["bandIndex"]: q for q in sp["points"]}
+    near = []
+    nums = [band, p["wavelengthUm"], p["flux"]] + ([unc] if unc is not None else [])
+    for k, label in ((band - 1, "previous"), (band + 1, "next")):
+        q = by_idx.get(k)
+        if q and q.get("available"):
+            near.append(f"the {label} band ({k}, near {q['wavelengthUm']:.3f} micrometres) is {_g(q['flux'])}")
+            nums += [k, q["wavelengthUm"], q["flux"]]
+    around = (" For context, " + " and ".join(near) + ".") if near else ""
+    when = f" Observed {p['observedAt'][:10]}." if p.get("observedAt") else ""
+    flags = " Quality notes: " + "; ".join(f["description"][:120] for f in p.get("qualityFlags", [])[:3]) + "." if p.get("qualityFlags") else ""
+    add(f"SELECTED BAND {band}, centred near {p['wavelengthUm']:.3f} micrometres{rng}: flux {flux} {sp['fluxUnit']}.{around}{when}{flags} "
+        "This one band is one measurement from one observation; a single band does not describe the whole spectrum.",
+        "spectrum", sp["spectrumId"], nums,
+        plain=f"Band {band}, near {p['wavelengthUm']:.2f} micrometres, measures {_g(p['flux'])} {sp['fluxUnit']}.")

@@ -24,7 +24,7 @@ from typing import Callable
 
 import numpy as np
 
-from processing import alignment, compare, imaging, irsa, photometry, quality
+from processing import alignment, coadd, compare, imaging, irsa, photometry, quality
 from processing.fits_io import FitsReadError, read_cutout
 from store.registry import Registry
 
@@ -576,6 +576,10 @@ class Services:
             raise NotFound("Unknown candidate.")
         return c
 
+    def library(self, fresh: bool = False) -> dict:
+        from . import library
+        return library.build(self, fresh)
+
     def get_guided(self, guided_id: str, object_id: str | None = None) -> dict:
         if guided_id != "spot-the-shift":
             raise NotFound("Unknown guided investigation.")
@@ -697,6 +701,103 @@ class Services:
         if rec is None:
             raise NotFound("Unknown measurement.")
         return rec
+
+    # ---- stacks (co-added images) ----------------------------------------------------------------------------------
+    def get_coadd(self, object_id: str, *, bandpass: str = "SPHEREx-D3", fov_arcmin: float = imaging.DEFAULT_FOV_ARCMIN, max_frames: int = 16) -> dict:
+        """A stacked picture of one object in one detector band, built ONLY from frames already stored on this server (never waits for
+        the archive), using only frames that sample the object at matching wavelengths. See processing/coadd.py for the method.
+        Frontend-only operation, not in the contract: the result says plainly that it is a derived stack and lists its inputs."""
+        import hashlib
+        import os
+        if not re.fullmatch(r"SPHEREx-D[1-6]", bandpass or ""):
+            raise BadRequest("bandpass must be SPHEREx-D1 to SPHEREx-D6.")
+        if not (2 <= max_frames <= 40):
+            raise BadRequest("maxFrames must be 2-40.")
+        obj = self.get_object(object_id)
+        items = self.list_observations(object_id, bandpass=bandpass, limit=200)["items"]
+        order = [o["observationId"] for o in items]
+        recs = self.registry.get_observations(order)
+        rejected = {"not stored here": 0, "poor quality": 0, "wavelength unknown": 0}
+        ok: list[tuple[str, float, float]] = []
+        grid = None
+        for oid in order:
+            rec = recs.get(oid)
+            if rec is None:
+                continue
+            grid = grid or self._grid(rec, None, None, fov_arcmin)
+            url = irsa.cutout_url(rec["file"]["uri"], grid.center_ra, grid.center_dec, grid.cutout_size_deg)
+            if not self.cutouts.is_cached(url):
+                rejected["not stored here"] += 1
+            elif (rec.get("quality") or {}).get("summary") == "poor":
+                rejected["poor quality"] += 1
+            elif not rec.get("wavelengthAtObject") or rec["wavelengthAtObject"].get("bandwidthUm") is None:
+                rejected["wavelength unknown"] += 1
+            else:
+                ok.append((oid, rec["wavelengthAtObject"]["um"], rec["wavelengthAtObject"]["bandwidthUm"]))
+        group = coadd.best_wavelength_group(ok, compare.WAVELENGTH_MATCH_FRACTION)
+        mismatched = len(ok) - len(group)
+        if len(group) > max_frames:
+            wl = {i: w for i, w, _ in ok}
+            med = float(np.median([wl[i] for i in group]))
+            group = sorted(sorted(group, key=lambda i: abs(wl[i] - med))[:max_frames], key=order.index)
+        base = {"objectId": object_id, "bandpass": bandpass, "kind": "derived_stack", "generatedAt": now_iso()}
+        cid = "coadd_" + hashlib.sha1(f"v{coadd.METHOD_VERSION}|{object_id}|{bandpass}|{fov_arcmin:.4f}|{','.join(sorted(group))}".encode()).hexdigest()[:10]
+        stored = self.registry.get_coadd(cid)
+        png_path = self.images_dir / f"{cid}.png"
+        if stored and png_path.exists():
+            return stored
+        if len(group) < coadd.MIN_FRAMES:
+            why = (f"Only {len(group)} stored frame(s) in {bandpass} sample this object at matching wavelengths; a stack needs at least {coadd.MIN_FRAMES}. "
+                   f"Left out: {rejected['not stored here']} not stored on this server, {rejected['poor quality']} of poor quality, "
+                   f"{rejected['wavelength unknown']} without a known wavelength, {mismatched} at a different wavelength.")
+            return {**base, "coaddId": cid, "availability": {"status": "unavailable", "statusReason": why}, "inputObservationIds": group}
+        arrays = [self._grid_array(recs[i], grid)[0] for i in group]
+        try:
+            res = coadd.stack(arrays)
+        except ValueError as exc:
+            return {**base, "coaddId": cid, "availability": {"status": "unavailable", "statusReason": str(exc)}, "inputObservationIds": group}
+        png, st = imaging.render_png(res.image)
+        tmp = png_path.with_name(png_path.name + ".tmp")
+        tmp.write_bytes(png)
+        os.replace(tmp, png_path)
+        wl = {i: (w, b) for i, w, b in ok}
+        wls = [wl[i][0] for i in group]
+        bws = [wl[i][1] for i in group]
+        dates = sorted(recs[i]["observation"]["observedAt"] for i in group if recs[i]["observation"].get("observedAt"))
+        warnings = ["This is a derived picture made by averaging several observations. It is not a NASA observation and it is not a single date.",
+                    "The pictures were aligned with the archive's own sky coordinates only (no extra shifting). Each frame's sky background was removed, "
+                    f"frames were weighted by their noise, and values more than {coadd.SIGMA_CLIP:g} noise units from the typical value were dropped "
+                    f"({res.clipped_fraction * 100:.2f} percent of values) to remove cosmic-ray hits.",
+                    "The wavelength changes across each frame (by more than one bandwidth over 15 arcminutes in the example we checked), so frames were "
+                    "matched at the object's own position only; other parts of the picture blend slightly different wavelengths."]
+        pm = obj.get("properMotion") or {}
+        if len(dates) > 1 and pm.get("pmRaMasPerYr") is not None and pm.get("pmDecMasPerYr") is not None:
+            years = (iso_to_mjd(dates[-1]) - iso_to_mjd(dates[0])) / 365.25
+            moved = float(np.hypot(pm["pmRaMasPerYr"], pm["pmDecMasPerYr"])) / 1000.0 * years
+            if moved > 3.0:
+                warnings.append(f"This object moves about {moved:.1f} arcseconds across these dates (catalogue proper motion), so it is smeared in the stack; "
+                                "use the stack for the surrounding stars and faint background, not for the moving object.")
+        warnings.append("Use the stack to look at faint things, not to measure brightness: stars differ a little between dates (the wavelength at each pixel changes), "
+                        "so bright pixels are partly clipped. Brightness measurements in this app always come from single frames.")
+        if mismatched:
+            warnings.append(f"{mismatched} stored frame(s) were left out because they sample the object at a different wavelength.")
+        if res.frames_used >= 4 and res.measured_gain < 1.2:
+            warnings.append("The pixel-to-pixel noise barely improved, so these frames are probably not independent enough (or too few) to gain from stacking.")
+        out = {**base, "coaddId": cid, "availability": {"status": "available"}, "imageUrl": f"/media/images/{cid}.png",
+               "width": int(res.image.shape[1]), "height": int(res.image.shape[0]),
+               "stretch": st, "inputObservationIds": group, "frameCount": res.frames_used,
+               "observedFrom": dates[0] if dates else None, "observedTo": dates[-1] if dates else None,
+               "wavelengthUm": {"min": min(wls), "max": max(wls), "median": float(np.median(wls)), "bandwidthUm": float(np.median(bws))},
+               "noise": {"singleFrame": res.single_frame_sigma, "stack": res.stack_sigma, "measuredGain": res.measured_gain, "idealGain": res.ideal_gain,
+                         "largeScaleGain": res.large_scale_gain, "unit": "MJy/sr",
+                         "note": "Noise is the pixel-to-pixel scatter (slowly varying structure removed), measured the same way in a single frame and in the stack. "
+                                 "The ideal gain is what averaging this many independent frames would give. The large-scale gain is the same ratio with smooth "
+                                 "structure included; it is smaller because that structure differs from date to date and does not average down like noise."},
+               "leftOut": {**rejected, "different wavelength": mismatched},
+               "method": f"Weighted mean of {res.frames_used} {bandpass} frames matched in wavelength at the object (within {compare.WAVELENGTH_MATCH_FRACTION:g} of one bandwidth).",
+               "warnings": warnings}
+        self.registry.put_coadd(cid, out)
+        return out
 
     # ---- comparisons ---------------------------------------------------------------------------------------------
     def _grid_array(self, rec: dict, grid: imaging.GridSpec):
