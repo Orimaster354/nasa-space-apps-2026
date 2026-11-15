@@ -17,7 +17,7 @@
 
   <section class="hero" id="top">
     <header class="hero-nav">
-      <a class="brand" href="#top" aria-label="SPHERE X"><span aria-hidden="true">✦</span> SPHERE<span class="slash">/</span>X</a>
+      <a class="brand" href="#top" aria-label="SPHERE X"><svg class="brand-orbit" viewBox="0 0 40 28" width="40" height="28" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.4"><ellipse cx="20" cy="14" rx="17" ry="7" transform="rotate(-18 20 14)"/><path fill="currentColor" stroke="none" d="M20 5q1 8 8 9q-7 1-8 9q-1-8-8-9q7-1 8-9z"/><circle cx="35" cy="7" r="1.8" fill="currentColor" stroke="none"/><circle cx="5" cy="21" r="1" fill="currentColor" stroke="none"/></svg>SPHERE<span class="slash">/</span>X</a>
       <span class="rule" aria-hidden="true"></span>
       <nav aria-label="Primary">
         <a href="app.html#/investigate">Explore</a><span class="spark" aria-hidden="true">✦</span>
@@ -27,12 +27,58 @@
     </header>
 
     <div class="stars" aria-hidden="true"></div>
+    <div class="milkyway" aria-hidden="true"></div>
+
+    <!-- Hand-drawn sky details from the cover concept (decorative). Sparkles twinkle slowly; nothing flashes. -->
+    <svg class="sky-detail" aria-hidden="true" width="100%" height="100%">
+      <defs>
+        <symbol id="spk" viewBox="0 0 9 9" shape-rendering="crispEdges"><path fill="currentColor" d="M4 0h1v3H4zM4 6h1v3H4zM0 4h3v1H0zM6 4h3v1H6zM3 3h3v3H3z"/><path fill="#fff" d="M4 4h1v1H4z"/></symbol>
+        <symbol id="spk-soft" viewBox="0 0 20 20"><path fill="currentColor" d="M10 0q1 8.6 10 10q-9 1.4-10 10q-1-8.6-10-10q9-1.4 10-10z"/></symbol>
+      </defs>
+      <g class="tw tw-a" style="color:#f28c58"><use href="#spk" x="21%" y="9%" width="13" height="13"/><use href="#spk" x="57%" y="25%" width="13" height="13"/><use href="#spk" x="66%" y="60%" width="11" height="11"/><use href="#spk" x="3%" y="66%" width="11" height="11"/></g>
+      <g class="tw tw-b" style="color:#f2f0e9"><use href="#spk-soft" x="35%" y="11%" width="22" height="22"/><use href="#spk-soft" x="78%" y="12%" width="18" height="18"/><use href="#spk-soft" x="87%" y="38%" width="14" height="14"/><use href="#spk" x="2%" y="31%" width="9" height="9"/></g>
+      <g class="tw tw-c" style="color:#f28c58"><use href="#spk" x="71%" y="19%" width="15" height="15"/><use href="#spk" x="84%" y="49%" width="11" height="11"/><use href="#spk" x="41%" y="57%" width="9" height="9"/></g>
+      <g class="tw tw-d" style="color:#75bfe8"><use href="#spk" x="49%" y="5%" width="9" height="9"/><use href="#spk" x="61%" y="44%" width="9" height="9"/><use href="#spk-soft" x="92%" y="62%" width="12" height="12"/><use href="#spk" x="28%" y="71%" width="9" height="9"/></g>
+      <g class="tw tw-e" style="color:#f2f0e9"><use href="#spk" x="9%" y="76%" width="7" height="7"/><use href="#spk-soft" x="17%" y="60%" width="12" height="12"/><use href="#spk" x="33%" y="48%" width="7" height="7"/><use href="#spk" x="24%" y="22%" width="7" height="7"/><use href="#spk" x="52%" y="68%" width="7" height="7"/><use href="#spk-soft" x="96%" y="27%" width="10" height="10"/></g>
+    </svg>
+
+    <svg class="orbits" viewBox="0 0 240 110" aria-hidden="true" fill="none" stroke="#f2f0e9" stroke-width="1.3">
+      <g transform="rotate(-12 120 55)" opacity=".75">
+        <ellipse cx="120" cy="55" rx="104" ry="34"/>
+        <ellipse cx="120" cy="55" rx="66" ry="20" opacity=".8"/>
+        <circle r="3.2" fill="#f2f0e9" stroke="none"><animateMotion dur="80s" repeatCount="indefinite" path="M224 55a104 34 0 1 0 -208 0a104 34 0 1 0 208 0"/></circle>
+        <circle r="2.2" fill="#f2f0e9" stroke="none"><animateMotion dur="46s" repeatCount="indefinite" path="M54 55a66 20 0 1 1 132 0a66 20 0 1 1 -132 0"/></circle>
+      </g>
+      <circle cx="120" cy="55" r="9" fill="rgba(242,240,233,.12)" stroke="none"/>
+      <path fill="#fff" stroke="none" d="M120 39q1.6 14 16 16q-14.4 2-16 16q-1.6-14-16-16q14.4-2 16-16z"/>
+    </svg>
+
+    <svg class="comet" viewBox="0 0 160 60" aria-hidden="true">
+      <defs><linearGradient id="comet-tail" x1="1" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f2f0e9" stop-opacity="0"/><stop offset="1" stop-color="#f2f0e9" stop-opacity=".9"/></linearGradient></defs>
+      <path d="M156 3 L12 50" stroke="url(#comet-tail)" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="M150 10 L30 50" stroke="url(#comet-tail)" stroke-width="1" stroke-linecap="round" opacity=".55"/>
+      <circle cx="11" cy="51" r="6" fill="rgba(242,240,233,.18)"/><circle cx="11" cy="51" r="2.6" fill="#fff"/>
+    </svg>
+
+    <img class="cloud cloud-left" src="assets/landing/cloud-left.svg" alt="" width="256" height="120">
+    <img class="cloud cloud-right" src="assets/landing/cloud-right.svg" alt="" width="496" height="184">
+    <img class="cloud cloud-puff" src="assets/landing/cloud-puff.svg" alt="" width="160" height="72">
+
     <img class="art planet" src="assets/landing/planet.png" alt="" width="300" height="240">
-    <img class="art ship" src="assets/landing/ship.png" alt="" width="275" height="225">
+    <div class="art ship">
+      <svg class="flame" viewBox="0 0 48 16" shape-rendering="crispEdges" aria-hidden="true">
+        <path fill="#f28c58" d="M30 4h18v8H30zM22 5h8v6h-8zM16 6h6v4h-6zM11 7h5v2h-5z"/>
+        <path fill="#f6c46a" d="M34 5h14v6H34zM27 6h7v4h-7zM22 7h5v2h-5z"/>
+        <path fill="#fff4dc" d="M40 6h8v4h-8zM35 7h5v2h-5z"/>
+        <path class="sparks-a" fill="#f6c46a" d="M8 4h2v2H8zM3 9h2v2H3zM13 12h2v2h-2zM18 2h1v1h-1z"/>
+        <path class="sparks-b" fill="#f28c58" d="M6 7h2v2H6zM10 2h2v2h-2zM1 5h1v1H1zM16 13h1v1h-1z"/>
+      </svg>
+      <img src="assets/landing/ship.png" alt="" width="275" height="225">
+    </div>
     <img class="art earth" src="assets/landing/earth.png" alt="" width="1330" height="144">
 
     <div class="hero-copy">
-      <h1 class="pixel">The sky is<br><span class="hl">never still.</span></h1>
+      <h1 class="pixel"><svg class="burst" viewBox="0 0 40 40" aria-hidden="true"><g stroke="#f2f0e9" stroke-width="2.4" stroke-linecap="square"><path d="M6 27h8M10 14l6 6M22 4v9M33 7l-4 7"/></g></svg>The sky is<br><span class="hl">never still.</span></h1>
       <p class="lede">Explore the changing infrared sky. Spot moving objects across time with NASA SPHEREx observations.</p>
       <p class="cta-row"><a class="btn-pixel" href="app.html#/investigate">[ Begin exploring → ]</a></p>
       <p><a class="skip" href="app.html#/investigate">Skip to observations</a></p>
@@ -43,7 +89,29 @@
     <span class="navi-zone hero-zone" data-navi-zone aria-hidden="true"></span>
 
     <button class="skip-intro" id="skip-intro" type="button">Skip intro</button>
-    <a class="down pixel" href="#mission">▼ The Mission ▼</a>
+
+    <!-- The sketchbook edge: ink drawings on warm paper (telescope, ridgeline, an asteroid's path, a globe). -->
+    <div class="sketch-strip">
+      <svg class="sk sk-left" viewBox="0 0 320 96" preserveAspectRatio="xMinYMax slice" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M0 84 L18 70 L27 75 L44 56 L55 66 L63 61 L84 82"/><path d="M44 56 l-3 7 M47 60 l-4 8 M27 75 l-3 5" opacity=".55"/>
+        <path d="M160 86 L182 70 L192 76 L212 58 L226 72 L236 66 L262 86"/><path d="M212 58 l-3 8 M216 63 l-4 8" opacity=".55"/>
+        <path d="M0 90 h320" stroke-dasharray="2 6" opacity=".35"/>
+        <g transform="translate(122 42) rotate(-28)"><rect x="-30" y="-6.5" width="54" height="13" rx="1.5"/><rect x="24" y="-8.5" width="11" height="17" rx="1.5"/><rect x="-38" y="-3.5" width="8" height="7" rx="1"/><path d="M-12 -6.5v13M6 -6.5v13" opacity=".7"/><path d="M-20 -6.5v-5h6v5"/></g>
+        <circle cx="120" cy="51" r="3.2"/><path d="M120 54 L103 90 M120 54 L121 92 M120 54 L138 90 M108 78 h25"/>
+        <path fill="currentColor" stroke="none" d="M70 20q.8 5.6 6 6.5q-5.2.9-6 6.5q-.8-5.6-6-6.5q5.2-.9 6-6.5zM176 12q.6 4 4.5 4.6q-3.9.6-4.5 4.6q-.6-4-4.5-4.6q3.9-.6 4.5-4.6zM292 38q.6 4 4.5 4.6q-3.9.6-4.5 4.6q-.6-4-4.5-4.6q3.9-.6 4.5-4.6z"/>
+        <path d="M30 22v6M27 25h6M250 22v5M247.5 24.5h5" opacity=".7"/>
+      </svg>
+      <a class="down pixel" href="#mission">▼ The Mission ▼</a>
+      <svg class="sk sk-right" viewBox="0 0 440 96" preserveAspectRatio="xMaxYMax slice" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M8 80 C 80 74, 160 62, 262 54" stroke-dasharray="4 6"/><path d="M254 49 l10 5 l-9 6"/>
+        <path d="M58 70 l6-4 l6 1 l3 5 l-3 5 l-7 1 l-5-3z" fill="rgba(16,24,32,.12)"/>
+        <path d="M110 60 l8-6 l10 0 l6 7 l-2 9 l-9 4 l-10-2 l-5-6z" fill="rgba(16,24,32,.12)"/><circle cx="121" cy="64" r="2"/><circle cx="128" cy="69" r="1.2"/>
+        <path d="M178 50 l10-9 l14 0 l9 8 l1 12 l-9 9 l-15 1 l-10-8z" fill="rgba(16,24,32,.12)"/><circle cx="192" cy="54" r="3"/><circle cx="203" cy="62" r="1.8"/><circle cx="188" cy="64" r="1.4"/>
+        <g transform="translate(372 100)"><circle r="68"/><ellipse rx="26" ry="68"/><ellipse rx="50" ry="68"/><path d="M-68 0h136M-60 -32h120M-40 -55h80"/></g>
+        <path fill="currentColor" stroke="none" d="M366 44q1.2 8.6 9 10q-7.8 1.4-9 10q-1.2-8.6-9-10q7.8-1.4 9-10z"/>
+        <path fill="currentColor" stroke="none" d="M290 18q.6 4 4.5 4.6q-3.9.6-4.5 4.6q-.6-4-4.5-4.6q3.9-.6 4.5-4.6z"/>
+      </svg>
+    </div>
   </section>
 
   <main>

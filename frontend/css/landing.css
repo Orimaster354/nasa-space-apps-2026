@@ -30,11 +30,84 @@ body.landing { background: var(--bg-page) fixed, #070b10; overflow-x: hidden; }
 .art { position: absolute; image-rendering: pixelated; pointer-events: none; z-index: 0; }
 .planet { right: 0; top: 56px; width: min(26vw, 340px); height: auto;
   -webkit-mask-image: radial-gradient(closest-side, #000 60%, transparent 100%); mask-image: radial-gradient(closest-side, #000 60%, transparent 100%); }
-.ship { left: 46%; top: 30%; width: min(34vw, 420px); height: auto; animation: drift 7s ease-in-out infinite;
+.ship { left: 46%; top: 30%; width: min(34vw, 420px); animation: drift 7s ease-in-out infinite; z-index: 1; }
+.ship img { display: block; width: 100%; height: auto; position: relative;
   -webkit-mask-image: radial-gradient(closest-side, #000 62%, transparent 100%); mask-image: radial-gradient(closest-side, #000 62%, transparent 100%); }
-.earth { left: 0; bottom: 0; width: 100%; height: 30vh; object-fit: cover; object-position: top;
+.earth { left: 0; bottom: var(--strip-h); width: 100%; height: var(--earth-h); object-fit: cover; object-position: top;
   -webkit-mask-image: linear-gradient(180deg, transparent 0, #000 35%); mask-image: linear-gradient(180deg, transparent 0, #000 35%); }
 @keyframes drift { 50% { transform: translate(8px, -10px); } }
+
+/* ---- Cover details from the concept: calm, but lots to look at -------------------------------------
+   Everything here is decorative (aria-hidden), slow (5 s and up), and frozen for reduced motion. */
+.hero { --strip-h: 92px; --earth-h: 30vh; }
+
+/* Engine flame trailing from the rear thrusters, flickering gently. */
+.flame { position: absolute; right: 90%; top: 64%; width: 46%; height: auto; transform: rotate(-16deg); transform-origin: 100% 50%;
+  image-rendering: pixelated; filter: drop-shadow(0 0 6px rgba(242, 140, 88, 0.55)); }
+.flame .sparks-a { animation: flick 1.6s steps(1) infinite; }
+.flame .sparks-b { animation: flick 1.6s 0.8s steps(1) infinite; }
+@keyframes flick { 50% { opacity: 0; } }
+
+/* Milky Way: a dusty diagonal band behind the ship, from the planet down toward the headline. */
+.milkyway { position: absolute; z-index: -1; left: 40%; top: -18%; width: 20%; height: 100%; transform: rotate(38deg); opacity: 0.9; pointer-events: none;
+  background:
+    radial-gradient(1px 1px at 20% 30%, #dbe7ff, transparent) 0 0 / 19px 23px,
+    radial-gradient(1px 1px at 70% 60%, #fff, transparent) 0 0 / 31px 27px,
+    radial-gradient(1.2px 1.2px at 40% 80%, #9fbfff, transparent) 0 0 / 13px 17px,
+    radial-gradient(1px 1px at 85% 15%, #ffd9bf, transparent) 0 0 / 41px 37px,
+    radial-gradient(40% 50% at 45% 50%, rgba(140, 165, 225, 0.32), rgba(70, 95, 160, 0.14) 55%, transparent 80%);
+  -webkit-mask-image: radial-gradient(50% 50% at 50% 50%, #000 35%, transparent 100%); mask-image: radial-gradient(50% 50% at 50% 50%, #000 35%, transparent 100%); }
+
+/* Sparkles: four groups that breathe out of phase. */
+.sky-detail { position: absolute; inset: 0; z-index: 0; pointer-events: none; overflow: visible; }
+.tw { animation: breathe 7s ease-in-out infinite; }
+.tw-b { animation-duration: 9s; animation-delay: -3s; }
+.tw-c { animation-duration: 11s; animation-delay: -6s; }
+.tw-d { animation-duration: 8s; animation-delay: -1.5s; }
+.tw-e { animation-duration: 13s; animation-delay: -4s; }
+.tw-b use[href="#spk-soft"] { filter: drop-shadow(0 0 4px rgba(242, 240, 233, 0.7)); }
+@keyframes breathe { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+
+/* Orbit diagram between the headline and the planet; two little worlds circle very slowly. */
+.orbits { position: absolute; z-index: 0; left: 42%; top: 58px; width: min(17vw, 240px); height: auto; pointer-events: none; opacity: 0.9; }
+
+/* Shooting star on the right, settling in once in a while. */
+.comet { position: absolute; z-index: 0; right: 4%; top: 46%; width: min(10vw, 150px); height: auto; overflow: visible; pointer-events: none;
+  animation: comet 16s ease-in-out infinite; }
+@keyframes comet { 0%, 100% { opacity: 0.85; transform: none; } 50% { opacity: 0.55; transform: translate(-6px, 2px); } }
+
+/* Pixel clouds at the edges of the horizon, drifting a few pixels. */
+.cloud { position: absolute; z-index: 1; height: auto; image-rendering: pixelated; pointer-events: none; animation: cloud 24s ease-in-out infinite;
+  -webkit-mask-image: linear-gradient(180deg, #000 70%, transparent); mask-image: linear-gradient(180deg, #000 70%, transparent); }
+.cloud-left { left: -36px; bottom: calc(var(--strip-h) + var(--earth-h) - 200px); width: min(16vw, 220px); }
+.cloud-right { right: -28px; bottom: calc(var(--strip-h) + var(--earth-h) - 84px); width: min(34vw, 496px); animation-duration: 30s; animation-delay: -9s; }
+.cloud-puff { left: 31%; bottom: calc(var(--strip-h) + var(--earth-h) - 140px); width: min(10vw, 140px); opacity: 0.9; animation-duration: 20s; animation-delay: -5s; }
+@keyframes cloud { 50% { transform: translateX(10px); } }
+
+/* "!" marks beside the headline, as in the concept sketch. */
+.hero-copy h1 { position: relative; }
+.hero-copy > * { width: fit-content; max-width: 100%; }   /* boxes hug their content, so Navi sees the open sky beside them */
+.burst { position: absolute; left: -20px; top: -30px; width: 34px; height: 34px; }
+
+/* Brand mark: a little orbit with a star. */
+.hero-nav .brand { display: inline-flex; align-items: center; gap: var(--sp-2); }
+.brand-orbit { flex: none; color: var(--warm-ivory); }
+
+/* Sketchbook strip: warm paper with a stepped pixel edge and ink drawings. */
+.sketch-strip { position: absolute; z-index: 3; left: 0; right: 0; bottom: 0; height: var(--strip-h); color: #24313b;
+  background: #efe5cf; display: flex; align-items: flex-end; justify-content: space-between; gap: var(--sp-4); }
+.sketch-strip::before { content: ""; position: absolute; left: 0; right: 0; top: -12px; height: 12px; pointer-events: none;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='96' height='12' shape-rendering='crispEdges'%3E%3Cpath fill='%23efe5cf' d='M0 8h8V4h12v4h8V0h10v6h14V2h10v4h8V8h14V4h12v8H0z'/%3E%3C/svg%3E") repeat-x 0 0 / 96px 12px; }
+.sketch-strip::after { content: ""; position: absolute; inset: 0; pointer-events: none; opacity: 0.5;   /* faint paper grain */
+  background: radial-gradient(1px 1px at 30% 40%, rgba(36, 49, 59, 0.18), transparent) 0 0 / 7px 9px, radial-gradient(1px 1px at 70% 70%, rgba(36, 49, 59, 0.12), transparent) 0 0 / 11px 13px; }
+.sk { position: relative; z-index: 1; height: 100%; width: auto; flex: none; }
+.sk-left { margin-left: var(--sp-3); }
+.sketch-strip .down { position: relative; z-index: 1; left: auto; bottom: auto; transform: none; align-self: center; color: #1b2630; text-shadow: none; letter-spacing: 0.18em; white-space: nowrap; }
+.sketch-strip .down:hover { color: var(--slate-blue); }
+
+@media (prefers-reduced-motion: reduce) {
+  .tw, .comet, .cloud, .flame .sparks-a, .flame .sparks-b { animation: none; }
+}
 
 .hero-copy { position: relative; z-index: 2; padding: var(--sp-6) var(--gutter) 0; max-width: 640px; }
 .hero-copy h1 { font-size: var(--fs-hero); line-height: 1.02; text-shadow: 4px 4px 0 rgba(0, 0, 0, 0.45); }
@@ -49,13 +122,14 @@ body.landing { background: var(--bg-page) fixed, #070b10; overflow-x: hidden; }
 .demo-note { margin-top: var(--sp-5); }
 
 @media (max-width: 900px) {
-  .ship { left: 38%; top: 52%; width: 55vw; opacity: 0.8; } .planet { width: 38vw; opacity: 0.7; }
+  .ship { left: 52%; top: 42%; width: 40vw; opacity: 0.85; } .planet { width: 38vw; opacity: 0.7; }
+  .orbits { left: 46%; top: 70px; } .milkyway { left: 52%; }
   .hero-copy { max-width: none; }
 }
 
-.skip-intro { position: absolute; z-index: 4; right: var(--gutter); bottom: var(--sp-4); background: rgba(16, 24, 32, 0.75); color: var(--text); border: 1px solid var(--border); padding: var(--sp-2) var(--sp-4); cursor: pointer; font-size: var(--fs-xs); letter-spacing: var(--tracking-label); text-transform: uppercase; }
+.skip-intro { position: absolute; z-index: 4; right: var(--gutter); bottom: calc(var(--strip-h) + var(--sp-5)); background: rgba(16, 24, 32, 0.75); color: var(--text); border: 1px solid var(--border); padding: var(--sp-2) var(--sp-4); cursor: pointer; font-size: var(--fs-xs); letter-spacing: var(--tracking-label); text-transform: uppercase; }
 .skip-intro[hidden] { display: none; }
-.down { position: absolute; z-index: 3; left: 50%; bottom: var(--sp-3); transform: translateX(-50%); color: var(--warm-ivory); text-decoration: none; font-size: var(--fs-md); text-shadow: 2px 2px 0 rgba(0,0,0,.6); }
+.down { text-decoration: none; font-size: var(--fs-md); }
 
 /* Intro: staged fade-in; skipped by .no-intro (button, any key) or reduced motion. */
 .hero:not(.no-intro) .hero-copy > *, .hero:not(.no-intro) .ship, .hero:not(.no-intro) .planet { animation-fill-mode: both; }
@@ -68,8 +142,8 @@ body.landing { background: var(--bg-page) fixed, #070b10; overflow-x: hidden; }
    beside the Mission intro, next to "How it works", and the sky above the Mission scenery. */
 .navi-zone { display: block; pointer-events: none; }
 .hero-zone { position: absolute; z-index: 1; left: calc(46% + min(34vw, 420px) + 12px); right: 2%; top: calc(30% + 70px); height: 190px; }
-@media (max-width: 900px) { .hero-zone { left: 55%; right: 3%; top: calc(52% - 110px); height: 100px; } }
-@media (max-width: 560px) { .hero-zone { left: 62%; top: calc(52% - 70px); height: 64px; } }
+@media (max-width: 900px) { .hero-zone { left: 47%; right: auto; width: 130px; top: calc(42% - 96px); height: 84px; } }   /* open sky between the headline, the planet and the ship */
+@media (max-width: 560px) { .hero-zone { left: 3%; right: auto; width: 38%; top: calc(100% - var(--strip-h) - var(--earth-h) - 84px); height: 70px; } }   /* the pocket of sky under the copy, left of the ship */
 .m-zone { flex: 0 0 240px; align-self: stretch; min-height: 110px; }
 .m-how-head { display: flex; align-items: center; gap: var(--sp-5); }
 .m-zone-how { flex: 1; min-height: 90px; }
@@ -114,3 +188,26 @@ body.landing { background: var(--bg-page) fixed, #070b10; overflow-x: hidden; }
   .hero-nav nav .spark { display: none; }
 }
 @media (max-width: 340px) { .hero-nav nav a:first-of-type { display: none; } }   /* "Begin exploring" sits right below */
+
+/* Cover call to action: ivory "paper" button with a double pixel frame, as in the concept. */
+.hero .btn-pixel { background: var(--warm-ivory); color: var(--midnight-charcoal);
+  box-shadow: inset 0 0 0 3px var(--warm-ivory), inset 0 0 0 5px var(--midnight-charcoal), 0 0 0 3px var(--midnight-charcoal), 0 0 0 5px var(--warm-ivory), 6px 6px 0 5px rgba(0, 0, 0, 0.45); }
+.hero .btn-pixel:hover { background: #fff8e8; color: var(--midnight-charcoal); }
+.hero .skip { text-underline-offset: 6px; }
+
+/* Sketch strip on small screens: crop the drawings rather than shrinking them, so the ink stays legible. */
+@media (max-width: 760px) {
+  .hero { --strip-h: 80px; }
+  .sk-left { width: 170px; }
+  .sk-right { width: 150px; }
+}
+@media (max-width: 560px) {
+  .hero { --earth-h: 22vh; }
+  .ship { left: 44%; top: 60%; width: 54vw; }
+  .sk-right { display: none; }
+  .sk-left { width: 140px; margin-left: 0; }
+  .sketch-strip { justify-content: flex-start; }
+  .sketch-strip .down { font-size: var(--fs-sm); letter-spacing: 0.12em; }
+  .cloud-right { width: 70vw; }
+  .orbits { width: 34vw; left: 52%; top: 64px; }
+}
