@@ -29,6 +29,8 @@ from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 
+import numpy as np
+
 from processing import imaging, irsa, photometry
 from processing.fits_io import FitsReadError
 
@@ -307,3 +309,110 @@ def build(svc, obj: dict, ra: float | None, dec: float | None, radius: float, si
     basis = next((f.basis for f in measured if f.basis), None)
     return ({**base, "availability": {"status": "available"}, "extractionMethod": method, **({"uncertaintyBasis": basis} if basis else {}),
              "points": points, "warnings": warnings}, bool(skipped))
+
+
+# ---------------------------------------------------------------------------------------------------------------------------------
+# P2-03: compare an object's spectrum between two stretches of time (earlier and later observations)
+EPOCH_SIGNIFICANT_SIGMA = 3.0
+EPOCH_WAVELENGTH_MATCH_FRACTION = 0.25          # same rule as comparisons: a quarter of one bandwidth
+
+
+def compare_epochs(svc, obj: dict, radius: float, split_iso: str | None, now_iso) -> dict:
+    """Band-by-band comparison of the object's flux in observations BEFORE and AFTER a date, using only frames already stored on this server
+    (it never waits for the archive). A band is compared only when both epochs have a measurement there and the object fell at
+    matching wavelengths in the two (otherwise a brightness difference could just be the spectrum's slope); the uncertainty of each difference
+    is the statistical errors plus the repeatability floor of each frame. This is a consistency check, not proof of variability."""
+    from .core import observation_id_for
+    files, _ = svc._discover_cached(obj["coordinates"]["raDeg"], obj["coordinates"]["decDeg"])
+    svc.list_observations(obj["objectId"], limit=1)
+    recs = svc.registry.get_observations([observation_id_for(f.uri) for f in files])
+    jobs, not_stored = [], 0
+    for f in files:
+        rec = recs.get(observation_id_for(f.uri))
+        if not rec:
+            continue
+        d, wr = detector_number(rec["observation"].get("bandpass")), rec["observation"].get("wavelengthRangeUm")
+        if not (d and wr and 1 <= d <= 6 and rec["observation"].get("observedAt")):
+            continue
+        if not _is_cached(svc, obj, rec):
+            not_stored += 1
+            continue
+        jobs.append((rec, d))
+    archive = _Archive()
+    deadline = time.monotonic() + 3600.0                                     # stored frames only: nothing here waits for a download
+    with ThreadPoolExecutor(max_workers=WORKERS) as pool:
+        results = list(pool.map(lambda j: _measure(svc, j[0], j[1], obj, None, None, radius, deadline, archive), jobs))
+    measured = [r for r in results if r.flux_mjy is not None and r.wavelength_um is not None and r.lo_um <= r.wavelength_um <= r.hi_um]
+    base = {"objectId": obj["objectId"], "apertureRadiusArcsec": radius, "fluxUnit": photometry.FLUX_UNIT, "generatedAt": now_iso(), "kind": "epoch_comparison"}
+    if len(measured) < 4:
+        return {**base, "availability": {"status": "unavailable", "statusReason": (
+            f"Only {len(measured)} stored observation(s) of this object could be measured ({not_stored} more are not stored on this server); a comparison needs "
+            "frames from two different stretches of time.")}, "bands": []}
+    dates = sorted(r.obs["observation"]["observedAt"] for r in measured)
+    split = split_iso or dates[len(dates) // 2]
+    early = [r for r in measured if r.obs["observation"]["observedAt"] < split]
+    late = [r for r in measured if r.obs["observation"]["observedAt"] >= split]
+    if not early or not late:
+        return {**base, "splitAt": split, "availability": {"status": "unavailable", "statusReason": "All stored measurable observations fall on one side of that date."}, "bands": []}
+
+    def best_per_band(frames):
+        out: dict[int, FrameResult] = {}
+        for f in frames:
+            band, _, _ = band_of(f.detector, f.wavelength_um, f.lo_um, f.hi_um)
+            if band not in out or abs(f.snr) > abs(out[band].snr):
+                out[band] = f
+        return out
+
+    be, bl = best_per_band(early), best_per_band(late)
+
+    def side(f):
+        return {"flux": _sig(f.flux_mjy, 5), "fluxUncertainty": _sig(f.sigma_mjy, 3), "wavelengthUm": round(f.wavelength_um, 4), "observedAt": f.obs["observation"]["observedAt"],
+                "observationId": f.obs["observation"]["observationId"]}
+
+    bands, n_cmp, n_sig, ratios, sigs = [], 0, 0, [], []
+    floor = photometry.SYSTEMATIC_FRACTION
+    for band in sorted(set(be) | set(bl)):
+        e, l = be.get(band), bl.get(band)
+        row = {"bandIndex": band}
+        if e is None or l is None:
+            row.update(comparable=False, reason=f"Only the {'earlier' if e else 'later'} observations have a measurement in this band.",
+                       **({"early": side(e)} if e else {}), **({"late": side(l)} if l else {}))
+            bands.append(row)
+            continue
+        bw = float(np.mean([x for x in (e.bandwidth_um, l.bandwidth_um) if x])) if (e.bandwidth_um or l.bandwidth_um) else 0.024 * e.wavelength_um
+        dl = abs(e.wavelength_um - l.wavelength_um)
+        row.update(wavelengthUm=round((e.wavelength_um + l.wavelength_um) / 2, 4), early=side(e), late=side(l))
+        if dl > EPOCH_WAVELENGTH_MATCH_FRACTION * bw + 1e-9:
+            row.update(comparable=False, reason=f"The object fell at {e.wavelength_um:.3f} and {l.wavelength_um:.3f} um in the two stretches, {dl:.3f} um apart "
+                       f"(more than a quarter of the {bw:.3f} um bandwidth), so a brightness difference could just be the spectrum's slope.")
+            bands.append(row)
+            continue
+        sigma = math.sqrt(e.sigma_mjy ** 2 + l.sigma_mjy ** 2 + (floor * e.flux_mjy) ** 2 + (floor * l.flux_mjy) ** 2)
+        diff = l.flux_mjy - e.flux_mjy
+        sig = diff / sigma if sigma > 0 else 0.0
+        n_cmp += 1
+        n_sig += abs(sig) > EPOCH_SIGNIFICANT_SIGMA
+        sigs.append(abs(sig))
+        if e.flux_mjy:
+            ratios.append(l.flux_mjy / e.flux_mjy)
+        row.update(comparable=True, difference=_sig(diff, 4), differenceUncertainty=_sig(sigma, 3), significanceSigma=round(sig, 2),
+                   ratio=round(l.flux_mjy / e.flux_mjy, 4) if e.flux_mjy else None)
+        bands.append(row)
+
+    warnings = [f"Earlier: {len(early)} observations ({min(r.obs['observation']['observedAt'] for r in early)[:10]} to {max(r.obs['observation']['observedAt'] for r in early)[:10]}); "
+                f"later: {len(late)} ({min(r.obs['observation']['observedAt'] for r in late)[:10]} to {max(r.obs['observation']['observedAt'] for r in late)[:10]}). "
+                f"Each epoch keeps, per band, the measurement with the best signal-to-noise.",
+                f"The uncertainty of each difference includes a {floor * 100:g} percent repeatability floor per measurement, because frames at the same wavelength agree to a few percent, "
+                "more than their statistical errors.",
+                "Different pointings, detector positions and calibration states are not corrected, and the aperture has no aperture correction; a difference here is a lead, not proof of variability."]
+    if not_stored:
+        warnings.append(f"{not_stored} observation(s) of this object are not stored on this server and were not used.")
+    if n_cmp == 0:
+        return {**base, "splitAt": split, "availability": {"status": "unavailable", "statusReason": (
+            "No band has a wavelength-matched measurement in both stretches of time, so nothing can be compared fairly.")}, "bands": bands, "warnings": warnings}
+    summary = {"bandsCompared": n_cmp, "bandsDifferingBeyondSigma": int(n_sig), "sigmaThreshold": EPOCH_SIGNIFICANT_SIGMA,
+               "largestSignificanceSigma": round(max(sigs), 2), "medianRatio": round(float(np.median(ratios)), 4) if ratios else None}
+    summary["text"] = (f"{n_cmp} bands could be compared fairly between the earlier and later observations. "
+                       + (f"{n_sig} of them differ by more than {EPOCH_SIGNIFICANT_SIGMA:g} times their uncertainty (largest: {max(sigs):.1f}); that is worth a closer look, not a finding."
+                          if n_sig else f"None differs by more than {EPOCH_SIGNIFICANT_SIGMA:g} times its uncertainty (largest: {max(sigs):.1f}), so the spectrum is consistent between the two stretches within these errors."))
+    return {**base, "splitAt": split, "availability": {"status": "available"}, "summary": summary, "bands": bands, "warnings": warnings}

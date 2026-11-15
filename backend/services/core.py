@@ -105,6 +105,10 @@ def _astropy_resolver(name: str) -> tuple[float, float]:
 _COORD_RE = re.compile(r"^\s*([+-]?\d+(?:\.\d+)?)\s*[, ]\s*([+-]?\d+(?:\.\d+)?)\s*$")
 
 
+def photometry_unit_sr() -> str:
+    return "MJy/sr"
+
+
 class Services:
     def __init__(self, registry: Registry, cutouts: irsa.CutoutCache, images_dir: str | Path,
                  discover: Callable[[float, float], list[irsa.ArchiveFile]] = irsa.discover,
@@ -516,6 +520,24 @@ class Services:
             raise NotFound("Unknown spectrum.")
         return rec["result"]
 
+    def compare_spectrum_epochs(self, object_id: str, *, split: str | None = None, radius: float = spectrum.DEFAULT_RADIUS_ARCSEC) -> dict:
+        """P2-03 (frontend-only): the object's spectrum before versus after a date, from stored frames. Computed once and stored."""
+        if not (3.0 <= radius <= 60.0):
+            raise BadRequest("apertureRadiusArcsec must be between 3 and 60.")
+        if split is not None:
+            try:
+                iso_to_mjd(split)
+            except Exception as exc:
+                raise BadRequest("split must be an ISO date such as 2026-03-01.") from exc
+        obj = self.get_object(object_id)
+        key = "speccmp_" + hashlib.sha1(f"{object_id}|{radius:.3f}|{split or 'median'}".encode()).hexdigest()[:10]
+        stored = self.registry.get_spectrum(key)
+        if stored and self._age_s(stored.get("savedAt")) < 3600.0:
+            return stored["result"]
+        result = spectrum.compare_epochs(self, obj, radius, split, now_iso)
+        self.registry.put_spectrum(key, {"result": result, "savedAt": now_iso(), "partial": False})
+        return result
+
     def prewarm_spectra(self, names: list[str] | None = None) -> int:
         """Build the spectrum of each curated target one after another (a background job started at server start), so the first visitor to a
         Spectrum page finds it ready. Failures are logged, never raised. Returns how many were built."""
@@ -579,6 +601,49 @@ class Services:
         if c is None:
             raise NotFound("Unknown candidate.")
         return c
+
+    def catalog(self, object_id: str, source: str = "gaia", fov_arcmin: float = imaging.DEFAULT_FOV_ARCMIN, epoch: float = 2026.0) -> dict:
+        from app.config import settings
+        from . import catalog
+        if not settings.catalog_overlay:
+            raise Upstream("The catalogue overlay is switched off: its live query has not been verified against the real catalogue service yet. "
+                           "It can be enabled for experiments with SPX_CATALOG_OVERLAY=true.", False)
+        return catalog.build(self, object_id, source, fov_arcmin, epoch, now_iso, getattr(self, "catalog_fetch", None))
+
+    def difference_sources(self, comparison_id: str) -> dict:
+        """P2-02 (frontend-only, off by default): compact bright or dark residuals in a comparison's difference picture, as leads."""
+        from app.config import settings
+        from processing import differencing
+        rec = self.registry.get_comparison(comparison_id)
+        if rec is None:
+            raise NotFound("Unknown comparison.")
+        off = {"comparisonId": comparison_id, "availability": {"status": "unavailable", "statusReason": (
+            "Automated source differencing is switched off. On real SPHEREx pairs it reports mostly residuals of ordinary stars (the wavelength at each pixel "
+            "differs between pointings), so its output would be misleading. It can be enabled for experiments with SPX_AUTO_DIFFERENCING=true.")}, "sources": []}
+        if not settings.auto_differencing:
+            return off
+        if rec.get("availability", {}).get("status") != "available" or rec["compatibility"]["verdict"] == "not_comparable":
+            return {**off, "availability": {"status": "unavailable", "statusReason": "This comparison is not available or its two observations are not comparable."}}
+        base, target = self.registry.get_observation(rec["baseObservationId"]), self.registry.get_observation(rec["targetObservationId"])
+        grid = self._grid(base, None, None, imaging.DEFAULT_FOV_ARCMIN)
+        arr_b, _ = self._grid_array(base, grid)
+        arr_t, _ = self._grid_array(target, grid)
+        res = differencing.detect(arr_b, arr_t)
+        items = []
+        for d in res.detections:
+            ra, dec = grid.raster_to_sky(d.x, grid.npix - 1 - d.y)          # detection y is FITS orientation (up); raster y is down
+            it = {"kind": d.kind, "sky": {"raDeg": round(ra, 6), "decDeg": round(dec, 6)}, "raster": {"x": round(d.x, 2), "y": round(grid.npix - 1 - d.y, 2)},
+                  "peakSigma": round(d.peak_sigma, 1), "pixels": d.n_pixels}
+            items.append(it)
+        return {"comparisonId": comparison_id, "availability": {"status": "available"}, "sources": items,
+                "noise": (res.noise if math.isfinite(res.noise) else None), "groupsFound": res.groups_found, "droppedEdge": res.dropped_edge, "droppedStarResidual": res.dropped_star_residual,
+                "limitations": ["These are leads from an automatic search, not candidates and not findings.",
+                                "Expect false positives: star residuals from pointing and from the different wavelength at each pixel, cosmic-ray hits and edge effects.",
+                                "On noise-only synthetic pairs no detections were made, but on real SPHEREx pairs the search reports mostly star residuals."]}
+
+    def challenges(self, object_id: str) -> dict:
+        from . import challenges
+        return challenges.build(self, object_id)
 
     def library(self, fresh: bool = False) -> dict:
         from . import library
@@ -873,7 +938,30 @@ class Services:
             out["baseImage"] = self.get_image(base_id, wait_s=300)      # wait: a 'processing' stub must never be stored
             out["targetImage"] = self.get_image(target_id, wait_s=300)
             if mode == "difference":
-                png, st = imaging.render_difference_png(arr_t - arr_b)
+                # The sky background (mostly zodiacal light) differs from date to date. Left in, it is a uniform offset that shifts the
+                # grey scale and can hide or fake real differences, so each frame's sky level (its median) is removed first and reported.
+                lvl_b, lvl_t = float(np.nanmedian(arr_b)), float(np.nanmedian(arr_t))
+                diff = (arr_t - lvl_t) - (arr_b - lvl_b)
+                png, st = imaging.render_difference_png(diff)
+                noise = coadd.pixel_noise(diff)
+                zb = float(np.nanmedian(cut_b.zodi)) if cut_b.zodi is not None and np.isfinite(cut_b.zodi).any() else None
+                zt = float(np.nanmedian(cut_t.zodi)) if cut_t.zodi is not None and np.isfinite(cut_t.zodi).any() else None
+                full = st["highValue"] / noise if noise and noise > 0 else None
+                caveats = [
+                    f"Background matched: each picture's sky level was removed before subtracting (a difference of {lvl_t - lvl_b:+.4g} MJy/sr between the two"
+                    + (f"; the archive's zodiacal-light model differs by {zt - zb:+.4g} MJy/sr" if zb is not None and zt is not None else "")
+                    + "). A large faint feature that is genuinely different between dates can be partly removed with it.",
+                    "A star can look different for reasons other than the object changing: the wavelength at a given pixel differs between the two pointings "
+                    "(it is matched at the object's position only), and the two pictures are aligned only as well as the archive's coordinates allow.",
+                    ("The scale could not be related to the noise." if not full else
+                     f"Grey is no change; the full white-to-black range is about plus or minus {full:.1f} times the pixel-to-pixel noise. "
+                     + ("At this level most of what you see is noise." if full < 6 else
+                        "That is wide because bright stars leave the largest residuals and set the scale, so faint changes stay close to grey.")),
+                    "A bright or dark patch is a lead to check, not a detection."]
+                out["differenceQuality"] = {"backgroundMatched": True, "baseSkyLevel": lvl_b, "targetSkyLevel": lvl_t, "removedOffset": lvl_t - lvl_b,
+                                            "unit": photometry_unit_sr(), "zodiBase": zb, "zodiTarget": zt, "noiseSigma": noise if noise and noise > 0 else None,
+                                            "fullScaleSigma": full, "caveats": caveats}
+                out["warnings"] = list(out["warnings"]) + [caveats[0], caveats[2]]
                 name = f"{cid}_diff"
                 (self.images_dir / f"{name}.png").write_bytes(png)
                 out["differenceImage"] = {
