@@ -189,3 +189,44 @@ def test_the_bundle_does_not_depend_on_the_machine_it_was_built_on(built, tmp_pa
     svc = _offline(moved, archive)
     item = svc.list_observations(_object_ids(moved)[0], bandpass="SPHEREx-D3")["items"][0]
     assert svc.get_image(item["observationId"], wait_s=5)["availability"] == {"status": "available"}
+
+
+def test_poor_frames_are_dropped_and_their_files_removed(tmp_path):
+    """skip_poor removes the image and cutout of a frame whose own quality roll-up is 'poor', and reports it."""
+    data = tmp_path / "bundle"
+    archive = Archive(tmp_path)
+    files = [_file(u, s) for u, s in URIS.items()]
+    svc = _services(data, archive, discover=lambda ra, dec: files, resolver=lambda name: CENTER)
+    first = bundle.warm_target(svc, "Synthetic Test Field", band="SPHEREx-D3", frames=50, workers=2, pause_s=0, log=lambda *a: None)
+    victim = svc.list_observations(first["objectId"], bandpass="SPHEREx-D3", limit=200)["items"][0]["observationId"]
+    rec = svc.registry.get_observation(victim)
+    rec["quality"] = {"flags": [], "summary": "poor"}
+    svc.registry.put_observation(victim, rec)
+    n_cut = len(list((data / "cutouts").glob("*.fits")))
+    assert list((data / "images").glob(f"{victim}_*"))
+    dropped = bundle.prune_poor(svc, [victim])
+    assert dropped == [victim]
+    assert not list((data / "images").glob(f"{victim}_*"))
+    assert len(list((data / "cutouts").glob("*.fits"))) == n_cut - 1
+    again = bundle.prune_poor(svc, [victim])
+    assert again == [victim]                     # idempotent: files already gone, still reported as poor, no crash
+    others = [o["observationId"] for o in svc.list_observations(first["objectId"], bandpass="SPHEREx-D3", limit=200)["items"] if o["observationId"] != victim]
+    assert others and bundle.prune_poor(svc, others) == []          # frames that are not poor are never touched
+
+
+def test_warm_spectrum_renders_the_image_behind_every_available_band():
+    class Svc:
+        rendered = []
+
+        def get_spectrum(self, oid, wait_s=None):
+            return {"availability": {"status": "available"}, "points": [
+                {"available": True, "observationId": "a"}, {"available": True, "observationId": "a"},
+                {"available": True, "observationId": "b"}, {"available": False, "observationId": "c"}]}
+
+        def get_image(self, oid, wait_s=None):
+            self.rendered.append(oid)
+            return {"availability": {"status": "available"}}
+
+    svc = Svc()
+    r = bundle.warm_spectrum(svc, "obj", log=lambda *a: None)
+    assert r == {"status": "available", "bandImages": 2, "rendered": 2} and sorted(svc.rendered) == ["a", "b"]

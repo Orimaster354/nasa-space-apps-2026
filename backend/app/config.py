@@ -12,6 +12,8 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     # Build the five demo targets' spectra in the background at start-up so the Spectrum page is ready for the first visitor (uses the archive).
     prewarm_spectra: bool = False
+    # Ask the archive a tiny question now and then (in the background) so the app can show whether it is answering. Off by default: no network in tests.
+    archive_probe: bool = False
     data_dir: str = "data"
     # If set, this folder (the frontend) is served at "/" so the app runs from one origin (no CORS, one URL for judges).
     frontend_dir: str = ""

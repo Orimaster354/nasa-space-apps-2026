@@ -1,0 +1,31 @@
+# Extra targets stored in the demo bundle (images + spectrum; candidates exist only for the curated five).
+# One name per line, resolved through CDS Sesame. Lines starting with # are ignored.
+# Nearby red dwarfs and brown dwarfs (they move: good for blinking)
+Teegarden's Star
+Luhman 16
+Wolf 359
+Proxima Centauri
+Ross 128
+Kapteyn's Star
+Wolf 1069
+Gliese 1061
+LHS 1140
+TRAPPIST-1
+VHS J1256-1257
+Lacaille 9352
+Gliese 229
+# Stars with interesting spectra or variability
+T Tauri
+Mira
+Eta Carinae
+Antares
+# Galaxies and nebulae
+M31
+M87
+M82
+M104
+M42
+M1
+NGC 253
+NGC 1365
+Cassiopeia A
