@@ -1,6 +1,7 @@
 """HTTP routes for contract v0.2.0 operations #1-#7 (objects, observations, images). No scientific logic here."""
 from __future__ import annotations
 
+import re
 from typing import Literal
 
 from fastapi import APIRouter, Query, Request
@@ -9,11 +10,23 @@ from services.core import NotFound, Services
 
 from processing.imaging import DEFAULT_FOV_ARCMIN
 
-from .schemas import (AstronomicalObject, ComparisonResult, CreateComparisonRequest, CreateMeasurementRequest, Measurement,
-                      Observation, ObservationImage, Page, PixelToSky)
+from .schemas import (AIResponse, AstronomicalObject, ComparisonResult, CreateComparisonRequest, CreateMeasurementRequest, Measurement,
+                      Observation, ObservationImage, Page, PixelToSky, SendChatMessageRequest)
 
 router = APIRouter()
 _EXCLUDE = {"response_model_exclude_none": True}
+
+
+_CLIENT_ID = re.compile(r"^[A-Za-z0-9_-]{8,64}$")
+
+
+def client_id(request: Request) -> str:
+    """Anonymous visitor key for the AI message allowance: the X-Client-Id the page sends, else the caller's address."""
+    cid = request.headers.get("x-client-id", "")
+    if _CLIENT_ID.match(cid):
+        return "c:" + cid
+    fwd = request.headers.get("x-forwarded-for", "").split(",")[0].strip()
+    return "ip:" + (fwd or (request.client.host if request.client else "unknown"))
 
 
 def svc(request: Request) -> Services:
@@ -85,6 +98,12 @@ def create_comparison(request: Request, body: CreateComparisonRequest):
 @router.post("/measurements", response_model=Measurement, **_EXCLUDE)
 def create_measurement(request: Request, body: CreateMeasurementRequest):
     return svc(request).create_measurement(body.kind, body.observationIds, body.region.model_dump() if body.region else None)
+
+
+@router.post("/chat/messages", response_model=AIResponse, **_EXCLUDE)
+def send_chat_message(request: Request, body: SendChatMessageRequest):
+    ctx = body.context.model_dump(exclude_none=True)
+    return request.app.state.companion.respond(body.message, ctx, client_id(request), body.investigationId)
 
 
 @router.get("/measurements/{measurement_id}", response_model=Measurement, **_EXCLUDE)

@@ -163,6 +163,58 @@ class Measurement(_Model):
     createdAt: str
 
 
+class Selection(_Model):
+    observationId: str
+    sky: SkyCoordinate | None = None
+    radiusArcsec: float | None = None
+
+
+class ChatContext(_Model):
+    activeView: Literal["viewer", "timeline", "comparison", "spectrum", "workspace"] | None = None
+    candidateId: str | None = None
+    mode: Literal["beginner", "advanced"] | None = None
+    objectId: str | None = None
+    observationIds: list[str] | None = None
+    comparisonId: str | None = None
+    spectrumId: str | None = None
+    measurementIds: list[str] | None = None
+    selection: Selection | None = None
+
+
+class SendChatMessageRequest(_Model):
+    investigationId: str | None = None
+    message: str = Field(min_length=1, max_length=2000)
+    context: ChatContext = Field(default_factory=ChatContext)
+
+
+class ChatMessage(_Model):
+    messageId: str
+    role: Literal["user", "assistant"]
+    content: str
+    createdAt: str
+    context: ChatContext | None = None
+
+
+class AIReference(_Model):
+    targetType: Literal["observation", "comparison", "spectrum", "measurement", "object", "candidate"]
+    targetId: str
+
+
+class SuggestedAction(_Model):
+    kind: Literal["open_observation", "open_comparison", "open_spectrum", "add_note", "run_comparison"]
+    label: str
+    targetId: str | None = None
+    params: dict[str, str | float] | None = None
+
+
+class AIResponse(_Model):
+    message: ChatMessage
+    references: list[AIReference]
+    caveats: list[str]
+    suggestedActions: list[SuggestedAction]
+    availability: Availability
+
+
 class CreateComparisonRequest(_Model):
     baseObservationId: str
     targetObservationId: str

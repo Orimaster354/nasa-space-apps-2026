@@ -76,17 +76,17 @@ Priorities: **P0** essential for a functioning submission · **P1** important di
 
 ### AI (core)
 
-- [ ] **P0-27 LLM provider adapter with two configured providers and ordered fallback.**
+- [x] **P0-27 LLM provider adapter with two configured providers and ordered fallback.** *(Done: `ai/llm.py`. Gemini and an OpenAI-compatible adapter, ordered chain, then the automated summary. Keys are `SecretStr`, sent only in headers, never logged (tested). Live check: one real call with `gemini-3.1-flash-lite` passed the grounding check; `gemini-2.5-flash` and `gemini-2.5-flash-lite` returned 404 for this key.)*
   Dep: D-1. Done: providers/models/keys come from env; call to provider 1 failing triggers provider 2, then the deterministic fallback; tested with a fake provider; keys never appear in logs or responses.
-- [ ] **P0-28 Tool functions returning structured results.**
+- [x] **P0-28 Tool functions returning structured results.** *(Done differently by design: no model-side tool calling. `ai/facts.py` assembles the object, observation, comparison and measurement results into numbered text facts before the model is called. The model never requests data.)*
   Dep: P0-13, P0-23, P0-24. Done: tools exist for object, observations, comparison, measurements (spectrum/candidates added later); each returns contract models.
-- [ ] **P0-29 AI companion receives structured measurement results.**
+- [x] **P0-29 AI companion receives structured measurement results.** *(Done: the prompt is JSON of `{id, text}` facts; tests assert it contains the measurement values and no image keys, URLs or base64, and that Gemini and OpenAI-compatible request bodies hold text parts only.)*
   Dep: P0-28. Done: for a context with a comparison, the prompt contains the `Measurement`/`ComparisonResult` objects (verified by a test that inspects the prompt), and no raw arrays, FITS, or image bytes. The LLM adapter has no image input path at all (a test asserts requests are text-only). *(Design rule from 2026-11-14: scientific computation first, AI interpretation second; see plan §9.)*
-- [ ] **P0-30 Chat endpoint.**
+- [x] **P0-30 Chat endpoint.** *(Done: `POST /chat/messages` with per-visitor (default 15) and global daily (default 500) AI-message limits, then automated summaries. Visitor key = `X-Client-Id` header, else the caller address. NOT done: persisting messages to an investigation (no investigation endpoints yet, `investigationId` is accepted and ignored).)*
   Dep: P0-27, P0-29. Done: `POST /chat/messages` returns a valid `AIResponse` with `references`, `caveats`, `suggestedActions`; honors `ChatContext.mode` and `candidateId`; messages persisted when `investigationId` given.
-- [ ] **P0-31 Grounding: structured output + numeric check.**
+- [x] **P0-31 Grounding: structured output + numeric check.** *(Done: `ai/grounding.py`. Every digit-written number in answer and hypotheses must match a number in a cited fact (rounding accepted); one retry quoting the problems, then the automated summary. Known limit: numbers written as words are not caught (the prompt says to use digits).)*
   Dep: P0-30. Done: model output parsed as `{answer, citedResultIds, hypotheses}`; any number in `answer` not found in cited results triggers retry then the templated fallback; tested with fake-provider outputs that invent a number (must be rejected).
-- [ ] **P0-32 Verify AI explanations distinguish evidence from hypotheses.**
+- [x] **P0-32 Verify AI explanations distinguish evidence from hypotheses.** *(Done: hypotheses are returned in a separate labelled list and shown under 'Possible explanations (hypotheses, not established findings)'; discovery/confirmation wording is rejected unless negated; backend-built caveats are always returned, whatever the model says.)*
   Dep: P0-31. Done: response separates cited evidence from labeled hypotheses; tests with fixed provider outputs assert that unsupported claims are demoted or removed; caveats always present when a comparison has `warn`/`fail`.
 
 ### Persistence, deploy, demo

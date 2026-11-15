@@ -13,6 +13,9 @@ from pathlib import Path
 
 from fastapi.staticfiles import StaticFiles
 
+from ai.companion import Companion
+from ai.limits import QuotaLimiter
+from ai.llm import ProviderChain, providers_from_settings
 from api.routes import router
 from processing.irsa import CutoutCache, discover
 from services.core import BadRequest, DataUnavailable, NotFound, Services, Upstream
@@ -42,10 +45,16 @@ def build_default_services() -> Services:
                     discover=lambda ra, dec: discover(ra, dec, collections=collections))
 
 
-def create_app(services: Services | None = None) -> FastAPI:
+def build_default_companion(services: Services) -> Companion:
+    return Companion(services, ProviderChain(providers_from_settings(settings)),
+                     QuotaLimiter(settings.chat_limit_per_client, settings.chat_limit_global_daily))
+
+
+def create_app(services: Services | None = None, companion: Companion | None = None) -> FastAPI:
     logging.basicConfig(level=settings.log_level, format="%(asctime)s %(levelname)s %(name)s %(message)s")
     app = FastAPI(title="SPHEREx backend", version=CONTRACT_VERSION)
     app.state.services = services or build_default_services()
+    app.state.companion = companion or build_default_companion(app.state.services)
     app.mount("/media/images", StaticFiles(directory=app.state.services.images_dir), name="images")
 
     app.add_middleware(
