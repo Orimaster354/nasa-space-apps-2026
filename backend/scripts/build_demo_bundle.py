@@ -57,6 +57,12 @@ while todo:
             print(f"{t}: archive not ready ({exc})", flush=True)
             again.append(t)
             continue
+        # A target is only done when its observation list is SAVED as well (an incomplete archive answer is never saved): without it the target
+        # would not open while the archive is down.
+        c0 = svc.registry.get_object(r["objectId"])["coordinates"]
+        if svc.registry.get_discovery(f"{round(c0['raDeg'], 4):.4f},{round(c0['decDeg'], 4):.4f}") is None:
+            r["missing"] = r["missing"] + ["observation list"]
+            print(f"{t}: frames stored but the archive's observation list was incomplete, so it is not saved yet; will retry", flush=True)
         report[t] = r
         failed.pop(t, None)
         if r["missing"]:

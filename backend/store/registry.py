@@ -16,6 +16,7 @@ class Registry:
         self.path = str(path)
         Path(self.path).parent.mkdir(parents=True, exist_ok=True)
         self._lock = threading.Lock()
+        self.backup = None            # store.backup.GcsBackup when SPX_BACKUP_BUCKET is set: saved investigations are copied to a bucket
         with self._conn() as c:
             c.execute("CREATE TABLE IF NOT EXISTS objects (id TEXT PRIMARY KEY, body TEXT NOT NULL)")
             c.execute("CREATE TABLE IF NOT EXISTS observations (id TEXT PRIMARY KEY, body TEXT NOT NULL)")
@@ -135,11 +136,13 @@ class Registry:
         return self._get("discoveries", key)
 
     # ---- investigations (owner-scoped; see services/investigations.py)
-    def inv_put(self, inv_id: str, owner: str, updated: str, body: dict) -> None:
+    def inv_put(self, inv_id: str, owner: str, updated: str, body: dict, notify: bool = True) -> None:
         with self._lock, self._conn() as c:
             c.execute("INSERT INTO investigations (id, owner, updated, body) VALUES (?, ?, ?, ?) "
                       "ON CONFLICT(id) DO UPDATE SET owner = excluded.owner, updated = excluded.updated, body = excluded.body",
                       (inv_id, owner, updated, json.dumps(body)))
+        if notify and self.backup is not None:
+            self.backup.changed("put", inv_id, owner, updated, body)
 
     def inv_get(self, inv_id: str) -> tuple[str, dict] | None:
         with self._conn() as c:
@@ -154,3 +157,5 @@ class Registry:
     def inv_delete(self, inv_id: str) -> None:
         with self._lock, self._conn() as c:
             c.execute("DELETE FROM investigations WHERE id = ?", (inv_id,))
+        if self.backup is not None:
+            self.backup.changed("delete", inv_id)

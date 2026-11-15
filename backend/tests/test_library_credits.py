@@ -44,6 +44,8 @@ def test_the_library_is_empty_before_anything_is_stored_then_lists_what_is(env):
     it = j["items"][0]
     assert it["objectId"] == oid and it["storedFrames"] == 3 and it["observationsListed"] == 3 and it["worksOffline"] is True
     assert it["storedByBand"] == {"SPHEREx-D3": 2, "SPHEREx-D6": 1} and it["spectrum"] is None and it["candidates"] is None
+    assert it["listedByBand"] == {"SPHEREx-D3": 2, "SPHEREx-D6": 1}
+    assert (it["defaultBand"], it["defaultBandListed"], it["defaultBandStored"]) == ("SPHEREx-D3", 2, 2)             # the like-for-like pair
     assert "keep working when NASA's archive is unreachable" in j["note"]
 
 

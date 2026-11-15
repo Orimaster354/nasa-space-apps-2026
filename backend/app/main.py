@@ -59,6 +59,11 @@ def create_app(services: Services | None = None, companion: Companion | None = N
     app.state.companion = companion or build_default_companion(app.state.services)
     if settings.archive_probe:
         archive_status.enable_probe()
+    if settings.backup_bucket:
+        from store.backup import GcsBackup
+        reg = app.state.services.registry
+        reg.backup = GcsBackup(settings.backup_bucket)
+        reg.backup.restore_into(reg)
     if settings.prewarm_spectra:
         threading.Thread(target=app.state.services.prewarm_spectra, name="prewarm-spectra", daemon=True).start()
     app.mount("/media/images", StaticFiles(directory=app.state.services.images_dir), name="images")
