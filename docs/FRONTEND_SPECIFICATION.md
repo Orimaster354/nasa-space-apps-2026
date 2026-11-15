@@ -64,21 +64,39 @@ says so. The flux-vs-wavelength chart is collapsible (closed by default so the i
 
 ## 6. Navi companion (every page, including the landing page)
 
-**Body** (`js/components/navi.js`). Original sprite, never altered, drawn at 1x (88x84) or exactly 0.5x. Each page
-marks **safe zones** in unused space (`data-navi-zone`, optional `data-navi-size="small"`): the empty end of the nav
-bar, the title row, the sky above the scenery; on the landing page beside the spacecraft and beside the Mission
-sections. She wanders between points in visible zones: slow curved flights that lean into the direction of travel,
-pauses of several seconds, occasional playful loops/twirls/sparkles, a small particle trail. A path that would cross
-imagery or the cover art becomes a quick sparkle-hop instead, so she never flies over data. When the user starts
-inspecting an image (pointer or wheel on it) she retreats to the farthest zone and stays quiet for 20 s. When no zone
-is on screen she tucks into the corner at half size. Layout changes and scrolling re-validate her position. Clicking
-**Begin exploring** makes her lead the way; the workspace starts her where she left and she flies in (session handoff).
-Reduced motion: no wandering, gliding, floating or particles.
+**Body** (`js/components/navi.js`). Original sprite, never altered, shown at one size everywhere: 60 CSS px tall
+on desktop, 52 px below 600 px wide, aspect ratio preserved. She is anchored to the viewport and flown by a steering
+model in a `requestAnimationFrame` loop (position + velocity, capped speed and acceleration, easing on arrival), with a
+soft layered-sine hover and a slight lean into turns; changing destination mid-flight bends her path, never jumps.
+Destinations come from the free space actually on screen: a 24 px grid of candidate spots, kept 18 px from every
+edge and away from corners, rejecting any spot where she would cover imagery/art, controls, inputs, navigation or
+text, and any path that would cross imagery or controls. She prefers comfortable hops (120-480 px) to places she has
+not just visited, rests 2-5.5 s, then explores again. Scroll, resize, tool switches and content appearing under her
+trigger a re-check (with timer fallbacks if the browser does not report them); if her spot is no longer free she flies
+to the nearest free one; if nothing is free she takes the least-crowded spot (never imagery, never a corner). While
+the user inspects an image she retreats away from it and stays quiet for 20 s. Clicking **Begin exploring** makes her
+lead the way and the workspace starts her where she left. Reduced motion: no flight, hover, lean or particles; she is
+placed directly in free space.
 
-**Voice** (whispers). Small translucent bubbles with a pointer, placed by `js/core/placement.js` so they never cover
-art, imagery, titles, controls or navigation; click or Esc dismisses; they fade on their own; the latest one is
-repeated in the assistant. Priorities: important (guided) > tour > reactions > ambient; a joke never interrupts the
-tour. Focus mode silences everything except guided hints.
+**Behaviour states** (`js/components/naviStates.js`, separate from the flight code). One state at a time, priority
+TOUCHED > MISC > IDLE_DIALOGUE > MOVING > IDLE; a lower-priority request is refused while a higher state is active.
+IDLE: hover in place; after 10–15 s → MOVING; on entering IDLE a 25% chance of IDLE_DIALOGUE (cooldown 45 s since her
+last remark, 150 s with Comments: Fewer; never while the user is acting, studying an image, in Focus mode or with
+Comments: Off; only where the bubble fits beside her, she never moves just to chat; recent lines are not repeated).
+MOVING: the existing flight to a safe destination; arrival → IDLE. TOUCHED: clicking her pauses autonomy, drops any
+bubble, opens the assistant; nothing can speak over it; closing → IDLE. IDLE_DIALOGUE: one short spontaneous line while
+hovering; bubble closes → IDLE. MISC: tutorials, explanations, reactions and warnings (contextual `say()`, tour steps,
+`goNear`); overrides idle chatter and wandering; finishes → IDLE. The state is exposed as `data-state` on `.navi`.
+Navi is created once per page and survives tool switches (no duplicated timers).
+
+**Voice** (whispers). A soft, translucent whisper rather than a chat box: organic rounded shape, faint glacier/aurora
+tint over a light dark wash, backdrop blur, barely-there glow, no border, two trailing motes toward Navi instead of a
+tail. Before a contextual line she settles where the bubble fits, hovers in place while it shows (the bubble follows
+her resting point, so it never shakes), then returns to IDLE. Bubble placement is tiered: clear of everything; else
+clear of imagery and controls; else least overlap. If content appears under her mid-sentence she moves and repeats
+the line. Text: IBM Plex Sans (the app's clean body face; no extra font download), 16 px (15 px on phones), line height
+1.5, wraps within 300 px, never shrunk; whole-pixel positioning and opacity-only fades keep it crisp. Click or Esc
+dismisses. Bubble ranks: guided > tour > reactions > ambient > idle remarks, so only one bubble ever shows.
 
 **Personality** (`js/components/naviBrain.js`, all lines predefined, no LLM). Curious, playful, a little sarcastic,
 occasionally dramatic, encouraging, scientifically careful: jokes are about situations, never people; questions are

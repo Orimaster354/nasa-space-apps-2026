@@ -19,7 +19,7 @@ import { on } from "../core/events.js";
 /** Lines by situation. `{x}` placeholders are filled from context. */
 const LINES = /** @type {Record<string, string[]>} */ ({
   object: ["Ooh, {name}. Good taste.", "{name}? Let's see what it's been up to.", "{name}. Fresh sky, fresh suspicions."],
-  date: ["New date, same sky. Mostly.", "Time travel achieved. Well, data travel.", "Different night. Spot anything shifty?"],
+  date: ["Try moving through the dates. The universe isn't exactly known for sitting still.", "New date, same sky. Mostly.", "Time travel achieved. Well, data travel.", "Different night. Spot anything shifty?"],
   play: ["Rolling the footage. Watch the same patch of sky.", "Here we go. Eyes on anything that jumps.", "Playback on. Try not to blink. Actually, there's a mode for that."],
   pause: ["Congratulations, you've discovered the pause button.", "Paused. The universe can wait. It's had practice.", "Freeze frame. Very dramatic."],
   stop: ["Back to the first night. Rewind complete."],
@@ -27,7 +27,10 @@ const LINES = /** @type {Record<string, string[]>} */ ({
   sidebyside: ["Two nights, side by side. Drag the divider if one deserves more attention.", "Side by side. Unlink the views if you want to wander separately."],
   overlay: ["Slide between the two dates and watch for a ghost.", "Overlay. Anything that smears is worth a second look."],
   difference: ["Bright or dark patches are differences. Could be change. Could be noise. Check the caveats.", "Difference image: where the nights disagree. Disagreement isn't proof, though."],
-  candidate: ["Wait, that actually looks interesting. I was beginning to lose hope.", "Want to investigate this source? Blink two dates and see if it jumps.", "Ooh, a candidate. Candidate, not discovery. We still need evidence."],
+  candidate: ["That looks suspicious. Let's investigate before you start celebrating.", "Want to investigate this source? Blink two dates and see if it jumps.", "Ooh, a candidate. Candidate, not discovery. We still need evidence."],
+  // A strong candidate: excitement, but scientifically careful (possible detection ≠ confirmed discovery).
+  discovery: ["Wait. That actually looks interesting. I was beginning to lose hope. Still only a candidate, though.", "Okay, that one is promising. Promising, not proven. Blink it before anyone writes a press release."],
+  degraded: ["Heads up: this observation is flagged for quality. Treat anything odd here with extra suspicion.", "This date has a quality flag. A jump here could be the detector, not the sky."],
   band: ["Band {n}: {wl} µm. Invisible to you, delicious to SPHEREx.", "{wl} µm. Different wavelength, different secrets.", "Band {n}. Cooler things glow brighter out here in the infrared."],
   gap: ["No data in this band. Even telescopes have off days.", "That band is a gap. I won't invent numbers for it. Promise."],
   save: ["Saved. Future you says thanks.", "Investigation saved. Very organised. I'm impressed."],
@@ -38,12 +41,54 @@ const LINES = /** @type {Record<string, string[]>} */ ({
   guidedWrong: ["That star isn't moving. Your imagination, however, is thriving.", "Close, but that one's sitting still. Try another."],
   guidedRight: ["Wait, that one really did move. Nice eye.", "Got it! That's the one that shifted."],
   repeated: ["You clicked the same button three times. Bold strategy.", "Third time's the charm? It does the same thing every time. I checked."],
-  idle: ["Maybe try changing the observation date. Just a revolutionary idea.", "Still there? The stars are patient. I'm slightly less so."],
   spectrum: ["Different infrared wavelengths reveal different things. Yes, there's more to space than pretty stars."],
   notes: ["Write down what you notice. Science is mostly careful notes and coffee."],
   learn: ["Questions are the whole point. Ask me anything."],
-  welcomeBack: ["Back again? Good. The sky kept changing without you."],
+  welcomeBack: ["Alright, explorer. Let's see if you can find something interesting.", "Back again? Good. The sky kept changing without you."],
 });
+
+/** Spontaneous IDLE_DIALOGUE remarks. Playful, sometimes cheeky, never actually mean; never about a mistake. */
+const IDLE_LINES = [
+  "The universe is expanding. My patience isn't.",
+  "You know, some of these stars are older than your entire species.",
+  "Another day, another suspiciously bright dot.",
+  "I wonder if anyone's looking back at us.",
+  "Fun fact: SPHEREx sees the sky in 102 colours. You see three. No offence.",
+  "Infrared is just light that's too cool for your eyes.",
+  "Somewhere out there, a rock is minding its own business. For now.",
+  "If a star moves and nobody blinks, did it really move?",
+  "Every one of those dots is a sun or a whole galaxy. Try not to think about it too hard.",
+  "I'd offer you coffee, but I'm made of pixels and optimism.",
+];
+const IDLE_CONTEXT = /** @type {Record<string, string[]>} */ ({
+  staring: ["You've been staring at that star for a while. Should I be jealous?", "Maybe try changing the observation date. Just a revolutionary idea.", "Still there? The stars are patient. I'm slightly less so."],
+  repeated: ["Space is infinite, and somehow you've managed to click the same thing twice."],
+  landing: ["Go on, press the button. The universe won't explore itself."],
+  spectrum: ["Somewhere in those bands is a story. It's usually about dust. It's always dust."],
+  notes: ["Good scientists write things down. Great ones can read their own handwriting."],
+});
+const IDLE_HISTORY_KEY = "spherex.navi.idleHistory";
+/**
+ * One idle remark, avoiding the last few (remembered across pages for this session).
+ * @param {{ route?: string, staring?: boolean, repeated?: boolean }} [ctx]
+ */
+export function pickIdleLine(ctx = {}) {
+  /** @type {string[]} */ let recent = [];
+  try { recent = JSON.parse(sessionStorage.getItem(IDLE_HISTORY_KEY) ?? "[]"); } catch { /* storage blocked */ }
+  const pools = [];
+  if (ctx.staring) pools.push(...IDLE_CONTEXT.staring);
+  if (ctx.repeated) pools.push(...IDLE_CONTEXT.repeated);
+  if (ctx.route === "/landing") pools.push(...IDLE_CONTEXT.landing);
+  if (ctx.route === "/spectrum") pools.push(...IDLE_CONTEXT.spectrum);
+  if (ctx.route === "/notes") pools.push(...IDLE_CONTEXT.notes);
+  // Context lines are preferred when they apply; otherwise the general pool.
+  const fresh = (/** @type {string[]} */ l) => l.filter(x => !recent.includes(x));
+  const choice = fresh(pools).length && Math.random() < 0.6 ? fresh(pools) : fresh(IDLE_LINES).length ? fresh(IDLE_LINES) : IDLE_LINES;
+  const text = choice[Math.floor(Math.random() * choice.length)];
+  recent = [text, ...recent].slice(0, 8);
+  try { sessionStorage.setItem(IDLE_HISTORY_KEY, JSON.stringify(recent)); } catch { /* ignore */ }
+  return text;
+}
 
 /** Tour steps. `near` is the element Navi moves beside (she never flies onto it). */
 const TOUR = [
@@ -135,15 +180,21 @@ export function attachBrain(navi) {
   let lastUserAct = 0;
   ["pointerdown", "keydown", "click"].forEach(t => document.addEventListener(t, e => { if (!/** @type {Element} */ (e.target).closest?.(".navi, .navi-panel, .navi-whisper")) lastUserAct = Date.now(); }, { capture: true, passive: true }));
   const byUser = () => Date.now() - lastUserAct < 1500;
-  let playing = false, lastDateLine = 0, lastBandLine = 0;
+  let playing = false, lastDateLine = 0, lastBandLine = 0, dateTimer = 0;
   subscribe((s, patch) => {
     const r = navi.route();
     if ("objectId" in patch && patch.objectId && byUser()) {
       setTimeout(() => { const name = /** @type {HTMLSelectElement|null} */ (document.querySelector("#target-select"))?.selectedOptions[0]?.textContent; react("object", { name: name ?? "that one" }); }, 900);
     }
     if (!byUser()) return;
-    if ("observationId" in patch && r === "/investigate" && s.compareMode === "view" && !playing && Date.now() - lastDateLine > 20000 && !("objectId" in patch)) {
-      lastDateLine = Date.now(); react("date");
+    if ("observationId" in patch && r === "/investigate" && s.compareMode === "view" && !playing && !("objectId" in patch)) {
+      // One remark per date change: an honest warning if the observation is quality-flagged, otherwise
+      // (now and then) a timeline line. Decided once the viewer has shown the new date.
+      clearTimeout(dateTimer);
+      dateTimer = window.setTimeout(() => {
+        if (/quality:/i.test(document.querySelector("#viewer .viewer-hud")?.textContent ?? "")) react("degraded");
+        else if (Date.now() - lastDateLine > 20000) { lastDateLine = Date.now(); react("date"); }
+      }, 350);
     }
     if ("compareMode" in patch && r === "/investigate") {
       const blinkStep = TOUR.find(t => t.id === "blink");
@@ -151,7 +202,10 @@ export function attachBrain(navi) {
         running = true; markSeen("modes"); show(blinkStep); markSeen("blink");
       } else if (s.compareMode !== "view") react(s.compareMode);
     }
-    if ("candidateId" in patch && patch.candidateId && r === "/investigate") react("candidate");
+    if ("candidateId" in patch && patch.candidateId && r === "/investigate") {
+      const score = Number(document.querySelector("#cand-panel [aria-selected=true] .score")?.textContent ?? "0");
+      react(score >= 0.8 ? "discovery" : "candidate");
+    }
     if ("bandIndex" in patch && r === "/spectrum" && Date.now() - lastBandLine > 15000) {
       lastBandLine = Date.now();
       const wl = document.querySelector(".bs-wl")?.textContent?.replace(/[^\d.]/g, "") ?? "";
@@ -185,25 +239,24 @@ export function attachBrain(navi) {
     const now = Date.now();
     if (b === clicks.el && now - clicks.t < 3000) clicks.n++; else { clicks.el = b; clicks.n = 1; }
     clicks.t = now;
+    if (clicks.n === 2) lastRepeatSeen = now;
     if (clicks.n === 3 && now - lastRepeat > 60000) { lastRepeat = now; react("repeated"); }
-    bumpIdle();
   }, true);
+  // (Spontaneous remarks during quiet spells come only from IDLE_DIALOGUE; see pickIdleLine.)
 
-  // A nudge after a long quiet spell in the workspace (once per visit).
-  let idleTimer = 0, idleUsed = false;
-  function bumpIdle() {
-    clearTimeout(idleTimer);
-    if (idleUsed) return;
-    idleTimer = window.setTimeout(() => { if (navi.route() === "/investigate" && !playing) { idleUsed = true; navi.say(line("idle"), { kind: "ambient" }); } }, 90000);
-  }
-  ["pointerdown", "keydown", "wheel"].forEach(t => document.addEventListener(t, bumpIdle, { capture: true, passive: true }));
-  bumpIdle();
+  // IDLE_DIALOGUE content: navi.js decides when (25% on entering IDLE, cooldown); this decides what.
+  let lastRepeatSeen = 0;
+  navi.idleLines = () => pickIdleLine({
+    route: navi.route(),
+    staring: navi.route() === "/investigate" && Date.now() - lastUserAct > 20000 && Date.now() - lastUserAct < 180000,
+    repeated: Date.now() - lastRepeatSeen < 60000,
+  });
 
   onArrive();
 
-  let firstRoute = true;    // the arrival greeting already covers the first route
+  let firstRoute = true, routeTimer = 0;    // the arrival greeting already covers the first route
   return {
-    onRoute() { if (firstRoute) { firstRoute = false; return; } clearTimeout(stepTimer); if (running && navi.route() !== "/investigate") running = false; setTimeout(routeLine, 900); },
+    onRoute() { if (firstRoute) { firstRoute = false; return; } clearTimeout(stepTimer); if (running && navi.route() !== "/investigate") running = false; clearTimeout(routeTimer); routeTimer = window.setTimeout(routeLine, 900); },
     startTour, skipTour,
   };
 }

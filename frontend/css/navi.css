@@ -1,29 +1,21 @@
 /* Navi, the companion. Shared by the landing page and the workspace so she is identical everywhere.
-   Sprite: approved asset at 1x (88x84) or exactly 0.5x when tucked into the corner; never resampled
-   at fractional sizes. Motion is gentle and stops entirely with prefers-reduced-motion. */
+   Flight, hover and lean are computed in js/components/navi.js (requestAnimationFrame steering);
+   CSS only sizes and draws her. One size everywhere (60px tall, 52px on small screens, set by JS),
+   aspect ratio of the approved sprite preserved. Reduced motion: no particles. */
 
 /* ---- Navi ---------------------------------------------------------------------------------- */
-/* Flight is driven by js/components/navi.js (curved paths); CSS only handles fades and lean. */
-.navi { position: absolute; left: 0; top: 0; z-index: 70; width: 88px; height: 84px; pointer-events: none;
-  transition: opacity 0.25s, filter 0.4s; will-change: transform; }
-.navi-lean { width: 100%; height: 100%; transition: transform 0.6s ease; }
-.navi.is-hopping { opacity: 0; transition: opacity 0.22s; }
-.navi.is-dashing { transition: transform 0.55s cubic-bezier(0.5, 0, 0.75, 0), opacity 0.25s; }
-.navi.is-quiet { opacity: 0.8; }
-.navi.is-small { width: 44px; height: 42px; }
-.navi.is-small .navi-trail { display: none; }
-.navi.is-switching { transition: none; opacity: 0; }
-.navi.is-peek { position: fixed; left: auto; top: auto; right: 6px; bottom: 10px; width: 44px; height: 42px; transform: none; }
-.navi.is-peek.is-tucked { transform: translateX(30px); opacity: 0.85; }
-.navi.is-peek.is-tucked:hover, .navi.is-peek.is-tucked:focus-within { transform: none; opacity: 1; }
-
-.navi-float { position: relative; width: 100%; height: 100%; animation: navi-bob 3.6s ease-in-out infinite; }
-.navi.thinking .navi-float { animation-duration: 1.1s; }
+.navi { position: fixed; left: 0; top: 0; z-index: 70; width: 63px; height: 60px; pointer-events: none;
+  transition: opacity 0.4s; will-change: transform; contain: layout style; }
+.navi.is-quiet { opacity: 0.85; }
+.navi-lean { position: relative; width: 100%; height: 100%; transform-origin: 50% 60%; }
 .navi-body { position: relative; z-index: 1; display: block; width: 100%; height: 100%; padding: 0; border: 0; background: transparent;
   cursor: pointer; pointer-events: auto; border-radius: 50%; }
-.navi-body img { display: block; width: 100%; height: 100%; image-rendering: pixelated; filter: drop-shadow(0 0 6px rgba(117, 191, 232, 0.25)); }
-.navi-body:hover img { filter: drop-shadow(0 0 10px rgba(117, 191, 232, 0.5)); }
-.navi-body:focus-visible { outline-offset: 0; }
+/* The sprite fills her box exactly (box has the sprite's aspect ratio), so she is never stretched.
+   Smooth resampling keeps her small features (eyes, wing edges) intact at this size. */
+.navi-body img { display: block; width: 100%; height: 100%; object-fit: contain; image-rendering: auto;
+  filter: drop-shadow(0 0 5px rgba(117, 191, 232, 0.35)) drop-shadow(0 0 1px rgba(16, 24, 32, 0.9)); }
+.navi-body:hover img { filter: drop-shadow(0 0 9px rgba(117, 191, 232, 0.6)) drop-shadow(0 0 1px rgba(16, 24, 32, 0.9)); }
+.navi-body:focus-visible { outline-offset: 2px; }
 
 /* Particle trail: a few pixel motes drifting off behind her wing (as in the reference sprite). */
 .navi-trail { position: absolute; left: 6%; bottom: 8%; width: 30%; height: 40%; pointer-events: none; }
@@ -33,38 +25,39 @@
 .navi-trail i:nth-child(3) { left: 25%; top: 55%; animation-delay: 1.1s; background: var(--glacier-blue); }
 .navi-trail i:nth-child(4) { left: 55%; top: 70%; animation-delay: 1.65s; width: 2px; height: 2px; }
 .navi-trail i:nth-child(5) { left: 10%; top: 80%; animation-delay: 2.2s; background: var(--aurora-teal); }
-.navi.is-moving .navi-trail i { animation-duration: 1.1s; }
-.navi.is-peek .navi-trail { display: none; }
-
-@keyframes navi-bob { 50% { transform: translateY(-6px); } }
+.navi.is-moving .navi-trail i { animation-duration: 1.2s; }
 @keyframes navi-mote { 0% { opacity: 0; transform: translate(0, 0); } 15% { opacity: 0.9; } 100% { opacity: 0; transform: translate(-14px, 10px); } }
 
-/* Occasional idle moments and the click response. */
-.navi-float.idle-drift { animation: navi-drift 2.6s ease-in-out; }
-.navi-float.idle-loop { animation: navi-loop 2.2s ease-in-out; }
-.navi-float.idle-sparkle .navi-trail i { animation-duration: 0.9s; }
-.navi-float.idle-twirl { animation: navi-twirl 2s ease-in-out; }
-@keyframes navi-twirl { 30% { transform: translate(4px, -6px) rotate(10deg); } 60% { transform: translate(-4px, -2px) rotate(-8deg); } }
-.navi-float.hop { animation: navi-hop 0.45s ease-out; }
-@keyframes navi-drift { 30% { transform: translate(-10px, -8px); } 65% { transform: translate(6px, -3px); } }
-@keyframes navi-loop { 25% { transform: translate(-8px, -10px) rotate(-6deg); } 50% { transform: translate(0, -16px); } 75% { transform: translate(8px, -10px) rotate(6deg); } }
-@keyframes navi-hop { 40% { transform: translateY(-10px) scale(1.04); } }
-
-/* ---- Whisper: a small, soft, translucent bubble with a pointer --------------------------------- */
-.navi-whisper { position: fixed; z-index: 71; margin: 0; max-width: 300px; padding: 6px 12px;
-  background: rgba(27, 43, 51, 0.62); color: var(--warm-ivory);
-  -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
-  border: 1px solid rgba(117, 191, 232, 0.22); border-radius: 12px;
-  box-shadow: 0 0 18px rgba(66, 191, 174, 0.16), 0 4px 14px rgba(0, 0, 0, 0.25);
-  font-family: var(--font-pixel); font-weight: 500; font-size: 0.8125rem; line-height: 1.35; letter-spacing: 0.01em;
-  cursor: pointer; opacity: 0; transform: translateY(3px); transition: opacity 0.25s, transform 0.25s; }
-.navi-whisper.is-shown { opacity: 1; transform: none; }
-.navi-whisper::after { content: ""; position: absolute; width: 8px; height: 8px; background: inherit;
-  border: inherit; border-width: 0 1px 1px 0; transform: rotate(45deg); -webkit-backdrop-filter: none; backdrop-filter: none; }
-.navi-whisper[data-side="left"]::after   { right: -5px; top: calc(var(--py, 50%) - 4px); transform: rotate(-45deg); }
-.navi-whisper[data-side="right"]::after  { left: -5px; top: calc(var(--py, 50%) - 4px); transform: rotate(135deg); }
-.navi-whisper[data-side="top"]::after    { bottom: -5px; left: calc(var(--px, 50%) - 4px); transform: rotate(45deg); }
-.navi-whisper[data-side="bottom"]::after { top: -5px; left: calc(var(--px, 50%) - 4px); transform: rotate(225deg); }
+/* ---- Whisper: a soft, translucent whisper floating beside her ----------------------------------------
+   No box, no border, no heavy shadow: an organic rounded shape with a faint glacier/aurora tint, a gentle
+   backdrop blur and a barely-there glow, plus two small trailing motes pointing at Navi instead of a tail.
+   Text: clean sans (IBM Plex Sans, the app's body face), 16px (15px on phones), line-height 1.5,
+   wraps instead of shrinking; whole-pixel positioning and opacity-only fades keep it crisp. */
+.navi-whisper { --tint: rgba(117, 191, 232, 0.12); --wash: rgba(16, 24, 32, 0.46);
+  position: fixed; z-index: 71; margin: 0; width: max-content; max-width: min(300px, calc(100vw - 32px)); padding: 10px 16px 11px;
+  background: linear-gradient(140deg, var(--tint), rgba(66, 191, 174, 0.07)), var(--wash);
+  -webkit-backdrop-filter: blur(10px) saturate(120%); backdrop-filter: blur(10px) saturate(120%);
+  border: 0; border-radius: 22px 20px 24px 19px / 20px 24px 19px 23px;
+  box-shadow: 0 0 24px rgba(117, 191, 232, 0.09);
+  color: var(--warm-ivory); text-shadow: 0 1px 2px rgba(5, 10, 15, 0.45);
+  font-family: var(--font-body); font-weight: 400; font-size: 1rem; line-height: 1.5; letter-spacing: 0.005em;
+  overflow-wrap: break-word; white-space: normal; cursor: pointer; opacity: 0; transition: opacity 0.35s ease; }
+.navi-whisper.is-shown { opacity: 1; }
+/* Trailing motes toward Navi (the side is chosen by navi.js; --px/--py aim at her). */
+.navi-whisper::before, .navi-whisper::after { content: ""; position: absolute; border-radius: 50%; background: var(--tint);
+  -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); box-shadow: 0 0 8px rgba(117, 191, 232, 0.12); }
+.navi-whisper::before { width: 9px; height: 9px; } .navi-whisper::after { width: 5px; height: 5px; }
+.navi-whisper[data-side="left"]::before  { right: -12px; top: calc(var(--py, 50%) - 6px); }
+.navi-whisper[data-side="left"]::after   { right: -21px; top: calc(var(--py, 50%) + 1px); }
+.navi-whisper[data-side="right"]::before { left: -12px; top: calc(var(--py, 50%) - 6px); }
+.navi-whisper[data-side="right"]::after  { left: -21px; top: calc(var(--py, 50%) + 1px); }
+.navi-whisper[data-side="top"]::before   { bottom: -12px; left: calc(var(--px, 50%) - 6px); }
+.navi-whisper[data-side="top"]::after    { bottom: -21px; left: calc(var(--px, 50%) + 1px); }
+.navi-whisper[data-side="bottom"]::before { top: -12px; left: calc(var(--px, 50%) - 6px); }
+.navi-whisper[data-side="bottom"]::after  { top: -21px; left: calc(var(--px, 50%) + 1px); }
+/* Without backdrop blur the wash carries the contrast on its own. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) { .navi-whisper { --wash: rgba(16, 24, 32, 0.78); } }
+@media (max-width: 600px) { .navi-whisper { font-size: 0.9375rem; line-height: 1.45; padding: 8px 13px 9px; max-width: min(280px, calc(100vw - 24px)); } }
 
 /* ---- Assistant panel: compact, beside her ------------------------------------------------------- */
 .navi-panel { position: fixed; z-index: 72; width: min(340px, calc(100vw - 32px)); height: min(480px, calc(100vh - 120px));
@@ -102,14 +95,15 @@
 @keyframes blip { 0%, 80%, 100% { opacity: 0.2; } 40% { opacity: 1; } }
 
 .nw-text { display: block; }
-.nw-actions { display: flex; gap: var(--sp-3); margin-top: 4px; font-family: var(--font-body); }
-.nw-actions button { background: none; border: 0; padding: 0; color: var(--glacier-blue); font-size: var(--fs-xs); font-weight: 600; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
-.nw-actions button:last-child { color: var(--text-muted); }
+.nw-actions { display: flex; gap: var(--sp-4); margin-top: 6px; font-family: var(--font-body); }
+.nw-actions button { background: none; border: 0; padding: 2px 0; color: var(--glacier-blue); font-size: 0.9375rem; font-weight: 600; cursor: pointer;
+  text-decoration: underline; text-decoration-color: rgba(117, 191, 232, 0.4); text-underline-offset: 3px; text-shadow: inherit; }
+.nw-actions button:hover { text-decoration-color: currentColor; }
+.nw-actions button:last-child { color: #c9ccc6; text-decoration-color: rgba(201, 204, 198, 0.35); }
 .np-link { background: none; border: 0; padding: 2px 0; color: var(--glacier-blue); font-size: var(--fs-xs); cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
 
 @media (prefers-reduced-motion: reduce) {
-  .navi, .navi.is-dashing, .navi-lean { transition: opacity 0.01ms; }
-  .navi-float, .navi-float.hop, .navi-float.idle-drift, .navi-float.idle-loop, .navi-float.idle-twirl { animation: none; }
+  .navi { transition: none; }
   .navi-trail { display: none; }
-  .navi-whisper { transition: none; transform: none; }
+  .navi-whisper { transition: none; }
 }
