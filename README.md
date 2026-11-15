@@ -37,6 +37,14 @@ docs/       Project documentation
 - Member 1: Asish Nakka
 - Member 2: Sonika Ravichandran
 
+## How we checked our work
+
+- [docs/SPECTRUM_VALIDATION.md](docs/SPECTRUM_VALIDATION.md): an independent re-measurement of the spectra, the error it found and fixed, repeatability, and what is not validated.
+- [docs/CANDIDATE_VALIDATION.md](docs/CANDIDATE_VALIDATION.md): stress tests of the Epsilon Indi B motion candidate, including negative controls on ordinary stars.
+- [docs/INVESTIGATION_EPSILON_INDI_B.md](docs/INVESTIGATION_EPSILON_INDI_B.md): one full investigation on real data, with what it does and does not establish.
+- [docs/FRAME_COUNTS.md](docs/FRAME_COUNTS.md): where each frame count in the app comes from.
+- [docs/BACKEND_CHECKLIST.md](docs/BACKEND_CHECKLIST.md): every planned item, its status and the evidence.
+
 ## Data credits
 
 The app uses public SPHEREx data from NASA/IPAC IRSA and shows the required acknowledgments on its Library page. The exact wording, dataset DOIs, papers and the WiseView reference are in [docs/DATA_CREDITS.md](docs/DATA_CREDITS.md).
