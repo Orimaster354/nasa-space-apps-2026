@@ -13,6 +13,8 @@ dependencies = [
   "astroquery",
   "numpy",
   "scipy",
+  "reproject",
+  "pillow",
 ]
 
 [project.optional-dependencies]

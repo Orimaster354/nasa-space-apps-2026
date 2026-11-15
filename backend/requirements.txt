@@ -1,0 +1,12 @@
+# Runtime dependencies, pinned to the versions the 144 tests pass on. Used by the Dockerfile.
+fastapi==0.163.0
+uvicorn[standard]==0.54.0
+pydantic==2.14.3
+pydantic-settings==2.16.3
+httpx==0.28.1
+numpy==2.4.6
+scipy==1.17.1
+astropy==8.0.2
+astroquery==0.4.11
+reproject==0.21.0
+pillow==13.0.0
