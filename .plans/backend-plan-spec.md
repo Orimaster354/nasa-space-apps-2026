@@ -32,3 +32,6 @@ Decisions captured while preparing `docs/BACKEND_IMPLEMENTATION_PLAN.md` and `do
 | LLM | Google Gemini (AI Studio key) first; check real free limits in the console before relying on it |
 | AI quota protection | Per-visitor message limit, then automated summaries |
 | Still open | Hosting platform, Gemini key and model, submission freeze clock time |
+
+## Update 2026-11-14: AI companion design rule
+Scientific computation first, AI interpretation second. No vision or multimodal model judges SPHEREx images. Deterministic tools (NumPy, SciPy, Astropy, Photutils) do alignment, difference imaging, source detection, brightness measurement, variability significance, flag/variance quality filtering and spectral analysis. They return structured, cited results. The LLM only interprets, explains, contextualizes and guides. It never invents measurements, claims unsupported discoveries, or presents hypotheses as findings. ML models are added only for a specific task where they clearly beat deterministic methods. Full wording: plan section 9.

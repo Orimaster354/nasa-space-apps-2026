@@ -210,7 +210,17 @@ Probe all five listed targets (Barnard's Star, WISE 0855, RW Aurigae, R Draconis
 
 ## 9. Phase 6: AI companion
 
-**Principles:** one conversational LLM; deterministic science; the LLM sees only structured results.
+**Core design philosophy (decided 2026-11-14): scientific computation first, AI interpretation second.**
+
+- **No vision or multimodal model looks at SPHEREx images to make a scientific judgment.** Images go to the user's eyes, never to the LLM.
+- **Deterministic tools do all the science** (NumPy, SciPy, Astropy, Photutils and similar): alignment and registration, difference imaging across epochs, source detection and brightness measurement, variability analysis with significance tests, quality filtering from SPHEREx flags and variance, and spectral analysis.
+- **The pipeline produces structured, evidence-backed results**: measurements, uncertainties and quality indicators. Each result has an ID the LLM can cite.
+- **Separation of duties.** Pipeline: observes, calculates, measures, detects. LLM: interprets, explains, gives context, suggests the next step, and helps the user test hypotheses.
+- **The LLM must never** invent a measurement, claim a discovery the pipeline does not support, or present a hypothesis as an established finding.
+- **Machine-learning models only when a specific task shows a clear advantage over a deterministic method.** None is planned for v1.
+- Why: scientific validity, explainability and reproducibility matter more than using AI for its own sake.
+
+**Principles:** one conversational LLM; deterministic science; the LLM sees only structured results (text and numbers, never pixels).
 
 - **Provider adapter [decided: free tier, chain of two]:** an interface with two configured providers tried in order, then a deterministic fallback. Provider names, models, keys, and limits are configuration, not code. Current free-tier limits and tool-calling support must be checked when a provider is chosen (D-1). A Claude Pro subscription does **not** include API credits; any API key is separate and its cost/usage must be set explicitly. Keys live only in server environment variables.
 - **Tools** (backend functions the LLM may request): get_object, list_observations, get_observation, get_comparison, run_comparison, get_measurements, get_spectrum, get_candidates, get_proper_motion. Each returns the same structured models as the API.

@@ -81,7 +81,7 @@ Priorities: **P0** essential for a functioning submission · **P1** important di
 - [ ] **P0-28 Tool functions returning structured results.**
   Dep: P0-13, P0-23, P0-24. Done: tools exist for object, observations, comparison, measurements (spectrum/candidates added later); each returns contract models.
 - [ ] **P0-29 AI companion receives structured measurement results.**
-  Dep: P0-28. Done: for a context with a comparison, the prompt contains the `Measurement`/`ComparisonResult` objects (verified by a test that inspects the prompt), and no raw arrays or FITS.
+  Dep: P0-28. Done: for a context with a comparison, the prompt contains the `Measurement`/`ComparisonResult` objects (verified by a test that inspects the prompt), and no raw arrays, FITS, or image bytes. The LLM adapter has no image input path at all (a test asserts requests are text-only). *(Design rule from 2026-11-14: scientific computation first, AI interpretation second; see plan §9.)*
 - [ ] **P0-30 Chat endpoint.**
   Dep: P0-27, P0-29. Done: `POST /chat/messages` returns a valid `AIResponse` with `references`, `caveats`, `suggestedActions`; honors `ChatContext.mode` and `candidateId`; messages persisted when `investigationId` given.
 - [ ] **P0-31 Grounding: structured output + numeric check.**
