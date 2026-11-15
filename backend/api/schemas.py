@@ -194,6 +194,7 @@ class ChatContext(_Model):
     observationIds: list[str] | None = None
     comparisonId: str | None = None
     spectrumId: str | None = None
+    bandIndex: int | None = Field(default=None, ge=1, le=102)      # frontend-only addition: the band selected on the Spectrum page
     measurementIds: list[str] | None = None
     selection: Selection | None = None
 

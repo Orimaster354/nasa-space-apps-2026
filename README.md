@@ -37,3 +37,6 @@ docs/       Project documentation
 - Member 1: Asish Nakka
 - Member 2: Sonika Ravichandran
 
+## Data credits
+
+The app uses public SPHEREx data from NASA/IPAC IRSA and shows the required acknowledgments on its Library page. The exact wording, dataset DOIs, papers and the WiseView reference are in [docs/DATA_CREDITS.md](docs/DATA_CREDITS.md).

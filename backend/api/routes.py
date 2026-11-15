@@ -82,6 +82,26 @@ def list_candidates(request: Request, object_id: str, limit: int = Query(20, ge=
     return svc(request).get_candidates(object_id, limit=limit, offset=offset, min_score=minScore, sort=sort)
 
 
+@router.get("/credits", **_EXCLUDE)
+def get_credits():
+    """Frontend-only operation (not in the contract): required acknowledgments (verbatim from IRSA), dataset DOIs, papers and resources."""
+    from services.credits import CREDITS
+    return CREDITS
+
+
+@router.get("/library", **_EXCLUDE)
+def get_library(request: Request, fresh: bool = False):
+    """Frontend-only operation (not in the contract): the targets stored on this server (they work with the archive unreachable)."""
+    return svc(request).library(fresh)
+
+
+@router.get("/objects/{object_id}/coadd", **_EXCLUDE)
+def get_coadd(request: Request, object_id: str, bandpass: str = "SPHEREx-D3", fovArcmin: float = Query(DEFAULT_FOV_ARCMIN, gt=0, le=30),
+              maxFrames: int = Query(16, ge=2, le=40)):
+    """Frontend-only operation (not in the contract): a derived stack of frames matched in wavelength, built from frames stored here."""
+    return svc(request).get_coadd(object_id, bandpass=bandpass, fov_arcmin=fovArcmin, max_frames=maxFrames)
+
+
 @router.get("/guided/{guided_id}", **_EXCLUDE)
 def get_guided(request: Request, guided_id: str, objectId: str | None = None):
     """Frontend-only operation (not in the contract): the guided investigation definition, built from a real candidate."""

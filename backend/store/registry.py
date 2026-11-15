@@ -23,6 +23,7 @@ class Registry:
             c.execute("CREATE TABLE IF NOT EXISTS measurements (id TEXT PRIMARY KEY, body TEXT NOT NULL)")
             c.execute("CREATE TABLE IF NOT EXISTS discoveries (id TEXT PRIMARY KEY, body TEXT NOT NULL)")
             c.execute("CREATE TABLE IF NOT EXISTS spectra (id TEXT PRIMARY KEY, body TEXT NOT NULL)")
+            c.execute("CREATE TABLE IF NOT EXISTS coadds (id TEXT PRIMARY KEY, body TEXT NOT NULL)")
             c.execute("CREATE TABLE IF NOT EXISTS candidates (id TEXT PRIMARY KEY, object_id TEXT NOT NULL, body TEXT NOT NULL)")
             c.execute("CREATE INDEX IF NOT EXISTS candidates_object ON candidates (object_id)")
             c.execute("CREATE TABLE IF NOT EXISTS candidate_runs (object_id TEXT PRIMARY KEY, body TEXT NOT NULL)")
@@ -106,6 +107,20 @@ class Registry:
                 rows = c.execute(f"SELECT id, body FROM observations WHERE id IN ({','.join('?' * len(chunk))})", chunk).fetchall()
                 out.update({r[0]: json.loads(r[1]) for r in rows})
         return out
+
+    def all_objects(self) -> list[dict]:
+        with self._conn() as c:
+            return [json.loads(r[0]) for r in c.execute("SELECT body FROM objects").fetchall()]
+
+    def all_observations(self) -> list[tuple[str, dict]]:
+        with self._conn() as c:
+            return [(r[0], json.loads(r[1])) for r in c.execute("SELECT id, body FROM observations").fetchall()]
+
+    def put_coadd(self, coadd_id: str, body: dict) -> None:
+        self._put("coadds", coadd_id, body)
+
+    def get_coadd(self, coadd_id: str) -> dict | None:
+        return self._get("coadds", coadd_id)
 
     def put_spectrum(self, spectrum_id: str, body: dict) -> None:
         self._put("spectra", spectrum_id, body)

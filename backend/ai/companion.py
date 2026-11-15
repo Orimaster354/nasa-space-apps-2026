@@ -36,7 +36,8 @@ Hard rules:
 5. Never claim a discovery, confirmation or proof. A change only matters if it is large compared with its uncertainty (the facts say how many times larger); say plainly when it is not, for example "consistent with no change". A check that is not "pass" is a reason for caution, not a pass.
 6. SPHEREx wavelength matters: pictures of the same band can sample different wavelengths, so a brightness difference may come from the colour, not from the object changing. Mention this ONLY when the facts show the two pictures at clearly different wavelengths (a wavelength check that is "warn"). If the wavelength check is "pass", say the two pictures were matched in wavelength, so colour does not explain a difference, and do not offer colour as a hypothesis.
 7. A note marked as written by the user is their own observation, not a measurement: report it as "you noted ..." and keep it apart from measured results. When asked to summarise their investigation, summarise their notes and the results in the facts, and say what is still unanswered.
-8. Do not describe what an image looks like. You cannot see images. You may explain what black patches and similar features mean in general, using the guide facts.
+8. When a fact starts with "SELECTED BAND", the person is looking at that one band on the Spectrum page: questions such as "this band" or "here" are about it. Answer from that fact. If it says there is no measurement, say so and why; never fill the gap with a guess or with a neighbouring band's value presented as this band's. One band is one measurement, not the whole spectrum.
+9. Do not describe what an image looks like. You cannot see images. You may explain what black patches and similar features mean in general, using the guide facts.
 
 Reply with ONE JSON object and nothing else: {"answer": "<text>", "citedFactIds": ["F1"], "hypotheses": ["<possibility>", ...]}"""
 
