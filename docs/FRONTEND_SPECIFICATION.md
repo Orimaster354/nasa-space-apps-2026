@@ -32,7 +32,7 @@ over the page (below 1000px; Esc / outside click closes). Default on wide screen
 | **Viewer toolbar** | Mode bar (View · Blink · Side by side · Overlay · Difference), compatibility badge while comparing (opens the checks), Fullscreen (whole viewer frame, both panes when comparing), Focus (distraction-free: only toolbar, viewer, timeline; Esc exits). |
 | **Viewer** (centre, ≈ window height − 290px) | Image, zoom (wheel / buttons / +−), pan (drag / arrows), reset, field of view (Fit · 1:1 · 2:1), brightness and contrast (cosmetic), candidate markers (toggle), RA/Dec readout from the API, date badge, loading / processing / unavailable / failed states. Zoom/pan is remembered per object (`store.viewState`) when leaving for Spectrum or Notes. |
 | **Candidates drawer** (left) | Candidates with id, score, description; selection highlights the marker and shows *why it is listed*, `scoreBasis`, warnings ("ranking score, not a probability"); Spot-the-shift card below. |
-| **Details drawer** (right) | Compatibility checks while comparing, then **Catalogue**, **Derived by this app** (value ± uncertainty, method, flags) and **Observation** blocks. Also where Navi's assistant docks while open. |
+| **Details drawer** (right) | Compatibility checks while comparing, then **Catalogue**, **Derived by this app** (value ± uncertainty, method, flags) and **Observation** blocks. Independent of Navi's chat: opening or closing one never opens, closes or moves the other. |
 | **Timeline** (bottom) | Chronological dots with dates. Play/pause, stop, step, speed (0.5×–4×). Replaced by A ⇄ B date pickers while comparing. |
 
 Playback = blinking through the sequential observations. Frames are preloaded so blinking is smooth.
@@ -111,8 +111,13 @@ candidates → viewer modes; Blink is explained when first used and the Spectral
 a whisper with *Next* and *Skip tour*; doing the thing (e.g. pressing play) also advances it; it pauses while the user
 studies an image. Progress in `store.naviTour`; *Replay tour* in the assistant.
 
-**Assistant.** Clicking Navi opens it; in the workspace it docks in the right drawer (opening it temporarily so it
-never covers imagery; the previous layout returns on close); a bottom sheet below 1000px (app) / 600px (landing).
+**Assistant.** Clicking Navi opens a floating chat window (default 400 × 450, conversation text 16px) with its own
+open state (`store.naviOpen`), fully independent of the Details drawer (`store.panels.right`). Drag it by its header
+(or the grip with arrow keys), resize it from the corner (300 × 280 up to 720px × screen height); it always stays
+inside the viewport, and its position and size are remembered (`spherex.navi.chat`) across mode switches, tools and
+reloads. By default it opens beside Navi or in the corner that hides the least imagery. Minimise (–) collapses it to
+its title bar; ✕ or Escape inside it closes it (Escape elsewhere on the page does not). Long conversations scroll
+inside. Below 600px it is a bottom sheet.
 Messages, suggested questions per page/mode, beginner/advanced, thinking and error/retry states; answers show
 explanation, **Based on** references, **Caveats**, **Next steps**. Mock replies are labelled illustrative.
 

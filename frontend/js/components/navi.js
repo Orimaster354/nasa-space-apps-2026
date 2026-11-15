@@ -35,6 +35,7 @@ import { getState, update, subscribe, toQuery } from "../core/store.js";
 import { esc } from "../core/dom.js";
 import { go, currentLocation } from "../core/router.js";
 import { placeBeside, rectsOf, overlap } from "../core/placement.js";
+import { loadJson, saveJson } from "../core/storage.js";
 import { createStateMachine, IDLE, MOVING, TOUCHED, IDLE_DIALOGUE, MISC } from "./naviStates.js";
 
 const SPRITE_W = 88, SPRITE_H = 84;                   // approved asset
@@ -53,8 +54,6 @@ const TEXT = "h1, h2, h3, h4, p:not(.navi-whisper), li, dt, dd, label, figcaptio
  * @property {string} [avoid]         extra selector of things she and her whispers must not cover
  * @property {string} [panelAvoid]    selector of things the assistant panel should not cover
  * @property {string} [critical]      selector of imagery / art she must never cover or fly across
- * @property {string} [panelColumn]   selector of a side column the assistant may dock over when visible
- * @property {(open: boolean) => boolean} [onPanel]  called when the assistant opens/closes; return true if the page made room
  * @typedef {{ label: string, run: () => void }} WhisperAction
  * @typedef {{ kind?: "important"|"tour"|"react"|"ambient", actions?: WhisperAction[], ms?: number, force?: boolean }} SayOptions
  * @typedef {{ left: number, top: number, right: number, bottom: number }} Box
@@ -82,10 +81,12 @@ export function mountNavi(opts = {}) {
   panel.className = "navi-panel"; panel.id = "navi-panel"; panel.hidden = true;
   panel.setAttribute("role", "dialog"); panel.setAttribute("aria-label", "Navi, research companion");
   panel.innerHTML = `
-    <header class="np-head">
+    <header class="np-head" title="Drag to move">
+      <button class="np-grip" type="button" aria-label="Move the chat window (arrow keys)" title="Drag to move">⠿</button>
       <strong class="pixel">Navi</strong>
-      <span class="muted fine">${isMock() ? "Illustrative replies · no AI model" : "Research companion"}</span>
-      <button class="np-close" type="button" aria-label="Close Navi">✕</button>
+      <span class="muted np-sub">${isMock() ? "Illustrative replies · no AI model" : "Research companion"}</span>
+      <button class="np-min" type="button" aria-label="Minimise chat" aria-expanded="true" title="Minimise">–</button>
+      <button class="np-close" type="button" aria-label="Close chat" title="Close">✕</button>
     </header>
     <div class="np-settings">
       <div class="np-seg" role="radiogroup" aria-label="Explanation level">
@@ -516,35 +517,106 @@ export function mountNavi(opts = {}) {
   /** Viewport rect of where she is resting / heading. */
   const restRect = () => ({ left: target.x, top: target.y, right: target.x + W, bottom: target.y + H });
 
-  // ---- assistant panel ------------------------------------------------------------------------
+  // ---- assistant panel: a floating chat window ---------------------------------------------------
+  // Its own open state (store.naviOpen) and geometry; it never opens or closes the Details drawer.
+  // Drag it by the header, resize it from the corner; position and size are remembered (also across
+  // mode switches and reloads) and always kept inside the viewport. Phones get a bottom sheet.
+  const CHAT_KEY = "spherex.navi.chat";
+  const CHAT_W = 400, CHAT_H = 450, CHAT_MIN_W = 300, CHAT_MIN_H = 280;
+  /** @type {{x:number,y:number,w:number,h:number}|null} */ let geom = loadJson(CHAT_KEY, null);
+  if (!geom || ![geom.x, geom.y, geom.w, geom.h].every(Number.isFinite)) geom = null;
+  const sheetMode = () => vw() < 600;
+  const maxW = () => Math.min(720, vw() - 16), maxH = () => Math.max(CHAT_MIN_H, vh() - 16);
+  const clampN = (/** @type {number} */ v, /** @type {number} */ lo, /** @type {number} */ hi) => Math.min(hi, Math.max(lo, v));
+  let sizeSet = { w: 0, h: 0 };          // size last applied by code (anything else is a user resize)
+  let minimised = false;                 // collapsed to its title bar
+
+  /** Default spot: beside her if that is clear, else the corner that hides the least imagery. */
+  function defaultSpot(/** @type {number} */ w, /** @type {number} */ h) {
+    const essential = rectsOf(opts.critical ?? "", own), other = rectsOf(opts.panelAvoid ?? "", own);
+    const cost = (/** @type {{x:number,y:number}} */ q) => {
+      const b = { left: q.x, top: q.y, right: q.x + w, bottom: q.y + h };
+      return 3 * essential.reduce((t, r) => t + overlap(b, r), 0) + other.reduce((t, r) => t + overlap(b, r), 0);
+    };
+    const m = 12, top = Math.min(72, vh() - h - m);
+    const spots = [placeBeside(restRect(), w, h, [...essential, ...other], { sides: ["bottom", "left", "top", "right"], gap: 8, align: "end" }),
+      { x: vw() - w - m, y: vh() - h - m }, { x: m, y: vh() - h - m }, { x: vw() - w - m, y: top }, { x: m, y: top }];
+    return spots.reduce((a, b) => (cost(b) < cost(a) ? b : a));
+  }
+  function moveTo(/** @type {number} */ x, /** @type {number} */ y) {
+    const w = panel.offsetWidth, h = panel.offsetHeight;
+    x = clampN(x, 8, Math.max(8, vw() - w - 8)); y = clampN(y, 8, Math.max(8, vh() - h - 8));
+    panel.style.left = `${Math.round(x)}px`; panel.style.top = `${Math.round(y)}px`;
+    return { x, y };
+  }
+  function saveGeom() {
+    if (sheetMode()) return;
+    const r = panel.getBoundingClientRect();
+    geom = { x: r.left, y: r.top, w: minimised ? (geom?.w ?? r.width) : r.width, h: minimised ? (geom?.h ?? CHAT_H) : r.height };
+    saveJson(CHAT_KEY, geom);
+  }
   function placePanel() {
-    const sheet = vw() < (inApp ? 1000 : 600);
+    const sheet = sheetMode();
     panel.classList.toggle("is-sheet", sheet);
     if (sheet) { panel.style.left = ""; panel.style.top = ""; panel.style.width = ""; panel.style.height = ""; return; }
-    const colEl = opts.panelColumn ? [...document.querySelectorAll(opts.panelColumn)].find(el => /** @type {HTMLElement} */ (el).offsetParent && el.getBoundingClientRect().width >= 240) : null;
-    const col = colEl?.getBoundingClientRect();
-    if (col && col.width < vw() * 0.45) {
-      const a = restRect(), top = Math.max(8, Math.min(Math.max(a.bottom + 8, col.top), vh() - 300));
-      panel.style.width = `${Math.round(col.width)}px`; panel.style.height = `${Math.round(Math.min(480, vh() - top - 12))}px`;
-      panel.style.left = `${Math.round(col.left)}px`; panel.style.top = `${Math.round(top)}px`;
-      return;
-    }
-    panel.style.width = ""; panel.style.height = "";
-    const a = restRect(), w = panel.offsetWidth, h = panel.offsetHeight;
-    const p = placeBeside(a, w, h, rectsOf(opts.panelAvoid ?? "", own), { sides: ["bottom", "left", "top", "right"], gap: 8, align: "end" });
-    panel.style.left = `${Math.round(p.x)}px`; panel.style.top = `${Math.round(p.y)}px`;
+    const w = Math.round(clampN(geom?.w ?? CHAT_W, CHAT_MIN_W, maxW())), h = Math.round(clampN(geom?.h ?? CHAT_H, CHAT_MIN_H, maxH()));
+    sizeSet = { w, h };
+    panel.style.width = `${w}px`; panel.style.height = minimised ? "" : `${h}px`;
+    const at = geom ?? defaultSpot(w, h);
+    moveTo(at.x, at.y);
   }
+
+  // Drag by the header (buttons inside it keep working), or move with the arrow keys on the grip.
+  const head = /** @type {HTMLElement} */ (panel.querySelector(".np-head"));
+  /** @type {{dx:number,dy:number,id:number}|null} */ let dragging = null;
+  head.addEventListener("pointerdown", e => {
+    if (sheetMode() || e.button !== 0 || /** @type {HTMLElement} */ (e.target).closest(".np-min, .np-close")) return;
+    const r = panel.getBoundingClientRect();
+    dragging = { dx: e.clientX - r.left, dy: e.clientY - r.top, id: e.pointerId };
+    try { head.setPointerCapture(e.pointerId); } catch { /* synthetic pointer */ }
+    panel.classList.add("is-dragging"); e.preventDefault();
+  });
+  head.addEventListener("pointermove", e => { if (dragging && e.pointerId === dragging.id) moveTo(e.clientX - dragging.dx, e.clientY - dragging.dy); });
+  const endDrag = () => { if (!dragging) return; dragging = null; panel.classList.remove("is-dragging"); saveGeom(); };
+  head.addEventListener("pointerup", endDrag); head.addEventListener("pointercancel", endDrag);
+  $(".np-grip").addEventListener("keydown", e => {
+    const d = /** @type {Record<string,[number,number]>} */ ({ ArrowLeft: [-20, 0], ArrowRight: [20, 0], ArrowUp: [0, -20], ArrowDown: [0, 20] })[e.key];
+    if (!d || sheetMode()) return;
+    e.preventDefault(); const r = panel.getBoundingClientRect(); moveTo(r.left + d[0], r.top + d[1]); saveGeom();
+  });
+
+  // Resize from the corner (CSS resize); remember the size and keep the window on screen.
+  new ResizeObserver(() => {
+    if (panel.hidden || sheetMode() || minimised) return;
+    const r = panel.getBoundingClientRect();
+    if (Math.abs(r.width - sizeSet.w) < 1 && Math.abs(r.height - sizeSet.h) < 1) return;
+    sizeSet = { w: r.width, h: r.height };
+    moveTo(r.left, r.top); saveGeom();
+  }).observe(panel);
+  addEventListener("resize", () => { if (!panel.hidden) placePanel(); });
+
+  // Minimise to the title bar (still movable); the conversation is kept.
+
+  function setMinimised(/** @type {boolean} */ on) {
+    minimised = on;
+    panel.classList.toggle("is-min", on);
+    const b = $(".np-min"); b.setAttribute("aria-expanded", String(!on)); b.textContent = on ? "▢" : "–";
+    b.setAttribute("aria-label", on ? "Restore chat" : "Minimise chat"); b.title = on ? "Restore" : "Minimise";
+    placePanel();
+    if (!on) { log.scrollTop = log.scrollHeight; input.focus(); }
+  }
+  $(".np-min").addEventListener("click", () => setMinimised(!minimised));
 
   function setOpen(/** @type {boolean} */ open, focus = true) {
     update({ naviOpen: open });
     panel.hidden = !open; body.setAttribute("aria-expanded", String(open));
     navi.classList.toggle("is-open", open);
-    const madeRoom = opts.onPanel?.(open) ?? false;
     if (open) {
       hideWhisper(); dropBubble(); fsm.request(TOUCHED, { force: true });   // TOUCHED: autonomy paused
       target = { x: pos.x, y: pos.y }; publish();                            // she pauses where she is
+      if (minimised) setMinimised(false);
       renderLog(); renderSuggestions(); renderTip(); syncSettings(); placePanel();
-      if (madeRoom) setTimeout(placePanel, 280);
+      log.scrollTop = log.scrollHeight;
       if (focus) input.focus();
     } else {
       fsm.release(TOUCHED); scheduleRecheck(300);                           // TOUCHED → IDLE
@@ -555,9 +627,7 @@ export function mountNavi(opts = {}) {
   $(".np-close").addEventListener("click", () => setOpen(false));
   panel.addEventListener("keydown", e => { if (e.key === "Escape") { e.stopPropagation(); setOpen(false); } });
   document.addEventListener("keydown", e => {
-    if (e.key !== "Escape") return;
-    if (!panel.hidden && !panel.contains(/** @type {Node} */ (e.target))) setOpen(false);
-    else if (!whisper.hidden) hideWhisper(true);
+    if (e.key === "Escape" && !whisper.hidden && !panel.contains(/** @type {Node} */ (e.target))) hideWhisper(true);
   });
 
   function syncSettings() {

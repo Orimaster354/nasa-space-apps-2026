@@ -8,7 +8,6 @@
 import { startRouter, ROUTES, go } from "./core/router.js";
 import { esc } from "./core/dom.js";
 import { isMock } from "./api/client.js";
-import { getState, update } from "./core/store.js";
 import { mountNavi } from "./components/navi.js";
 import { attachBrain } from "./components/naviBrain.js";
 import { mountScene } from "./components/scene.js";
@@ -41,17 +40,9 @@ const navi = mountNavi({
   // The assistant may sit over a side column, but not over imagery or the main controls.
   panelAvoid: "#primary-nav, .ws-context, .ws-toolbar, .viewer-wrap, .sp-viewer, .band-selector",
   critical: ".viewer-wrap, .sp-viewer",
-  panelColumn: ".ws.right-open .ws-right, #sp-info",
-  // In the workspace the assistant docks in the right drawer: open it while she talks, restore afterwards.
-  onPanel: open => {
-    if (!document.querySelector(".ws") || !matchMedia("(min-width: 1000px)").matches) return false;
-    const p = getState().panels;
-    if (open && !p.right) { panelsBeforeNavi = p; update({ panels: { ...p, right: true } }); return true; }
-    if (!open && panelsBeforeNavi) { update({ panels: panelsBeforeNavi }); panelsBeforeNavi = null; }
-    return false;
-  },
+  // The chat is a floating window with its own open state (store.naviOpen); it never opens, closes or
+  // docks into the Details drawer (store.panels.right), and the drawer never affects it.
 });
-/** @type {{left: boolean, right: boolean}|null} */ let panelsBeforeNavi = null;
 const brain = attachBrain(navi);
 /** @type {(() => void)|null} */ let unmount = null;
 

@@ -65,6 +65,30 @@
   border-radius: var(--radius-lg); box-shadow: 0 0 24px rgba(66, 191, 174, 0.12), var(--shadow-hard); overflow: hidden; }
 .navi-panel.is-sheet { left: 0; right: 0; bottom: 0; top: auto; width: 100%; height: min(70vh, 520px); border-radius: var(--radius-lg) var(--radius-lg) 0 0;
   padding-bottom: env(safe-area-inset-bottom, 0px); }
+
+/* Floating chat window: 400 × 450 by default, drag by the header, resize from the corner (navi.js keeps it on screen). */
+.navi-panel:not(.is-sheet) { width: 400px; height: 450px; min-width: 300px; min-height: 280px;
+  max-width: min(720px, calc(100vw - 16px)); max-height: calc(100vh - 16px); resize: both; }
+.navi-panel.is-dragging { user-select: none; box-shadow: 0 0 32px rgba(66, 191, 174, 0.2), var(--shadow-hard); }
+.navi-panel .np-head { align-items: center; cursor: move; touch-action: none; user-select: none; gap: var(--sp-2); }
+.navi-panel.is-sheet .np-head { cursor: default; }
+.np-grip { background: transparent; border: 0; color: var(--text-muted); cursor: move; padding: 2px 4px; font-size: var(--fs-md); line-height: 1; border-radius: var(--radius); }
+.np-grip:hover, .np-grip:focus-visible { color: var(--accent); }
+.navi-panel.is-sheet .np-grip { display: none; }
+.np-sub { flex: 1; min-width: 0; font-size: var(--fs-sm); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.np-min { background: transparent; border: 0; color: var(--text-muted); cursor: pointer; font-size: var(--fs-md); padding: 2px 8px; border-radius: var(--radius); line-height: 1; }
+.np-min:hover, .np-close:hover { color: var(--text); background: rgba(117, 191, 232, 0.08); }
+.navi-panel.is-min { height: auto !important; min-height: 0; resize: none; }
+.navi-panel.is-min > :not(.np-head) { display: none !important; }
+/* Readable conversation. */
+.navi-panel .np-log { overscroll-behavior: contain; }
+.navi-panel .bubble { font-size: 1rem; line-height: 1.5; }
+.navi-panel .caveats ul, .navi-panel .np-tip { font-size: 0.9375rem; }
+.navi-panel .np-sugg .chip { font-size: 0.9375rem; white-space: nowrap; flex: 0 0 auto; }
+/* Suggestions: one row that scrolls sideways, so the conversation keeps the height. */
+.navi-panel .np-sugg { flex-wrap: nowrap; overflow-x: auto; padding-top: var(--sp-2); scrollbar-width: thin; }
+.navi-panel .np-log { min-height: 120px; }
+.navi-panel .np-form .input { font-size: 1rem; }
 .np-head { display: flex; align-items: baseline; gap: var(--sp-3); padding: var(--sp-3) var(--sp-3) var(--sp-2) var(--sp-4); }
 .np-head .muted { flex: 1; }
 .np-close { background: transparent; border: 0; color: var(--text-muted); cursor: pointer; font-size: var(--fs-md); padding: 2px 6px; border-radius: var(--radius); }
