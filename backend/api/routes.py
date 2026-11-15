@@ -9,8 +9,8 @@ from services.core import NotFound, Services
 
 from processing.imaging import DEFAULT_FOV_ARCMIN
 
-from .schemas import (AstronomicalObject, ComparisonResult, CreateComparisonRequest, Observation, ObservationImage, Page,
-                      PixelToSky)
+from .schemas import (AstronomicalObject, ComparisonResult, CreateComparisonRequest, CreateMeasurementRequest, Measurement,
+                      Observation, ObservationImage, Page, PixelToSky)
 
 router = APIRouter()
 _EXCLUDE = {"response_model_exclude_none": True}
@@ -80,6 +80,16 @@ def pixel_to_sky(
 @router.post("/comparisons", response_model=ComparisonResult, **_EXCLUDE)
 def create_comparison(request: Request, body: CreateComparisonRequest):
     return svc(request).create_comparison(body.baseObservationId, body.targetObservationId, body.mode)
+
+
+@router.post("/measurements", response_model=Measurement, **_EXCLUDE)
+def create_measurement(request: Request, body: CreateMeasurementRequest):
+    return svc(request).create_measurement(body.kind, body.observationIds, body.region.model_dump() if body.region else None)
+
+
+@router.get("/measurements/{measurement_id}", response_model=Measurement, **_EXCLUDE)
+def get_measurement(request: Request, measurement_id: str):
+    return svc(request).get_measurement(measurement_id)
 
 
 @router.get("/comparisons/{comparison_id}", response_model=ComparisonResult, **_EXCLUDE)

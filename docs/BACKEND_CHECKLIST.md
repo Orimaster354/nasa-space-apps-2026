@@ -67,9 +67,9 @@ Priorities: **P0** essential for a functioning submission · **P1** important di
   Dep: P0-21, P0-19. Done: checks for footprint, wavelength/bandpass, calibration/release, background (zodi), alignment, quality; verdict mapping implemented as in the pipeline doc; `notEvaluated` never counts as pass (unit tests for every verdict).
 - [x] **P0-23 Scientifically valid comparison workflow.** *(`POST /comparisons`, `GET /comparisons/{id}`; blink/overlay/difference; cross-band differences refused; tested with a synthetic moved star.)*
   Dep: P0-22. Done: `POST /comparisons` and `GET /comparisons/{id}` return a `ComparisonResult`; `not_comparable` returns no difference image; shared grid dimensions verified; `comparisonKind` is set (`cross_band` is never presented as a temporal change).
-- [ ] **P0-24 Return brightness measurements with uncertainty.**
+- [x] **P0-24 Return brightness measurements with uncertainty.** *(Done: `processing/photometry.py`, `POST /measurements` (kind `aperture_flux`), `GET /measurements/{id}`. 18 photometry tests plus 6 API tests; the reported uncertainty was checked against the real scatter of 300 noisy synthetic frames. Unmeasurable regions return 422 `DATA_UNAVAILABLE`, never a zero.)*
   Dep: P0-16, P0-21. Done: `POST /measurements` returns `aperture_flux` with value, unit, uncertainty and `uncertaintyBasis`, method string (aperture, background, unit conversion); synthetic test matches the injected flux; a masked or non-detected region reports that, not zero.
-- [ ] **P0-25 Unit conversion documented and tested.**
+- [x] **P0-25 Unit conversion documented and tested.** *(Flux density in mJy = sum of background-subtracted MJy/sr over the aperture x pixel solid angle (from the WCS) x 1e9; written in the module docstring and in every result's `method`; validated on an injected star of known total. It is a unit identity, so no external citation is needed beyond the IRSA statement that IMAGE is in MJy/sr. No aperture or colour correction.)*
   Dep: P0-24, A6. Done: MJy/sr → flux density conversion method written down, cited, and validated on a synthetic or known source.
 - [ ] **P0-26 Basic change detection.**
   Dep: P0-23, P0-24. Done: `flux_change` measurement with propagated uncertainty and caveats from the compatibility result; ratio-to-uncertainty is reported with no “detection” wording.

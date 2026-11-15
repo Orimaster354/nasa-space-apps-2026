@@ -48,3 +48,9 @@ The frontend's `client.js` with `useMock=false` ran against the live backend: se
 ## Consequences for the plan
 - Multi-epoch same-band data **exists for all five targets** (A3 holds). Same-band epoch counts range from 8 to 113.
 - Only one file was downloaded; assumptions A4, A6, A7, A8, A9, A13 are still unverified.
+
+## Photometry on real cutouts (2026-11-14)
+- Measured one bright field star at the same sky position in 50 cached D3 frames (12 arcsec aperture, 24-36 arcsec ring): 43 measured, 7 refused (ring or aperture mostly masked/off-image), none returned as zero.
+- **Bug found only on real data:** `WCS.all_world2pix` raises `NoConvergence` for positions far from a TAN-SIP image. Now handled as "unmeasurable" (regression test added).
+- **The archive VARIANCE plane is smaller than the real scatter.** On one frame: archive sigma 0.019, pixel-to-pixel scatter 0.024 (1.3x), ring scatter 0.036 (1.9x) in MJy/sr. In crowded/bright fields the ring scatter is far larger (structure, not noise). Our uncertainty therefore rescales the archive variance up to the ring scatter and warns; it is conservative, not exact.
+- **Open and unverified:** fluxes of that star varied between 25 and 48 mJy across epochs. Variability, background structure, or the star falling at different wavelengths within the band on different pointings (SPHEREx bands have a position-dependent wavelength) could each contribute. We have NOT separated these. The wavelength at the target pixel (checklist P0-04, WCS-WAVE extension, which we do not parse yet) must be read before any flux change between epochs is reported.

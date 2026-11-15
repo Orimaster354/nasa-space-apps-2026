@@ -21,7 +21,7 @@ from typing import Callable
 
 import numpy as np
 
-from processing import compare, imaging, irsa, quality
+from processing import compare, imaging, irsa, photometry, quality
 from processing.fits_io import FitsReadError, read_cutout
 from store.registry import Registry
 
@@ -34,6 +34,10 @@ class NotFound(Exception):
 
 class BadRequest(Exception):
     pass
+
+
+class DataUnavailable(Exception):
+    """The request is valid but the data cannot support it (for example an unmeasurable region). HTTP 422."""
 
 
 class Upstream(Exception):
@@ -300,6 +304,59 @@ class Services:
         grid = self._grid(rec, center_ra, center_dec, fov_arcmin)
         ra, dec = grid.raster_to_sky(x, y)
         return {"sky": {"raDeg": ra, "decDeg": dec}}
+
+    # ---- measurements --------------------------------------------------------------------------------------------
+    def _cutout_for_measurement(self, rec: dict, ra: float, dec: float, outer_arcsec: float):
+        """Prefer the object-centred cutout the viewer already fetched; fall back to one centred on the region."""
+        grid = self._grid(rec, None, None, imaging.DEFAULT_FOV_ARCMIN)
+        cutout = read_cutout(self.cutouts.get(irsa.cutout_url(rec["file"]["uri"], grid.center_ra, grid.center_dec, grid.cutout_size_deg)))
+        if photometry.fits_in_image(cutout, ra, dec, outer_arcsec):
+            return cutout
+        size = min(1.0, max(0.05, 2 * outer_arcsec * 1.15 / 3600.0))
+        return read_cutout(self.cutouts.get(irsa.cutout_url(rec["file"]["uri"], ra, dec, size)))
+
+    def create_measurement(self, kind: str, observation_ids: list[str], region: dict | None) -> dict:
+        if kind != "aperture_flux":
+            raise BadRequest(f"Measurement kind '{kind}' is not supported yet; only 'aperture_flux' is available.")
+        if len(observation_ids) != 1:
+            raise BadRequest("aperture_flux needs exactly one observation id.")
+        if region is None:
+            raise BadRequest("aperture_flux needs a region (center and radiusArcsec).")
+        rec = self.registry.get_observation(observation_ids[0])
+        if rec is None:
+            raise NotFound("Unknown observation.")
+        c, radius = region["center"], float(region["radiusArcsec"])
+        try:
+            ra, dec = irsa.validate_position(c["raDeg"], c["decDeg"])
+        except ValueError as exc:
+            raise BadRequest(str(exc)) from exc
+        annulus = (2 * radius, 3 * radius)
+        mid = "meas_" + hashlib.sha1(f"{kind}|{observation_ids[0]}|{ra:.6f}|{dec:.6f}|{radius:.3f}".encode()).hexdigest()[:10]
+        existing = self.registry.get_measurement(mid)
+        if existing:
+            return existing
+        try:
+            cutout = self._cutout_for_measurement(rec, ra, dec, annulus[1])
+            res = photometry.aperture_flux(cutout, ra, dec, radius_arcsec=radius, annulus_arcsec=annulus)
+        except irsa.IrsaError as exc:
+            raise Upstream(str(exc), exc.retryable) from exc
+        except FitsReadError as exc:
+            raise DataUnavailable(f"The data file could not be read: {exc}") from exc
+        except photometry.Unmeasurable as exc:
+            raise DataUnavailable(str(exc)) from exc
+        out = {"measurementId": mid, "kind": kind, "value": res.flux_mjy, "unit": photometry.FLUX_UNIT,
+               "uncertainty": res.uncertainty_mjy, "uncertaintyBasis": res.uncertainty_basis, "signalToNoise": res.snr,
+               "observationIds": list(observation_ids), "region": {"center": {"raDeg": ra, "decDeg": dec}, "radiusArcsec": radius},
+               "method": res.method, "qualityFlags": res.quality_flags, "warnings": list(cutout.warnings) + res.warnings,
+               "createdAt": now_iso()}
+        self.registry.put_measurement(mid, out)
+        return out
+
+    def get_measurement(self, measurement_id: str) -> dict:
+        rec = self.registry.get_measurement(measurement_id)
+        if rec is None:
+            raise NotFound("Unknown measurement.")
+        return rec
 
     # ---- comparisons ---------------------------------------------------------------------------------------------
     def _grid_array(self, rec: dict, grid: imaging.GridSpec):

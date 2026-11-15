@@ -134,6 +134,33 @@ class Alignment(_Model):
     residualArcsec: float | None = None
 
 
+class Region(_Model):
+    center: SkyCoordinate
+    radiusArcsec: float = Field(gt=0, le=120)
+
+
+class CreateMeasurementRequest(_Model):
+    kind: Literal["aperture_flux", "flux_change", "angular_separation", "region_statistics", "position_centroid", "derived_motion"]
+    observationIds: list[str]
+    region: Region | None = None
+
+
+class Measurement(_Model):
+    measurementId: str
+    kind: Literal["aperture_flux", "flux_change", "angular_separation", "region_statistics", "position_centroid", "derived_motion"]
+    value: float
+    unit: str
+    uncertainty: float | None = None
+    uncertaintyBasis: str | None = None
+    signalToNoise: float | None = None          # additive, optional (pending contract addition): value / uncertainty
+    observationIds: list[str]
+    region: Region | None = None
+    method: str
+    qualityFlags: list[QualityFlag] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+    createdAt: str
+
+
 class CreateComparisonRequest(_Model):
     baseObservationId: str
     targetObservationId: str

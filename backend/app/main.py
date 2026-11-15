@@ -15,7 +15,7 @@ from fastapi.staticfiles import StaticFiles
 
 from api.routes import router
 from processing.irsa import CutoutCache, discover
-from services.core import BadRequest, NotFound, Services, Upstream
+from services.core import BadRequest, DataUnavailable, NotFound, Services, Upstream
 from store.registry import Registry
 
 from .config import CONTRACT_VERSION, settings
@@ -77,6 +77,10 @@ def create_app(services: Services | None = None) -> FastAPI:
     @app.exception_handler(BadRequest)
     async def bad_request(request: Request, exc: BadRequest):
         return JSONResponse(error_body("INVALID_REQUEST", str(exc), False, request.state.request_id), status_code=400)
+
+    @app.exception_handler(DataUnavailable)
+    async def data_unavailable(request: Request, exc: DataUnavailable):
+        return JSONResponse(error_body("DATA_UNAVAILABLE", str(exc), False, request.state.request_id), status_code=422)
 
     @app.exception_handler(Upstream)
     async def upstream(request: Request, exc: Upstream):
