@@ -22,12 +22,24 @@ ap.add_argument("--frames", type=int, default=50)
 ap.add_argument("--workers", type=int, default=4)
 ap.add_argument("--only", default=None, help="only this target name")
 ap.add_argument("--wait-minutes", type=float, default=60.0, help="keep retrying for this long when the archive is down")
+ap.add_argument("--extra", default=None, help="comma separated extra object names, or a path to a text file with one name per line")
+ap.add_argument("--keep-poor", action="store_true", help="keep frames whose own quality is 'poor' (default: drop them)")
+ap.add_argument("--no-spectra", action="store_true", help="do not build and store spectra")
 args = ap.parse_args()
 
 svc = build_default_services()
 t0 = time.time()
 deadline = t0 + args.wait_minutes * 60
-todo = [t for t in targets.TARGETS if not args.only or args.only.lower() in t.name.lower()]
+def _extra_names() -> list[str]:
+    if not args.extra:
+        return []
+    from pathlib import Path
+    raw = Path(args.extra).read_text(encoding="utf-8").splitlines() if Path(args.extra).is_file() else args.extra.split(",")
+    return [n.strip() for n in raw if n.strip() and not n.strip().startswith("#")]
+
+
+NAMES = [t.name for t in targets.TARGETS] + [n for n in _extra_names() if n.lower() not in {t.name.lower() for t in targets.TARGETS}]
+todo = [n for n in NAMES if not args.only or args.only.lower() in n.lower()]
 report: dict[str, dict] = {}
 failed: dict[str, str] = {}
 sweep = 0
@@ -37,19 +49,21 @@ while todo:
     again = []
     for t in todo:
         try:
-            r = bundle.warm_target(svc, t.name, band=args.band, frames=args.frames, workers=args.workers)
+            r = bundle.warm_target(svc, t, band=args.band, frames=args.frames, workers=args.workers, skip_poor=not args.keep_poor)
+            if not args.no_spectra and not r["missing"] and "spectrum" not in r:
+                r["spectrum"] = bundle.warm_spectrum(svc, r["objectId"])
         except (Upstream, NotFound) as exc:
-            failed[t.name] = str(exc)
-            print(f"{t.name}: archive not ready ({exc})", flush=True)
+            failed[t] = str(exc)
+            print(f"{t}: archive not ready ({exc})", flush=True)
             again.append(t)
             continue
-        report[t.name] = r
-        failed.pop(t.name, None)
+        report[t] = r
+        failed.pop(t, None)
         if r["missing"]:
             again.append(t)
     todo = again
     if todo and time.time() < deadline:
-        print(f"waiting 60 s before retrying {[t.name for t in todo]} ({(deadline - time.time()) / 60:.0f} min left) ...", flush=True)
+        print(f"waiting 60 s before retrying {todo} ({(deadline - time.time()) / 60:.0f} min left) ...", flush=True)
         time.sleep(60)
     elif todo:
         print("out of time; giving up on the rest", flush=True)
@@ -59,13 +73,15 @@ print("\nslimming cutouts ...", flush=True)
 slim = bundle.slim_directory(settings.data_dir + "/cutouts")
 print(f"slimmed {slim['files']} cutouts: {slim['bytesBefore'] / 1e6:.0f} MB -> {slim['bytesAfter'] / 1e6:.0f} MB")
 print("\nSUMMARY")
-for t in targets.TARGETS:
-    if args.only and args.only.lower() not in t.name.lower():
+for n in NAMES:
+    if args.only and args.only.lower() not in n.lower():
         continue
-    r = report.get(t.name)
+    r = report.get(n)
     if r:
-        print(f"  {t.name:16} {r['ready']}/{r['frames']} frames ready" + (f"  MISSING {len(r['missing'])}" if r["missing"] else ""))
+        sp = r.get("spectrum")
+        print(f"  {n:24} {r['ready']}/{r['frames']} frames ready" + (f", {len(r['poor'])} poor dropped" if r.get("poor") else "")
+              + (f"  MISSING {len(r['missing'])}" if r["missing"] else "") + (f"  spectrum {sp['status']} ({sp['rendered']}/{sp['bandImages']} band images)" if sp else ""))
     else:
-        print(f"  {t.name:16} NOT BUILT ({failed.get(t.name, 'unknown')})")
+        print(f"  {n:24} NOT BUILT ({failed.get(n, 'unknown')})")
 print(f"done in {time.time() - t0:.0f} s; data directory: {settings.data_dir}")
 sys.exit(0 if not todo else 1)

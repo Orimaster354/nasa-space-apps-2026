@@ -26,6 +26,8 @@ from typing import Callable
 
 import httpx
 
+from .archive_status import archive
+
 log = logging.getLogger("spx.irsa")
 
 IRSA_BASE = "https://irsa.ipac.caltech.edu/"
@@ -153,6 +155,7 @@ def _default_fetch(collection: str, ra: float, dec: float):
             continue
         last = None
         break
+    archive.note(last is None)                               # feeds the app's status badge
     if last is not None:
         raise last
     if r.status_code != 200:

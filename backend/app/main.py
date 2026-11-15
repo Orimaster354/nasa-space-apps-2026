@@ -18,6 +18,7 @@ from ai.companion import Companion
 from ai.limits import QuotaLimiter
 from ai.llm import ProviderChain, providers_from_settings
 from api.routes import router
+from processing.archive_status import archive as archive_status
 from processing.irsa import CutoutCache, discover
 from services.core import BadRequest, DataUnavailable, NotFound, Services, Upstream
 from store.registry import Registry
@@ -56,6 +57,8 @@ def create_app(services: Services | None = None, companion: Companion | None = N
     app = FastAPI(title="SPHEREx backend", version=CONTRACT_VERSION)
     app.state.services = services or build_default_services()
     app.state.companion = companion or build_default_companion(app.state.services)
+    if settings.archive_probe:
+        archive_status.enable_probe()
     if settings.prewarm_spectra:
         threading.Thread(target=app.state.services.prewarm_spectra, name="prewarm-spectra", daemon=True).start()
     app.mount("/media/images", StaticFiles(directory=app.state.services.images_dir), name="images")
@@ -110,6 +113,11 @@ def create_app(services: Services | None = None, companion: Companion | None = N
     @app.get("/api/v1/health")
     def health():
         return {"status": "ok", "contractVersion": CONTRACT_VERSION}
+
+    @app.get("/api/v1/archive-status")
+    def archive_state():
+        """Frontend-only (not in the contract): is NASA's IRSA archive answering? Never waits on the archive."""
+        return archive_status.snapshot()
 
     app.include_router(router, prefix="/api/v1")
     if settings.frontend_dir and Path(settings.frontend_dir).is_dir():

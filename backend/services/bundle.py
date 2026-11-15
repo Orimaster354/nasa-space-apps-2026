@@ -19,6 +19,8 @@ from pathlib import Path
 
 from astropy.io import fits
 
+from processing import imaging
+
 KEEP_EXTENSIONS = ("IMAGE", "FLAGS", "VARIANCE", "ZODI", "WCS-WAVE")
 
 
@@ -50,12 +52,46 @@ def slim_directory(cutout_dir: str | Path) -> dict:
     return {"files": n, "bytesBefore": sizes_before, "bytesAfter": sizes_after}
 
 
+def prune_poor(svc, observation_ids: list[str]) -> list[str]:
+    """Delete the stored image and cutout of every frame whose own quality roll-up is 'poor' (over a quarter of its pixels unusable).
+    Such a frame helps nobody in a demo and costs space; it is still listed and, if someone opens it, fetched live. Returns the ids dropped."""
+    from processing import irsa
+
+    dropped = []
+    for oid in observation_ids:
+        rec = svc.registry.get_observation(oid) or {}
+        if (rec.get("quality") or {}).get("summary") != "poor":
+            continue
+        for f in svc.images_dir.glob(f"{oid}_*"):
+            f.unlink(missing_ok=True)
+        grid = svc._grid(rec, None, None, imaging.DEFAULT_FOV_ARCMIN)
+        svc.cutouts.path_for(irsa.cutout_url(rec["file"]["uri"], grid.center_ra, grid.center_dec, grid.cutout_size_deg)).unlink(missing_ok=True)
+        dropped.append(oid)
+    return dropped
+
+
+def warm_spectrum(svc, object_id: str, wait_s: float = 900.0, log=print) -> dict:
+    """Build and STORE the object's spectrum, then render the image behind every band, so the Spectrum page works with the archive down.
+    A spectrum that is partial or refused is stored too (a refusal is an answer), but only a complete one is served without a rebuild."""
+    res = svc.get_spectrum(object_id, wait_s=wait_s)
+    status = res["availability"]["status"]
+    ids = sorted({p["observationId"] for p in res.get("points", []) if p.get("available") and p.get("observationId")})
+    ready = 0
+    if status == "available" and ids:
+        with ThreadPoolExecutor(max_workers=4) as pool:
+            ready = sum(a["status"] == "available" for a in pool.map(lambda oid: svc.get_image(oid, wait_s=300)["availability"], ids))
+    log(f"  spectrum: {status}, {len(ids)} band images, {ready} rendered" + ("" if status == "available" else f" ({res['availability'].get('statusReason', '')[:80]})"))
+    return {"status": status, "bandImages": len(ids), "rendered": ready}
+
+
 def warm_target(svc, query: str, band: str = "SPHEREx-D3", frames: int = 50, workers: int = 4, rounds: int = 4,
-                pause_s: float = 5.0, log=print) -> dict:
-    """Resolve a target, list its observations in `band`, and render the first `frames` images, retrying failures a few rounds."""
+                pause_s: float = 5.0, log=print, skip_poor: bool = False, spare: float = 0.25) -> dict:
+    """Resolve a target, list its observations in `band`, and render the first `frames` images, retrying failures a few rounds.
+
+    With `skip_poor`, `spare` (a fraction) extra frames are rendered so that dropping the poor ones still leaves about `frames` usable frames."""
     obj = svc.resolve(q=query)
     page = svc.list_observations(obj["objectId"], bandpass=band, limit=200)
-    items = page["items"][:frames]
+    items = page["items"][: (min(200, int(frames * (1 + spare) + 0.999)) if skip_poor else frames)]
     pending = [o["observationId"] for o in items]
     log(f"{obj['name']}: {page['total']} {band} observations; warming {len(pending)} frames")
     ok = 0
@@ -69,4 +105,10 @@ def warm_target(svc, query: str, band: str = "SPHEREx-D3", frames: int = 50, wor
         log(f"  round {rnd}: {ok}/{len(items)} frames ready" + (f"; retrying {len(pending)}" if pending and rnd < rounds else ""))
         if pending and rnd < rounds:
             time.sleep(pause_s)
-    return {"target": obj["name"], "objectId": obj["objectId"], "observations": page["total"], "frames": len(items), "ready": ok, "missing": pending}
+    poor: list[str] = []
+    if skip_poor:
+        poor = prune_poor(svc, [o["observationId"] for o in items if o["observationId"] not in pending])
+        if poor:
+            log(f"  dropped {len(poor)} poor-quality frame(s)")
+    return {"target": obj["name"], "objectId": obj["objectId"], "observations": page["total"], "frames": len(items) - len(poor),
+            "ready": ok - len(poor), "missing": pending, "poor": poor}
