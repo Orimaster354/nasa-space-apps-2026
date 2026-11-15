@@ -17,6 +17,11 @@ COPY frontend frontend
 # (the frontend source is left untouched). The build fails loudly if the switch is not found.
 RUN sed -i 's/useMock: true/useMock: false/' frontend/js/config.js && grep -q "useMock: false" frontend/js/config.js
 
+# A few lines of fixed text in the frontend still say the demo uses sample data (the badges tied to mock mode switch off by
+# themselves, these do not). Correct them in the DEPLOYED copy only; the frontend source is untouched. Tolerant: if the frontend
+# developer changes or removes that text, nothing here fails.
+RUN sed -i 's#badge badge-illustrative">Sample / illustrative data in this demo#badge">Real SPHEREx data from the public NASA IRSA archive#; s# Demo content is illustrative\.##' frontend/index.html  && sed -i 's# Sample data is illustrative\.##' frontend/app.html  && sed -i 's#"Illustrative data", "Everything in this demo is sample content made to show how the tools work\. It is not real SPHEREx data\."#"About the data", "The images and measurements come from the public SPHEREx archive at NASA IRSA. Navi writes its explanations with AI from those measurements; they are not scientific findings."#' frontend/js/views/learn.js
+
 ENV PYTHONPATH=/app/backend \
     SPX_FRONTEND_DIR=/app/frontend \
     SPX_DATA_DIR=/app/backend/demo_bundle \
