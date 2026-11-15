@@ -36,6 +36,10 @@ export function mount(root) {
         <summary><h2 style="display:inline">Intensity vs wavelength</h2></summary>
         <div id="chart"></div>
       </details>
+      ${isMock() ? "" : `<details class="panel" id="epoch-details">
+        <summary><h2 style="display:inline">Compare earlier and later observations</h2></summary>
+        <div id="epoch"><p class="muted fine">Opens a band-by-band comparison of this object's spectrum before and after a date, using only observations stored on the server and only bands where the object fell at matching wavelengths.</p></div>
+      </details>`}
     </div>
   </div>`;
 
@@ -43,6 +47,31 @@ export function mount(root) {
   let alive = true, token = 0, second = /** @type {number|null} */ (null), comparing = false;
   /** @type {any} */ let spec = null;
   /** @type {any[]} */ let observations = [];
+
+  // ---- earlier vs later comparison (frontend-only operation, real backend only) ------------------------
+  let epochLoaded = false;
+  async function loadEpoch() {
+    const box = root.querySelector("#epoch"), id = getState().objectId;
+    if (!box || !id || epochLoaded) return;
+    epochLoaded = true;
+    box.innerHTML = `<div class="stage-msg"><div class="spinner" aria-hidden="true"></div><p>Comparing…</p></div>`;
+    try {
+      const j = await api.getSpectrumComparison(id);
+      if (!alive) return;
+      if (j.availability.status !== "available") { box.innerHTML = `<p class="notice notice-warn">${esc(j.availability.statusReason)}</p>${(j.warnings ?? []).map((/** @type {string} */ w) => `<p class="fine muted">${esc(w)}</p>`).join("")}`; return; }
+      const rows = j.bands.filter((/** @type {any} */ b) => b.comparable).map((/** @type {any} */ b) => `<tr>
+        <td>${esc(b.bandIndex)}</td><td>${esc(b.wavelengthUm.toFixed(3))} µm</td>
+        <td>${esc(b.early.flux)} <span class="muted">± ${esc(b.early.fluxUncertainty)}</span><br><span class="muted fine">${esc(shortDate(b.early.observedAt))}</span></td>
+        <td>${esc(b.late.flux)} <span class="muted">± ${esc(b.late.fluxUncertainty)}</span><br><span class="muted fine">${esc(shortDate(b.late.observedAt))}</span></td>
+        <td>${esc(b.difference)} <span class="muted">± ${esc(b.differenceUncertainty)}</span></td><td>${esc(b.significanceSigma)}</td></tr>`).join("");
+      const skipped = j.bands.filter((/** @type {any} */ b) => !b.comparable).length;
+      box.innerHTML = `<p><strong>${esc(j.summary.text)}</strong></p>
+        <table class="data-table"><thead><tr><th>Band</th><th>Wavelength</th><th>Earlier (${esc(spec.fluxUnit)})</th><th>Later</th><th>Later minus earlier</th><th>Times its uncertainty</th></tr></thead><tbody>${rows}</tbody></table>
+        ${skipped ? `<p class="fine muted">${skipped} other band${skipped > 1 ? "s were" : " was"} not compared: only one stretch of time has a measurement there, or the object fell at a different wavelength in the two.</p>` : ""}
+        ${(j.warnings ?? []).map((/** @type {string} */ w) => `<p class="notice fine">${esc(w)}</p>`).join("")}`;
+    } catch (e) { epochLoaded = false; box.innerHTML = `<p class="notice notice-error">${esc(errMsg(e))}</p>`; }
+  }
+  root.querySelector("#epoch-details")?.addEventListener("toggle", e => { if (/** @type {HTMLDetailsElement} */ (e.target).open) loadEpoch(); });
 
   const viewer = createViewer($("#sp-viewer"), { label: "Image behind the selected band" });
   const selector = createBandSelector($("#bands"), { onSelect: band => selectBand(band), label: "Spectral band, shorter to longer wavelength" });

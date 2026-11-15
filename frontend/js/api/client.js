@@ -91,6 +91,8 @@ const real = /** @type {any} */ ({
   getLibrary: () => http("/library"),
   getCredits: () => http("/credits"),
   getCoadd: (/** @type {string} */ id, opts = {}) => http(`/objects/${enc(id)}/coadd`, { params: opts }),
+  getSpectrumComparison: (/** @type {string} */ id, opts = {}) => http(`/objects/${enc(id)}/spectrum-comparison`, { params: opts }),
+  getChallenges: (/** @type {string} */ id) => http(`/objects/${enc(id)}/challenges`),
 });
 
 /** True while illustrative mock data is in use; views show the "illustrative" badge. */
