@@ -5,6 +5,10 @@ Two sources, newest wins:
   * active: when the last word is older than `ttl_s`, ONE background probe asks the archive a tiny question. The status request itself
     never waits for it, so the badge can never slow the page down.
 The probe is off unless switched on (SPX_ARCHIVE_PROBE=true), so tests and local runs never touch the network by accident.
+
+Fail fast (switched on together with the probe): while the last word is "down", `should_try()` answers False, so a search for a position
+that is not saved on this server fails at once instead of waiting about 20 s for retries that are bound to fail. Every RETRY_AFTER_S one
+request is let through to test the water (a circuit breaker's "half-open" state); if it works, everything flows again.
 """
 from __future__ import annotations
 
@@ -14,6 +18,9 @@ from datetime import datetime, timezone
 from typing import Callable
 
 import httpx
+
+RETRY_AFTER_S = 15.0            # while the archive is down, let one real request through this often
+TRIAL_TIMEOUT_S = 30.0          # a trial that never reports back must not block the next one forever
 
 PROBE_URL = ("https://irsa.ipac.caltech.edu/SIA?COLLECTION=spherex_dr1&POS=circle+162.0+-53.0+0.001&RESPONSEFORMAT=votable")
 
@@ -35,15 +42,35 @@ class ArchiveStatus:
         self._at: float | None = None          # monotonic time of the last word
         self._wall: str | None = None
         self._probing = False
+        self._fail_fast = False
+        self._trial_at: float | None = None      # when the current half-open trial request was let through
 
     def note(self, ok: bool) -> None:
         """Record the outcome of a real archive request."""
         with self._lock:
             self._ok, self._at = ok, self._clock()
+            self._trial_at = None
             self._wall = datetime.now(timezone.utc).isoformat(timespec="seconds")
 
     def enable_probe(self, probe: Callable[[], bool] | None = None) -> None:
         self._probe = probe or default_probe
+        self._fail_fast = True
+
+    def should_try(self) -> bool:
+        """May a real archive request go ahead? Always yes unless fail-fast is on AND the archive was last seen down; then only one trial
+        request per RETRY_AFTER_S."""
+        if not self._fail_fast:
+            return True
+        with self._lock:
+            if self._ok is not False or self._at is None:
+                return True
+            now = self._clock()
+            if now - self._at < RETRY_AFTER_S:
+                return False
+            if self._trial_at is not None and now - self._trial_at < TRIAL_TIMEOUT_S:
+                return False
+            self._trial_at = now
+            return True
 
     def _run_probe(self) -> None:
         try:

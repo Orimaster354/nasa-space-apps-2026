@@ -25,6 +25,7 @@ from typing import Callable
 import numpy as np
 
 from processing import alignment, coadd, compare, imaging, irsa, photometry, quality
+from processing.archive_status import archive
 from processing.fits_io import FitsReadError, read_cutout
 from store.registry import Registry
 
@@ -197,6 +198,9 @@ class Services:
 
     def _live_discover(self, ra: float, dec: float, key: tuple[float, float], skey: str) -> list[irsa.ArchiveFile]:
         """Ask the archive; on a complete answer save it as the snapshot and cache it in memory. May raise IrsaError."""
+        if not archive.should_try():                       # it was seen down a moment ago: answer at once instead of waiting for retries
+            raise irsa.IrsaError("NASA's SPHEREx archive (IRSA) is not answering right now, so a position that is not stored on this server cannot "
+                                 "be looked up. The stored targets still work; try this one again in a minute.", retryable=True)
         files = self._discover(ra, dec)
         if getattr(files, "incomplete", []):
             return files                                   # a partial listing is returned to the caller but never saved or cached
