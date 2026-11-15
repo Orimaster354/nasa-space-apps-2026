@@ -56,7 +56,7 @@ Priorities: **P0** essential for a functioning submission · **P1** important di
   Dep: P0-04. Done: returns sky coordinate; round-trip error under a stated tolerance in a synthetic-WCS test.
 - [x] **P0-19 Quality flags decoded.** *(Done in `processing/quality.py` from IRSA online help; still to cross-check against the Explanatory Supplement.)*
   Dep: P0-16, A5. Done: flag decoder table sourced from the Explanatory Supplement (cited in code); unknown bits reported as `info` with raw value; `qualitySummary` rule documented and tested.
-- [ ] **P0-20 Async/“processing” behavior.**
+- [x] **P0-20 Async/“processing” behavior.** *(Done for images: a request waits up to 20 s for its image; slower downloads return HTTP 202 with `availability.status = processing` and `retryAfterSeconds = 3` while a background job continues, and the same GET later returns the image. Identical requests share one job; a failed job is reported as `failed`/`unavailable`, never stuck. The frontend already polls (frames.js, up to 6 tries). Comparisons are still synchronous: they wait for their images (up to 300 s) and never store a processing stub.)*
   Dep: P0-15. Done: slow fetch returns `processing` with `retryAfterSeconds`, then resolves; failure returns `failed` with a reason; tested with a slow stub.
 
 ### Comparison and measurement
@@ -91,13 +91,13 @@ Priorities: **P0** essential for a functioning submission · **P1** important di
 
 ### Persistence, deploy, demo
 
-- [ ] **P0-33 Investigation persistence.**
+- [x] **P0-33 Investigation persistence.** *(Done: `GET/POST /investigations`, `GET/PUT/DELETE /investigations/{id}`, owner-scoped to an anonymous visitor (X-Client-Id header, else the caller address), messages server-managed and appended by the chat endpoint when `investigationId` is given, limits (100 per visitor, 200 notes, 500 events). Stored in SQLite. CAVEAT: on Cloud Run the disk is temporary, so a redeploy or instance restart loses saved investigations; avoid redeploying during judging. The UI sends no X-Client-Id yet, so visitors are keyed by address until the frontend data layer adds it.)*
   Dep: P0-09. Done: SQLite store; create/get/list/update/delete per the contract; `messages` server-managed and ignored on PUT; survives restart. (Per-user scoping only if OD-7 is settled.)
 - [ ] **P0-34 Contract-validation tests for every implemented endpoint.**
   Dep: each endpoint. Done: one test per operation validates the response model; runs offline.
-- [ ] **P0-35 Deploy with a persistent disk.**
+- [x] **P0-35 Deploy with a persistent disk.** *(Done on Google Cloud Run (project navilink, us-central1, 2 CPU, 4 GiB, ONE instance because each instance has its own disk). Not a persistent disk: see P0-33 caveat.)*
   Dep: P0-05, D-3. Done: public URL reachable from the frontend origin; `/health` OK; cache directory persists across restarts; env keys set on the host only.
-- [ ] **P0-36 🛰 Real IRSA retrieval works from the deployed host.**
+- [x] **P0-36 🛰 Real IRSA retrieval works from the deployed host.** *(Done: from the deployed host, name resolution, SIA2 discovery, cutout download, image rendering and Gemini chat all worked in a real browser test.)*
   Dep: P0-35, P0-15. Done: a live search → observations → image succeeds on the host; latency recorded; failure behaviors demonstrated.
 - [ ] **P0-37 Pre-cache the curated demo targets.**
   Dep: P0-06, D-7, P0-35. Done: each curated target loads instantly with the host's network disabled for IRSA (simulated by stub).

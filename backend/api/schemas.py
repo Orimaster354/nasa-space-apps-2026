@@ -73,6 +73,8 @@ class Observation(_Model):
     qualityFlags: list[QualityFlag] = Field(default_factory=list)
     qualitySummary: Literal["good", "degraded", "poor", "unknown"] = "unknown"
     sourceMetadata: dict | None = None
+    wavelengthAtObjectUm: float | None = None     # additive, optional (pending contract addition): where the object falls in the band
+    bandwidthAtObjectUm: float | None = None
 
 
 class Page(_Model):
@@ -213,6 +215,56 @@ class AIResponse(_Model):
     caveats: list[str]
     suggestedActions: list[SuggestedAction]
     availability: Availability
+
+
+class Note(_Model):
+    noteId: str
+    text: str = Field(max_length=5000)
+    createdAt: str
+    observationId: str | None = None
+    comparisonId: str | None = None
+
+
+class Bookmark(_Model):
+    bookmarkId: str
+    targetType: str = Field(max_length=40)          # contract lists six values; any short string is accepted so a UI change cannot break Save
+    targetId: str
+    label: str | None = Field(None, max_length=200)
+    createdAt: str
+
+
+class InvestigationEvent(_Model):
+    eventId: str
+    type: str = Field(max_length=40)                # contract lists five values; see Bookmark.targetType
+    targetId: str | None = None
+    at: str
+
+
+class InvestigationInput(_Model):
+    title: str = Field(min_length=1, max_length=200)
+    objectId: str | None = None
+    notes: list[Note] = Field(default_factory=list, max_length=200)
+    bookmarks: list[Bookmark] = Field(default_factory=list, max_length=200)
+    history: list[InvestigationEvent] = Field(default_factory=list, max_length=500)
+
+
+class Investigation(_Model):
+    investigationId: str
+    title: str
+    objectId: str | None = None
+    createdAt: str
+    updatedAt: str
+    notes: list[Note] = Field(default_factory=list)
+    bookmarks: list[Bookmark] = Field(default_factory=list)
+    history: list[InvestigationEvent] = Field(default_factory=list)
+    messages: list[ChatMessage] = Field(default_factory=list)
+
+
+class InvestigationSummary(_Model):
+    investigationId: str
+    title: str
+    objectId: str | None = None
+    updatedAt: str
 
 
 class CreateComparisonRequest(_Model):

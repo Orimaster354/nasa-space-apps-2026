@@ -16,6 +16,7 @@ import math
 import re
 import threading
 import time
+from concurrent.futures import Future, ThreadPoolExecutor, TimeoutError as FutureTimeout
 from dataclasses import asdict
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -26,6 +27,8 @@ import numpy as np
 from processing import alignment, compare, imaging, irsa, photometry, quality
 from processing.fits_io import FitsReadError, read_cutout
 from store.registry import Registry
+
+from .investigations import InvestigationStore
 
 log = logging.getLogger("spx.core")
 
@@ -104,12 +107,18 @@ class Services:
     def __init__(self, registry: Registry, cutouts: irsa.CutoutCache, images_dir: str | Path,
                  discover: Callable[[float, float], list[irsa.ArchiveFile]] = irsa.discover,
                  resolver: Callable[[str], tuple[float, float]] = _astropy_resolver,
-                 discovery_ttl_s: float = 600.0):
+                 discovery_ttl_s: float = 600.0, image_wait_s: float = 20.0, render_workers: int = 6):
         self.registry, self.cutouts = registry, cutouts
+        self.investigations = InvestigationStore(registry)
         self.images_dir = Path(images_dir)
         self.images_dir.mkdir(parents=True, exist_ok=True)
         self._discover, self._resolver = discover, resolver
         self._ttl = discovery_ttl_s
+        # Images render in a small worker pool. A request waits up to `image_wait_s` for its image; if it is not ready by then the
+        # response is 'processing' (the frontend polls) and the job keeps running. Identical requests share one job.
+        self.image_wait_s = image_wait_s
+        self._pool = ThreadPoolExecutor(max_workers=render_workers, thread_name_prefix="render")
+        self._jobs: dict[str, Future] = {}
         self._disc_cache: dict[tuple[float, float], tuple[float, list[irsa.ArchiveFile]]] = {}
         self._lock = threading.Lock()
 
@@ -241,9 +250,11 @@ class Services:
             oid = observation_id_for(f.uri)
             prior = self.registry.get_observation(oid)
             observation = self._observation_dict(f, obj, (prior or {}).get("quality"))
+            self._with_wave(observation, prior or {})
             object_ids = sorted(set((prior or {}).get("observation", {}).get("objectIds", [])) | {object_id})
             observation["objectIds"] = object_ids
-            self.registry.put_observation(oid, {"observation": observation, "file": asdict(f), "quality": (prior or {}).get("quality")})
+            self.registry.put_observation(oid, {"observation": observation, "file": asdict(f), "quality": (prior or {}).get("quality"),
+                                                **({"wavelengthAtObject": prior["wavelengthAtObject"]} if prior and prior.get("wavelengthAtObject") else {})})
             items.append(observation)
 
         note = None
@@ -258,11 +269,20 @@ class Services:
             out["coverageNote"] = note
         return out
 
+    @staticmethod
+    def _with_wave(obs: dict, rec: dict) -> None:
+        w = rec.get("wavelengthAtObject")
+        if w:
+            obs["wavelengthAtObjectUm"] = w["um"]
+            if w.get("bandwidthUm") is not None:
+                obs["bandwidthAtObjectUm"] = w["bandwidthUm"]
+
     def get_observation(self, observation_id: str) -> dict:
         rec = self.registry.get_observation(observation_id)
         if rec is None:
             raise NotFound("Unknown observation.")
         obs = dict(rec["observation"])
+        self._with_wave(obs, rec)
         if rec.get("quality"):
             obs["qualityFlags"], obs["qualitySummary"] = rec["quality"]["flags"], rec["quality"]["summary"]
         return obs
@@ -282,8 +302,38 @@ class Services:
         except ValueError as exc:
             raise BadRequest(str(exc)) from exc
 
+    @staticmethod
+    def _failure(base: dict, exc: Exception) -> dict:
+        if isinstance(exc, irsa.IrsaError):
+            status = "failed" if exc.retryable else "unavailable"
+            return {**base, "availability": {"status": status, "statusReason": str(exc), **({"retryAfterSeconds": 30} if exc.retryable else {})}}
+        return {**base, "availability": {"status": "failed", "statusReason": f"The data file could not be read: {exc}"}}
+
+    def _render_image(self, observation_id: str, rec: dict, grid: imaging.GridSpec, stretch: str, low_pct: float, high_pct: float,
+                      png_path: Path, meta_path: Path) -> dict:
+        """Fetch the cutout, resample, render and save. The PNG is written LAST (atomically): its existence means 'done'."""
+        import json
+        import os
+        url = irsa.cutout_url(rec["file"]["uri"], grid.center_ra, grid.center_dec, grid.cutout_size_deg)
+        cutout = read_cutout(self.cutouts.get(url))
+        arr = imaging.to_grid(cutout, grid)
+        png, st = imaging.render_png(arr, stretch, low_pct, high_pct)
+        if cutout.flags is not None:
+            rec["quality"] = {"flags": quality.summarize(cutout.flags), "summary": quality.quality_summary(cutout.flags)}
+        wl, bw = self._wave_at(cutout, grid.center_ra, grid.center_dec)
+        if wl is not None:
+            rec["wavelengthAtObject"] = {"um": wl, **({"bandwidthUm": bw} if bw is not None else {})}
+        self.registry.put_observation(observation_id, rec)
+        meta_path.write_text(json.dumps(st))
+        tmp = png_path.with_name(png_path.name + ".tmp")
+        tmp.write_bytes(png)
+        os.replace(tmp, png_path)
+        return st
+
     def get_image(self, observation_id: str, *, stretch: str = "asinh", low_pct: float = 1.0, high_pct: float = 99.5,
-                  center_ra: float | None = None, center_dec: float | None = None, fov_arcmin: float = imaging.DEFAULT_FOV_ARCMIN) -> dict:
+                  center_ra: float | None = None, center_dec: float | None = None, fov_arcmin: float = imaging.DEFAULT_FOV_ARCMIN,
+                  wait_s: float | None = None) -> dict:
+        import json
         rec = self.registry.get_observation(observation_id)
         if rec is None:
             raise NotFound("Unknown observation.")
@@ -294,30 +344,31 @@ class Services:
 
         name = f"{observation_id}_{grid.grid_id}_{stretch}_{low_pct:g}_{high_pct:g}"
         png_path, meta_path = self.images_dir / f"{name}.png", self.images_dir / f"{name}.json"
-        try:
-            if not png_path.exists():
-                url = irsa.cutout_url(rec["file"]["uri"], grid.center_ra, grid.center_dec, grid.cutout_size_deg)
-                cutout = read_cutout(self.cutouts.get(url))
-                arr = imaging.to_grid(cutout, grid)
-                png, st = imaging.render_png(arr, stretch, low_pct, high_pct)
-                png_path.write_bytes(png)
-                import json
-                meta_path.write_text(json.dumps(st))
-                if cutout.flags is not None:
-                    rec["quality"] = {"flags": quality.summarize(cutout.flags), "summary": quality.quality_summary(cutout.flags)}
-                    self.registry.put_observation(observation_id, rec)
-            else:
-                import json
-                st = json.loads(meta_path.read_text())
-        except irsa.IrsaError as exc:
-            status = "failed" if exc.retryable else "unavailable"
-            return {**base, "availability": {"status": status, "statusReason": str(exc),
-                                             **({"retryAfterSeconds": 30} if exc.retryable else {})}}
-        except FitsReadError as exc:
-            return {**base, "availability": {"status": "failed", "statusReason": f"The data file could not be read: {exc}"}}
-
+        if png_path.exists() and meta_path.exists():
+            st = json.loads(meta_path.read_text())
+        else:
+            created = False
+            with self._lock:
+                fut = self._jobs.get(name)
+                if fut is None:
+                    fut = self._pool.submit(self._render_image, observation_id, rec, grid, stretch, low_pct, high_pct, png_path, meta_path)
+                    self._jobs[name] = fut
+                    created = True
+            if created:                       # outside the lock: a finished future runs its callback immediately, and that takes the lock
+                fut.add_done_callback(lambda f, n=name: self._job_done(n))
+            try:
+                st = fut.result(timeout=self.image_wait_s if wait_s is None else wait_s)
+            except FutureTimeout:
+                return {**base, "availability": {"status": "processing", "retryAfterSeconds": 3,
+                                                 "statusReason": "Fetching this image from the SPHEREx archive and preparing it."}}
+            except (irsa.IrsaError, FitsReadError) as exc:
+                return self._failure(base, exc)
         return {**base, "availability": {"status": "available"}, "imageUrl": f"/media/images/{name}.png",
                 "width": grid.npix, "height": grid.npix, "stretch": st, "wcs": grid.wcs_summary(), "gridId": grid.grid_id}
+
+    def _job_done(self, name: str) -> None:
+        with self._lock:
+            self._jobs.pop(name, None)
 
     def pixel_to_sky(self, observation_id: str, x: float, y: float, *, center_ra: float | None = None,
                      center_dec: float | None = None, fov_arcmin: float = imaging.DEFAULT_FOV_ARCMIN) -> dict:
@@ -503,8 +554,8 @@ class Services:
                                         + (" Residual = median offset of matched bright stars between the two frames." if est.measured else ""),
                               **({"residualArcsec": est.residual_arcsec} if est.measured else {})})
         if a["verdict"] != "not_comparable":
-            out["baseImage"] = self.get_image(base_id)
-            out["targetImage"] = self.get_image(target_id)
+            out["baseImage"] = self.get_image(base_id, wait_s=300)      # wait: a 'processing' stub must never be stored
+            out["targetImage"] = self.get_image(target_id, wait_s=300)
             if mode == "difference":
                 png, st = imaging.render_difference_png(arr_t - arr_b)
                 name = f"{cid}_diff"

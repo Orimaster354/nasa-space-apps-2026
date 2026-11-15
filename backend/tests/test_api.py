@@ -35,13 +35,15 @@ class FakeCutouts:
     """Stands in for CutoutCache: serves synthetic FITS files, counts fetches, can fail on demand."""
 
     def __init__(self, tmp_path):
-        self.tmp, self.calls, self.fail = tmp_path, 0, None
+        self.tmp, self.calls, self.fail, self.gate = tmp_path, 0, None, None     # gate: a threading.Event that holds downloads open
         self.files = {u: make_cutout_fits(tmp_path / f"{i}.fits", *STAR, rotation_deg=s["rotation"], mjd=s["mjd"], detector=s["detector"],
                                            flag_value=(1 << 21))
                       for i, (u, s) in enumerate(URIS.items())}
 
     def get(self, url):
         self.calls += 1
+        if self.gate is not None:
+            self.gate.wait(timeout=15)
         if self.fail:
             raise self.fail
         for uri, path in self.files.items():
