@@ -524,7 +524,10 @@ class Services:
         sigma = math.sqrt(res_b.uncertainty_mjy ** 2 + res_t.uncertainty_mjy ** 2)
         snr = value / sigma
         warnings = [f"Base frame: {w}" for w in res_b.warnings] + [f"Target frame: {w}" for w in res_t.warnings]
-        warnings += [f"{c['name']}: {c['detail']}" for c in verdict["checks"] if c["result"] in ("warn", "notEvaluated") and c["name"] != "wavelength"]
+        warnings += [f"{c['name']}: {c['detail']}" for c in verdict["checks"]
+                     if c["result"] in ("warn", "notEvaluated") and c["name"] not in ("wavelength", "alignment")]
+        warnings.append("alignment: Each frame was measured on its own pixels, with the position taken from that frame's own sky coordinates; "
+                        "the frame-to-frame alignment was not measured for this number.")
         if res_b.snr < photometry.LOW_SNR and res_t.snr < photometry.LOW_SNR:
             warnings.append("Neither frame significantly detects a source here, so a change in brightness is not meaningful.")
         if abs(snr) < photometry.LOW_SNR:

@@ -225,7 +225,8 @@ def test_the_system_prompt_asks_for_a_warm_beginner_friendly_voice(rich):
     comp.respond("hi", ctx, "c:a")
     sp = p.systems[0].lower()
     for phrase in ("never sarcastic", "plain everyday words", "explain it in a few words", "one small thing to try next", "you cannot see images",
-                   "for general questions", "return an empty hypotheses list"):
+                   "for general questions", "return an empty hypotheses list", 'a wavelength check that is "warn"',
+                   "matched in wavelength", "consistent with no change"):
         assert phrase in sp, phrase
     assert "beginner" in json.loads(p.prompts[0])["style"]
 
@@ -297,3 +298,15 @@ def test_cool_down_blocks_everyone_until_it_ends():
 def test_defaults_are_generous_for_visitors_and_protective_for_the_provider():
     lim = QuotaLimiter()
     assert (lim.per_client, lim.global_daily, lim.per_minute) == (60, 1500, 10)
+
+
+def test_the_softwares_notes_about_a_measurement_reach_the_model(env):
+    c, *_ = env
+    from tests.test_api import _observations
+    _, obs = _observations(c)
+    region = {"center": {"raDeg": 133.7959, "decDeg": -7.2446}, "radiusArcsec": 20}
+    m = c.post("/api/v1/measurements", json={"kind": "flux_change", "observationIds": [obs[0]["observationId"], obs[1]["observationId"]], "region": region}).json()
+    pack = facts.build(c.app.state.services, {"measurementIds": [m["measurementId"]]})
+    text = next(f.text for f in pack.facts if f.target_type == "measurement")
+    assert "Notes from the software:" in text and "times its uncertainty" in text
+    assert "Base frame:" not in text and "Target frame:" not in text               # per-frame housekeeping notes stay out of the prompt

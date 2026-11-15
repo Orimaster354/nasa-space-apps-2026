@@ -213,6 +213,9 @@ def build(services: Services, ctx: dict | None) -> EvidencePack:
             txt += f"; aperture radius {r['radiusArcsec']:g} arcsec"
             nums.append(r["radiusArcsec"])
         txt += f". Method: {m['method']}"
+        notes = [w for w in m.get("warnings", []) if not w.startswith(("Base frame:", "Target frame:"))][:4]
+        if notes:
+            txt += " Notes from the software: " + " ".join(n[:220] for n in notes)
         what = "the object's brightness" if m["kind"] == "aperture_flux" else "the change in brightness between the two pictures"
         plain = f"I measured {what} as about {_g(m['value'])}" + (f" ± {_g(unc, 3)}" if unc is not None else "") + f" {m['unit']}."
         if snr is not None:
