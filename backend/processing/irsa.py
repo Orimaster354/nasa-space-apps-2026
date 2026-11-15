@@ -128,17 +128,32 @@ def sia_url(collection: str, ra: float, dec: float, radius_deg: float = SEARCH_R
     return f"{SIA_URL}?COLLECTION={collection}&POS=circle+{ra!r}+{dec!r}+{radius_deg!r}&RESPONSEFORMAT=votable"
 
 
+SIA_ATTEMPTS = 3
+SIA_BACKOFF_S = 1.0
+
+
 def _default_fetch(collection: str, ra: float, dec: float):
     """One SIA2 query -> astropy Table. Raises IrsaError on any failure."""
     from astropy.io.votable import parse_single_table
 
     url = sia_url(collection, ra, dec)
-    try:
-        r = httpx.get(url, timeout=60.0, follow_redirects=True)
-    except httpx.HTTPError as exc:
-        raise IrsaError("The SPHEREx archive could not be reached.") from exc
-    if r.status_code >= 500 or r.status_code == 429:
-        raise IrsaError(f"The SPHEREx archive answered {r.status_code}.")
+    r, last = None, None
+    for attempt in range(SIA_ATTEMPTS):                     # IRSA sometimes answers 502/503 for a moment (seen on 2026-11-15)
+        if attempt:
+            time.sleep(SIA_BACKOFF_S * attempt)
+        try:
+            r = httpx.get(url, timeout=60.0, follow_redirects=True)
+        except httpx.HTTPError as exc:
+            last, r = IrsaError("The SPHEREx archive could not be reached."), None
+            last.__cause__ = exc
+            continue
+        if r.status_code >= 500 or r.status_code == 429:
+            last = IrsaError(f"The SPHEREx archive answered {r.status_code}.")
+            continue
+        last = None
+        break
+    if last is not None:
+        raise last
     if r.status_code != 200:
         raise IrsaError(f"The SPHEREx archive rejected the query ({r.status_code}).", retryable=False)
     try:
@@ -162,12 +177,19 @@ def _to_file(r) -> ArchiveFile | None:
     )
 
 
+class Discovery(list):
+    """List of ArchiveFile plus `incomplete`: names of collections that did not answer (so the list may be missing files)."""
+
+    incomplete: list[str] = []
+
+
 def discover(ra: float, dec: float, collections: tuple[str, ...] = DEFAULT_COLLECTIONS,
-             fetch: Callable[[str, float, float], object] = _default_fetch) -> list[ArchiveFile]:
+             fetch: Callable[[str, float, float], object] = _default_fetch) -> Discovery:
     """Science spectral-image files whose footprint contains the position, oldest first. Empty list when there is no coverage.
 
     Collections are queried concurrently. If some fail but others answer, the answers are returned and the failure is
-    logged; if every collection fails, IrsaError is raised.
+    logged and named in `.incomplete`. If every collection fails, OR some fail and nothing was found, IrsaError is raised: we must
+    never say "no coverage" when part of the archive did not answer.
     """
     validate_position(ra, dec)
 
@@ -188,7 +210,8 @@ def discover(ra: float, dec: float, collections: tuple[str, ...] = DEFAULT_COLLE
     for c, e in errors:
         log.warning("SIA2 collection %s failed: %s", c, e)
 
-    files: list[ArchiveFile] = []
+    files = Discovery()
+    files.incomplete = [c for c, _ in errors]
     seen: set[str] = set()
     for _, table, _ in results:
         if table is None:
@@ -198,6 +221,9 @@ def discover(ra: float, dec: float, collections: tuple[str, ...] = DEFAULT_COLLE
             if f and f.uri not in seen:
                 seen.add(f.uri)
                 files.append(f)
+    if errors and not files:
+        raise IrsaError("Part of the SPHEREx archive is not answering right now, so coverage for this position cannot be confirmed. Try again shortly.",
+                        retryable=any(e.retryable for _, e in errors))
     files.sort(key=lambda f: (f.mjd_start is None, f.mjd_start or 0.0))
     return files
 

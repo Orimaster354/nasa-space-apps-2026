@@ -65,6 +65,14 @@ def list_observations(
         limit=limit, offset=offset, sort=sort)
 
 
+@router.get("/objects/{object_id}/candidates", response_model=Page, **_EXCLUDE)
+def list_candidates(request: Request, object_id: str, limit: int = Query(20, ge=1, le=100), offset: int = Query(0, ge=0)):
+    """Candidate generation is not built yet. An honest empty page (never a made-up candidate) so the UI shows 'none' instead of an error."""
+    svc(request).get_object(object_id)                      # 404 for an unknown object
+    return {"items": [], "total": 0, "limit": limit, "offset": offset,
+            "coverageNote": "Automated candidate detection is not available yet; compare the observations yourself."}
+
+
 @router.get("/observations/{observation_id}", response_model=Observation, **_EXCLUDE)
 def get_observation(request: Request, observation_id: str):
     return svc(request).get_observation(observation_id)

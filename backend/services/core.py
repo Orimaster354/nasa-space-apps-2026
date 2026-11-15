@@ -11,6 +11,7 @@ Deviations worth knowing (documented, not hidden):
 from __future__ import annotations
 
 import hashlib
+import logging
 import math
 import re
 import threading
@@ -25,6 +26,8 @@ import numpy as np
 from processing import alignment, compare, imaging, irsa, photometry, quality
 from processing.fits_io import FitsReadError, read_cutout
 from store.registry import Registry
+
+log = logging.getLogger("spx.core")
 
 _MJD_EPOCH = datetime(1858, 11, 17, tzinfo=timezone.utc)
 
@@ -145,19 +148,37 @@ class Services:
         return obj
 
     # ---- observations --------------------------------------------------------------------------------------------
-    def _discover_cached(self, ra: float, dec: float) -> list[irsa.ArchiveFile]:
+    def _discover_cached(self, ra: float, dec: float) -> tuple[list[irsa.ArchiveFile], str | None]:
+        """Archive listing for a position, plus an optional note for the user.
+
+        Live results are cached for a few minutes and saved as a snapshot. If the archive is down, the last saved snapshot is used
+        (clearly noted) instead of failing; with no snapshot the error is raised. A listing that is missing a collection is never
+        cached or saved, so the next request retries, and it carries a note saying it may be incomplete.
+        """
         key = (round(ra, 4), round(dec, 4))
+        skey = f"{key[0]:.4f},{key[1]:.4f}"
         with self._lock:
             hit = self._disc_cache.get(key)
         if hit and time.monotonic() - hit[0] < self._ttl:
-            return hit[1]
+            return hit[1], None
         try:
             files = self._discover(ra, dec)
         except irsa.IrsaError as exc:
+            snap = self.registry.get_discovery(skey)
+            if snap:
+                log.warning("archive unavailable (%s); serving the saved listing from %s", exc, snap.get("savedAt"))
+                return ([irsa.ArchiveFile(**{**d, "footprint": tuple(tuple(p) for p in d["footprint"]) if d.get("footprint") else d.get("footprint")})
+                         for d in snap["files"]],
+                        f"The SPHEREx archive is not responding right now, so this is the last saved listing ({snap.get('savedAt', 'earlier')}). It may be out of date.")
             raise Upstream(str(exc), exc.retryable) from exc
+        incomplete = list(getattr(files, "incomplete", []))
+        if incomplete:
+            return list(files), (f"Some archive collections did not respond ({', '.join(incomplete)}), so this list may be incomplete. "
+                                 "Reload in a moment to check again.")
+        self.registry.put_discovery(skey, {"savedAt": now_iso(), "files": [asdict(f) for f in files]})
         with self._lock:
-            self._disc_cache[key] = (time.monotonic(), files)
-        return files
+            self._disc_cache[key] = (time.monotonic(), list(files))
+        return list(files), None
 
     def _observation_dict(self, f: irsa.ArchiveFile, obj: dict, quality_info: dict | None) -> dict:
         det = f.bandpass.rsplit("D", 1)[-1] if f.bandpass and "D" in f.bandpass else None
@@ -194,7 +215,7 @@ class Services:
             raise BadRequest("sort must be observedAt or -observedAt.")
         obj = self.get_object(object_id)
         c = obj["coordinates"]
-        files = self._discover_cached(c["raDeg"], c["decDeg"])
+        files, archive_note = self._discover_cached(c["raDeg"], c["decDeg"])
 
         lo = iso_to_mjd(date_from) if date_from else None
         hi = iso_to_mjd(date_to) if date_to else None
@@ -232,6 +253,7 @@ class Services:
             note = "Observations exist here, but none match the filters."
         page = items[offset:offset + limit]
         out = {"items": page, "total": len(items), "limit": limit, "offset": offset}
+        note = " ".join(n for n in (note, archive_note) if n) or None
         if note:
             out["coverageNote"] = note
         return out

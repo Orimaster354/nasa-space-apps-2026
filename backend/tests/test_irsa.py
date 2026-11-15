@@ -190,6 +190,7 @@ def test_default_fetch_uses_column_names_not_generic_ids(monkeypatch):
 
 
 def test_default_fetch_maps_http_failures(monkeypatch):
+    monkeypatch.setattr(irsa.time, "sleep", lambda s: None)
     monkeypatch.setattr(irsa.httpx, "get", lambda url, **kw: httpx.Response(502))
     with pytest.raises(irsa.IrsaError) as e:
         irsa._default_fetch("spherex_dr1", 10.0, 10.0)
@@ -198,3 +199,50 @@ def test_default_fetch_maps_http_failures(monkeypatch):
     with pytest.raises(irsa.IrsaError) as e:
         irsa._default_fetch("spherex_dr1", 10.0, 10.0)
     assert not e.value.retryable
+
+
+def test_some_collections_failing_and_nothing_found_is_an_error_not_no_coverage():
+    """Regression (seen live on 2026-11-15): IRSA answered 502 for two collections, the others returned nothing, and the app said
+    'no observations cover this position'. With part of the archive silent we cannot claim that."""
+    def fetch(c, ra, dec):
+        if c in ("spherex_dr1", "spherex_qr3"):
+            raise irsa.IrsaError("502")
+        return Table(names=["access_url"], dtype=["U10"])
+
+    with pytest.raises(irsa.IrsaError) as e:
+        irsa.discover(10, 10, collections=("spherex_dr1", "spherex_qr3", "spherex_dr1_deep"), fetch=fetch)
+    assert e.value.retryable and "cannot be confirmed" in str(e.value)
+
+
+def test_partial_results_name_the_collections_that_did_not_answer():
+    def fetch(c, ra, dec):
+        if c == "spherex_qr3":
+            raise irsa.IrsaError("502")
+        return _table(_row("ibe/x/a.fits", 60800.0))
+
+    files = irsa.discover(10, 10, collections=("spherex_dr1", "spherex_qr3"), fetch=fetch)
+    assert len(files) == 1 and files.incomplete == ["spherex_qr3"]
+    complete = irsa.discover(10, 10, collections=("spherex_dr1",), fetch=lambda c, ra, dec: _table(_row("ibe/x/a.fits", 60800.0)))
+    assert complete.incomplete == []
+
+
+def test_default_fetch_retries_a_transient_502_then_succeeds(monkeypatch):
+    sleeps, calls = [], []
+    monkeypatch.setattr(irsa.time, "sleep", lambda s: sleeps.append(s))
+
+    def fake_get(url, **kw):
+        calls.append(url)
+        return httpx.Response(502) if len(calls) < 3 else httpx.Response(200, content=VOTABLE.encode())
+
+    monkeypatch.setattr(irsa.httpx, "get", fake_get)
+    t = irsa._default_fetch("spherex_dr1", 10.0, 10.0)
+    assert len(calls) == 3 and sleeps == [irsa.SIA_BACKOFF_S, 2 * irsa.SIA_BACKOFF_S] and float(t["t_min"][0]) == 60800.7
+
+
+def test_default_fetch_does_not_retry_a_client_error(monkeypatch):
+    calls = []
+    monkeypatch.setattr(irsa.time, "sleep", lambda s: None)
+    monkeypatch.setattr(irsa.httpx, "get", lambda url, **kw: (calls.append(1), httpx.Response(400))[1])
+    with pytest.raises(irsa.IrsaError):
+        irsa._default_fetch("spherex_dr1", 10.0, 10.0)
+    assert len(calls) == 1
