@@ -9,6 +9,7 @@ import { startRouter, ROUTES, go } from "./core/router.js";
 import { esc } from "./core/dom.js";
 import { isMock } from "./api/client.js";
 import { mountNavi } from "./components/navi.js";
+import { mountArchiveBadge } from "./components/archiveBadge.js";
 import { attachBrain } from "./components/naviBrain.js";
 import { mountScene } from "./components/scene.js";
 import * as investigate from "./views/investigate.js";
@@ -31,6 +32,8 @@ const VIEWS = {
 
 // Honesty marker: always visible while mock data is in use.
 if (isMock()) badgeEl.innerHTML = `<span class="badge badge-illustrative">Sample / illustrative — not real SPHEREx data</span>`;
+
+if (!isMock()) mountArchiveBadge(badgeEl);          // real backend: show whether NASA's archive is answering
 
 mountScene(/** @type {HTMLElement} */ (document.getElementById("scene")));
 const navi = mountNavi({

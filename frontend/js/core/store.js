@@ -32,7 +32,7 @@ import { loadJson, saveJson } from "./storage.js";
  * @property {Array<Object>} bookmarks    Contract `Bookmark[]` shape.
  * @property {Array<Object>} history      Contract `InvestigationEvent[]` shape.
  * @property {Array<{role: "user"|"assistant", content: string, response?: Object, at: string}>} messages  Companion conversation.
- * @property {{id: string, step: number, hints: number, done: boolean, base?: number}|null} guided  Guided investigation progress.
+ * @property {{id: string, step: number, hints: number, done: boolean, base?: number, since?: string}|null} guided  Guided investigation progress.
  * @property {string} title               Working investigation title.
  */
 

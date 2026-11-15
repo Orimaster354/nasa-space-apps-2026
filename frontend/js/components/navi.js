@@ -352,6 +352,8 @@ export function mountNavi(opts = {}) {
 
   /** User is inspecting imagery: retreat away from it and keep quiet for a while. */
   function study(/** @type {Element|null} */ el) {
+    { const g = getState().guided; if (g && !g.done) return; }               // clicking the image IS the guided activity: she stays put and answers
+    if (currentKind === "tour" && !whisper.hidden && whisper.classList.contains("is-shown")) return;   // a tour step stays put while they poke at the image
     const was = studying(); studyUntil = Date.now() + 20000;
     hideWhisper(true);
     navi.classList.add("is-quiet");
@@ -372,7 +374,7 @@ export function mountNavi(opts = {}) {
     const r = el.getBoundingClientRect();
     const p = choose("near", { x: Math.min(vw(), Math.max(0, (r.left + r.right) / 2)), y: Math.min(vh(), Math.max(0, (r.top + r.bottom) / 2)) });
     if (!p || !fsm.request(MISC)) return;                   // a tutorial step is a MISC event
-    holdUntil = Date.now() + holdMs; setTarget(p, 130);
+    holdUntil = Date.now() + holdMs; setTarget(p, 200);
   }
 
   // ---- whispers: settle, then speak --------------------------------------------------------------
@@ -471,8 +473,10 @@ export function mountNavi(opts = {}) {
     followWhisper();
     whisper.classList.remove("is-shown"); void whisper.offsetWidth; whisper.classList.add("is-shown");
     clearTimeout(whisperTimer);
-    const ms = o.ms ?? (kind === "tour" ? 15000 : kind === "important" ? 9000 : Math.min(10000, 4000 + text.length * 55));
-    whisperTimer = window.setTimeout(() => hideWhisper(true), ms);
+    // A tour bubble has no timeout: it stays until the visitor presses Next / Skip or does what it asks. A timeout used to count as
+    // "dismissed" and walked the tour on by itself.
+    const ms = o.ms ?? (kind === "tour" ? 0 : kind === "important" ? 9000 : Math.min(10000, 4000 + text.length * 55));
+    if (ms) whisperTimer = window.setTimeout(() => hideWhisper(true), ms);
     if (reduced()) followWhisper();
   }
   /** Keep the bubble beside her base position (not her hover), inside the viewport, on whole pixels. */

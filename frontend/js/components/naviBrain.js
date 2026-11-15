@@ -113,12 +113,15 @@ export function attachBrain(navi) {
     lastIdx[key] = i;
     return list[i].replace(/\{(\w+)\}/g, (_, k) => String(vars[k] ?? ""));
   }
-  const react = (/** @type {string} */ key, vars = {}) => !tourActive() && navi.say(line(key, vars), { kind: "react" });
+  // While a guided investigation is running she only speaks at its milestones (below), so chatter never talks over a step.
+  const guidedActive = () => { const g = getState().guided; return !!g && !g.done; };
+  const react = (/** @type {string} */ key, vars = {}) => !tourActive() && !guidedActive() && navi.say(line(key, vars), { kind: "react" });
 
   // ---- tour -------------------------------------------------------------------------------------
   const tourState = () => getState().naviTour;
   const tourActive = () => { const t = tourState(); return !!t && !t.done && running; };
-  let running = false, forced = false, stepTimer = 0;
+  let running = false, forced = false, stepTimer = 0, showTimer = 0, playTimer = 0;
+  /** @type {string|null} */ let currentStep = null;
 
   function markSeen(/** @type {string} */ id) {
     const t = tourState() ?? { seen: [], done: false };
@@ -126,19 +129,23 @@ export function attachBrain(navi) {
     const seen = [...t.seen, id];
     update({ naviTour: { seen, done: TOUR.every(s => seen.includes(s.id)) } });
   }
-  function skipTour() { running = false; clearTimeout(stepTimer); update({ naviTour: { seen: TOUR.map(s => s.id), done: true } }); navi.say("Tour skipped. I'll still be around if you need me. Just click me.", { kind: "important", force: true, ms: 4500 }); }
+  function skipTour() { running = false; clearTimeout(stepTimer); clearTimeout(showTimer); clearTimeout(playTimer); update({ naviTour: { seen: TOUR.map(s => s.id), done: true } }); navi.say("Tour skipped. I'll still be around if you need me. Just click me.", { kind: "important", force: true, ms: 4500 }); }
 
   /** Show one tour step: move beside its target, whisper it, wait for Next / dismissal / the action. */
   function show(/** @type {typeof TOUR[number]} */ step) {
     if (navi.route() !== step.route) return;
     if (!forced && getState().naviHints === "off") { running = false; return; }
+    currentStep = step.id;
     if (step.near) navi.goNear(step.near, 12000);
     const isLast = step.id === "modes" || step.id === "blink" || step.id === "spectrum";
-    setTimeout(() => {
+    // say() flies her to where the bubble fits and shows it on arrival, so there is no need to wait for goNear first.
+    clearTimeout(showTimer);
+    showTimer = window.setTimeout(() => {
+      if (!running || navi.route() !== step.route) return;                       // skipped or left the page meanwhile
       const actions = [{ label: isLast ? "Got it" : "Next ›", run: () => advance(step.id) }, { label: "Skip tour", run: skipTour }];
       navi.onWhisperClosed = () => advance(step.id);
       navi.say(step.text, { kind: "tour", actions, force: forced });
-    }, step.near ? 900 : 300);
+    }, 120);
   }
   /** Move to the next step of the main flow (after a pause, never while the user studies an image). */
   function advance(/** @type {string} */ id) {
@@ -148,22 +155,25 @@ export function attachBrain(navi) {
     const i = MAIN_FLOW.indexOf(id);
     const next = i >= 0 ? MAIN_FLOW.slice(i + 1).map(n => TOUR.find(s => s.id === n)).find(s => s && !tourState()?.seen.includes(s.id)) : null;
     if (!next) { if (i >= 0) running = false; return; }
-    const wait = () => { if (!running) return; if (navi.studying || navi.panelOpen) { stepTimer = window.setTimeout(wait, 2500); return; } show(next); };
-    stepTimer = window.setTimeout(wait, 1600);
+    // The next step is only reached because the visitor pressed Next (or did the action), so it follows quickly. Only the open chat
+    // window holds it back; "studying" no longer does (that could stall the tour for 20 s while Navi drifted around).
+    const wait = () => { if (!running) return; if (navi.panelOpen) { stepTimer = window.setTimeout(wait, 600); return; } show(next); };
+    stepTimer = window.setTimeout(wait, 450);
   }
   function startTour(/** @type {boolean} */ force = false) {
+    if (guidedActive()) return;                                   // a guided investigation replaces the tour
     forced = force; running = true;
     if (force) update({ naviTour: { seen: [], done: false } });
     const first = TOUR.find(s => MAIN_FLOW.includes(s.id) && !tourState()?.seen.includes(s.id));
     if (navi.route() !== "/investigate") { if (force) window.location.hash = "#/investigate"; return; }
-    if (first) setTimeout(() => show(first), 400);
+    if (first) setTimeout(() => show(first), 250);
   }
   navi.onReplayTour = () => startTour(true);
 
   // ---- arrival ------------------------------------------------------------------------------------
   function onArrive() {
     const t = tourState();
-    if (navi.route() === "/investigate" && (!t || !t.done) && (navi.arrived || !t)) setTimeout(() => startTour(false), navi.arrived ? 1100 : 1600);
+    if (navi.route() === "/investigate" && (!t || !t.done) && (navi.arrived || !t)) setTimeout(() => startTour(false), navi.arrived ? 700 : 1000);
     else if (navi.route() === "/investigate" && t?.done) setTimeout(() => navi.say(line("welcomeBack"), { kind: "ambient" }), 1800);
     else setTimeout(() => routeLine(), 1500);
   }
@@ -181,8 +191,21 @@ export function attachBrain(navi) {
   ["pointerdown", "keydown", "click"].forEach(t => document.addEventListener(t, e => { if (!/** @type {Element} */ (e.target).closest?.(".navi, .navi-panel, .navi-whisper")) lastUserAct = Date.now(); }, { capture: true, passive: true }));
   const byUser = () => Date.now() - lastUserAct < 1500;
   let playing = false, lastDateLine = 0, lastBandLine = 0, dateTimer = 0;
+  /** @type {{step: number, done: boolean}|null} */ let lastGuided = getState().guided ? { step: getState().guided.step, done: getState().guided.done } : null;
+  const GUIDED_SAY = /** @type {Record<string, string>} */ ({
+    start: "Okay, step one: go through the dates and watch the stars. I'll wait until you've seen a few.",
+    find: "Good. Now find the star that shifted and click it. Zoom in if it helps. Hints are on the card.",
+    done: "That's the whole method: step through, spot the shift, then confirm it with a blink.",
+  });
   subscribe((s, patch) => {
     const r = navi.route();
+    if ("guided" in patch) {
+      const g = s.guided ? { step: s.guided.step, done: s.guided.done } : null, was = lastGuided; lastGuided = g;
+      if (g && running) { running = false; clearTimeout(stepTimer); clearTimeout(showTimer); clearTimeout(playTimer); navi.onWhisperClosed = null; navi.hideWhisper(false); update({ naviTour: { seen: TOUR.map(t => t.id), done: true } }); }   // the guide replaces the tour
+      if (g && !g.done && !was) navi.say(GUIDED_SAY.start, { kind: "important", ms: 6000 });
+      else if (g && !g.done && was && was.step === 0 && g.step === 1) navi.say(GUIDED_SAY.find, { kind: "important", ms: 6000 });
+      else if (g && g.done && !(was && was.done)) navi.say(GUIDED_SAY.done, { kind: "important", ms: 7000 });
+    }
     if ("objectId" in patch && patch.objectId && byUser()) {
       setTimeout(() => { const name = /** @type {HTMLSelectElement|null} */ (document.querySelector("#target-select"))?.selectedOptions[0]?.textContent; react("object", { name: name ?? "that one" }); }, 900);
     }
@@ -214,19 +237,27 @@ export function attachBrain(navi) {
     if ("notes" in patch && (patch.notes?.length ?? 0) > 0) react("note");
   });
 
+  const timelineStepOpen = () => tourActive() && currentStep === "timeline" && !tourState()?.seen.includes("timeline");
+  function finishTimelineStep() { if (timelineStepOpen()) navi.hideWhisper(true); }       // the closing callback moves the tour on
+
   on(e => {
     switch (e.type) {
       case "focus_mode": if (e.on) navi.hideWhisper(); break;
-      case "play": playing = true; if (tourActive() && !tourState()?.seen.includes("timeline")) { navi.hideWhisper(true); } else react("play"); break;
-      case "pause": playing = false; react("pause"); break;
-      case "stop": playing = false; react("stop"); break;
+      case "play":
+        playing = true;
+        // The timeline step asks them to play and watch, so it ends after a few seconds of playback (or when they pause), not on the click.
+        if (tourActive() && currentStep === "timeline" && !tourState()?.seen.includes("timeline")) { clearTimeout(playTimer); playTimer = window.setTimeout(finishTimelineStep, 6000); }
+        else react("play");
+        break;
+      case "pause": playing = false; if (timelineStepOpen()) { clearTimeout(playTimer); playTimer = window.setTimeout(finishTimelineStep, 900); } else react("pause"); break;
+      case "stop": playing = false; if (timelineStepOpen()) { clearTimeout(playTimer); playTimer = window.setTimeout(finishTimelineStep, 900); } else react("stop"); break;
       case "save": react("save"); break;
       case "image_missing": react("missing"); break;
       case "image_processing": react("processing"); break;
       case "not_comparable": react("notComparable"); break;     // the verdict is already on screen; muting silences her
       case "gap_band": react("gap"); break;
-      case "guided_wrong": react("guidedWrong"); break;
-      case "guided_right": navi.say(line("guidedRight"), { kind: "important" }); break;
+      case "guided_wrong": navi.say(line("guidedWrong"), { kind: "important", ms: 5000 }); break;
+      case "guided_right": navi.say(line("guidedRight"), { kind: "important", ms: 5000 }); break;
     }
   });
 

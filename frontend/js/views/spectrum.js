@@ -57,7 +57,6 @@ export function mount(root) {
         await new Promise(r => setTimeout(r, (s.availability.retryAfterSeconds ?? 2) * 1000));
         s = await api.getSpectrum(objectId);
       }
-      observations = (await api.listObservations(objectId)).items;
       if (!alive) return;
       spec = s;
     } catch (e) { $("#sp-empty").innerHTML = `<p class="notice notice-error">${esc(errMsg(e))}</p>`; return; }
@@ -96,12 +95,11 @@ export function mount(root) {
     const t = ++token;
     renderInfo(p);
     if (!p.available) { viewer.setState({ kind: "unavailable", message: p.unavailableReason ?? "No data for this band." }); viewer.setHud(""); return; }
-    const obs = observations.find(o => o.observationId === p.observationId);
     viewer.setHud(`<span class="badge">Band ${p.bandIndex} · ${esc(p.wavelengthUm.toFixed(2))} <span class="unit">µm</span></span><span class="badge">${esc(shortDate(p.observedAt))}</span>${isMock() ? `<span class="badge badge-illustrative">illustrative · false colour</span>` : ""}`);
-    if (!obs) { viewer.setState({ kind: "unavailable", message: "The observation behind this band is not listed." }); return; }
+    if (!p.observationId) { viewer.setState({ kind: "unavailable", message: "No observation is recorded for this band." }); return; }
     viewer.setState({ kind: "loading", message: "Loading image…" });
     try {
-      const f = await loadFrame(obs.observationId);
+      const f = await loadFrame(p.observationId);
       if (!alive || t !== token) return;
       if (f.availability.status === "available" && f.imageUrl && f.width && f.height) await viewer.setImage({ url: f.imageUrl, width: f.width, height: f.height });
       else viewer.setState({ kind: f.availability.status === "failed" ? "failed" : "unavailable", message: f.availability.statusReason ?? "Image not available." });
