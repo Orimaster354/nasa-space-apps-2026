@@ -1,5 +1,6 @@
 """FastAPI app factory. Contract: docs/FRONTEND_BACKEND_CONTRACT.md (v0.1.0)."""
 import logging
+import threading
 import time
 import uuid
 
@@ -55,6 +56,8 @@ def create_app(services: Services | None = None, companion: Companion | None = N
     app = FastAPI(title="SPHEREx backend", version=CONTRACT_VERSION)
     app.state.services = services or build_default_services()
     app.state.companion = companion or build_default_companion(app.state.services)
+    if settings.prewarm_spectra:
+        threading.Thread(target=app.state.services.prewarm_spectra, name="prewarm-spectra", daemon=True).start()
     app.mount("/media/images", StaticFiles(directory=app.state.services.images_dir), name="images")
 
     app.add_middleware(

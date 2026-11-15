@@ -320,3 +320,26 @@ def test_the_reasons_frames_were_skipped_are_counted_once_each_and_add_up(env, t
     total = int(re.search(r"; (\d+) were not processed", text).group(1))
     assert sum(counts) == total and all(x >= 0 for x in counts) and "-" not in re.sub(r"\d{4}-\d{2}-\d{2}", "", text.split("not processed")[1])
     assert "time budget" in text and "did not respond" not in text                                    # only the budget reason applies here
+
+
+def test_prewarming_builds_every_target_in_turn_and_never_raises(env):
+    c, *_ = env
+    svc = c.app.state.services
+    calls = []
+
+    def fake(object_id, **kw):
+        calls.append(object_id)
+        if len(calls) == 2:
+            raise RuntimeError("the archive fell over")
+        return {"availability": {"status": "available"}}
+
+    svc.get_spectrum = fake
+    assert svc.prewarm_spectra() == 4                                                                  # five targets, one failed, the rest still built
+    assert len(calls) == 5 and len(set(calls)) == 5
+    assert svc.prewarm_spectra(["Epsilon Indi B"]) == 1 and len(calls) == 6
+
+
+def test_the_prewarm_is_off_unless_asked_for():
+    from app.config import Settings
+    assert Settings(_env_file=None).prewarm_spectra is False
+    assert Settings(_env_file=None, prewarm_spectra=True).prewarm_spectra is True

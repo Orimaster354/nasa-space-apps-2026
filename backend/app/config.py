@@ -10,6 +10,8 @@ class Settings(BaseSettings):
     # Origins allowed to call the API from a browser (comma separated).
     cors_origins: str = "http://localhost:8000,http://127.0.0.1:8000"
     log_level: str = "INFO"
+    # Build the five demo targets' spectra in the background at start-up so the Spectrum page is ready for the first visitor (uses the archive).
+    prewarm_spectra: bool = False
     data_dir: str = "data"
     # If set, this folder (the frontend) is served at "/" so the app runs from one origin (no CORS, one URL for judges).
     frontend_dir: str = ""
