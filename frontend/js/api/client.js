@@ -14,6 +14,26 @@ import { ApiClientError } from "./types.js";
 import * as mock from "./mock/mockApi.js";
 
 /**
+ * A random anonymous visitor ID, kept in this browser, sent as X-Client-Id so the server can keep a visitor's saved investigations and AI
+ * allowance together even when their network address changes (it is NOT a login and carries no personal data). If storage is blocked a
+ * per-page ID is used instead.
+ */
+let pageClientId = "";
+function clientId() {
+  try {
+    let id = window.localStorage.getItem("spherex.clientId");
+    if (!id) {
+      id = (window.crypto?.randomUUID?.() ?? `${Date.now().toString(36)}${Math.random().toString(36).slice(2)}`).replace(/[^A-Za-z0-9_-]/g, "").slice(0, 60);
+      window.localStorage.setItem("spherex.clientId", id);
+    }
+    return id;
+  } catch {
+    pageClientId ||= `${Date.now().toString(36)}${Math.random().toString(36).slice(2)}`.slice(0, 60);
+    return pageClientId;
+  }
+}
+
+/**
  * Real HTTP call. Converts every failure into ApiClientError:
  *  - no response at all  -> network: true (contract §6: separate case)
  *  - non-2xx             -> the backend's ApiError envelope (message is user-safe)
@@ -26,7 +46,8 @@ async function http(path, opts = {}) {
   let res;
   try {
     res = await fetch(url, { method: opts.method ?? "GET",
-      ...(opts.body !== undefined ? { headers: { "Content-Type": "application/json" }, body: JSON.stringify(opts.body) } : {}) });
+      headers: { "X-Client-Id": clientId(), ...(opts.body !== undefined ? { "Content-Type": "application/json" } : {}) },
+      ...(opts.body !== undefined ? { body: JSON.stringify(opts.body) } : {}) });
   } catch { throw new ApiClientError("Can't reach the server. Check your connection and try again.", { network: true, retryable: true }); }
   if (!res.ok) {
     /** @type {import("./types.js").ApiErrorBody|null} */

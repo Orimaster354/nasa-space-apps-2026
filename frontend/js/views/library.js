@@ -35,7 +35,8 @@ function card(t) {
   return `<article class="panel lib-card" data-id="${esc(t.objectId)}">
     <h2>${esc(t.name)}</h2>
     <p class="fine muted">${t.objectType ? esc(t.objectType) + " · " : ""}RA ${num(t.coordinates.raDeg, 3)}°, Dec ${num(t.coordinates.decDeg, 3)}°${pm}</p>
-    <p><strong>${t.storedFrames}</strong> stored frames <span class="muted">of ${t.observationsListed} listed</span> ${bands}</p>
+    <p><strong>${t.defaultBandStored}</strong> of ${t.defaultBandListed} timeline pictures stored <span class="muted">(${esc((t.defaultBand || "").replace("SPHEREx-", ""))} band)</span></p>
+    <p class="fine muted">${t.storedFrames} pictures stored in all (${bands}). The archive lists ${t.observationsListed} observations of this target across all six detectors.</p>
     <p class="fine">${spectrumLine(t)}</p>
     <p class="fine">${candidateLine(t)}</p>
     <div class="lib-actions">
