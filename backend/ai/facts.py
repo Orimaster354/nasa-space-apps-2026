@@ -231,6 +231,20 @@ def build(services: Services, ctx: dict | None) -> EvidencePack:
         add("Candidate details are not available from the backend yet, so nothing about this candidate can be stated.",
             plain="Candidate details are not available yet, so I can't say anything about that candidate.")
     if ctx.get("spectrumId"):
-        add("Spectrum data is not available from the backend yet, so nothing about this spectrum can be stated.",
-            plain="Spectrum data is not available yet, so I can't say anything about that spectrum.")
+        try:
+            sp = services.get_stored_spectrum(ctx["spectrumId"])
+        except NotFound:
+            pack.missing.append("the selected spectrum")
+        else:
+            ok = [p for p in sp["points"] if p.get("available")]
+            lo, hi = min(p["wavelengthUm"] for p in ok), max(p["wavelengthUm"] for p in ok)
+            top, bottom = max(ok, key=lambda p: p["flux"]), min(ok, key=lambda p: p["flux"])
+            nums = [len(ok), lo, hi, top["wavelengthUm"], top["flux"], bottom["wavelengthUm"], bottom["flux"]]
+            text = (f"Spectrum: {len(ok)} bands have a measurement, between {lo:.2f} and {hi:.2f} micrometres, in {sp['fluxUnit']} "
+                    f"(aperture radius {sp.get('apertureRadiusArcsec', 'unknown')} arcsec). Brightest at {top['wavelengthUm']:.2f} micrometres "
+                    f"({_g(top['flux'])} {sp['fluxUnit']}); faintest at {bottom['wavelengthUm']:.2f} micrometres ({_g(bottom['flux'])} {sp['fluxUnit']}). "
+                    f"Method: {sp['extractionMethod']}.")
+            plain = (f"The spectrum has {len(ok)} measured bands from {lo:.2f} to {hi:.2f} micrometres. It is brightest near {top['wavelengthUm']:.2f} "
+                     f"micrometres and faintest near {bottom['wavelengthUm']:.2f} micrometres.")
+            add(text, "spectrum", sp["spectrumId"], nums, list(sp.get("warnings", [])), plain)
     return pack

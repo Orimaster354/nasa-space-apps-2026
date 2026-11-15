@@ -110,7 +110,7 @@ Priorities: **P0** essential for a functioning submission · **P1** important di
 
 - [ ] **P1-19 Co-add (stack) images per detector/bandpass (challenge "extra" item).**
   Dep: P0-17, OD-16. Done: contract addition agreed; stacking of same-bandpass aligned frames improves measured noise on a synthetic test, and the result is labelled as a derived stack with its input observation IDs.
-- [ ] **P1-20 Per-position spectrum on the fly.**
+- [x] **P1-20 Per-position spectrum on the fly.** *(Done: optional `ra`, `dec`, `apertureRadiusArcsec` (3 to 60); curated targets follow their proper motion per frame; the first answer waits up to 25 s, then HTTP 202 processing and the same GET returns the result (archive budget 25 s, 4 download workers, stored frames first, one probe download then give up if the archive is down); a complete spectrum is stored for good, an incomplete one for 10 minutes.)*
   Dep: P1-13. Done: `GET /objects/{id}/spectrum` accepts `ra`/`dec` and returns a spectrum for that position within a documented time budget.
 - [x] **P1-21 Release-agnostic data discovery.**
   Dep: P0-13. Done: collections/releases are configuration (not hard-coded); a new release name added to config is searchable without code changes.
@@ -138,7 +138,7 @@ Priorities: **P0** essential for a functioning submission · **P1** important di
   Dep: P1-07, P0-28. Done: companion can answer “why is this a candidate?” citing candidate evidence IDs; never uses “confirmed”/“discovered” (test with forbidden-phrase checks).
 - [ ] **P1-12 Investigation summary generation.**
   Dep: P0-33, P0-31. Done: summary built from stored notes/measurements, grounded via the numeric check.
-- [ ] **P1-13 One real spectrum.**
+- [x] **P1-13 One real spectrum.** *(Done: `GET /objects/{id}/spectrum` returns SpectralData built from many observations: aperture photometry per frame at the wavelength at the object's pixel, one point per band (best signal-to-noise, not an average), gaps with reasons, 102 expected bands, units stated, warnings for dates, estimated band numbers, coverage and the approximate flux scale. Verified on real data (Epsilon Indi B shows the two-peaked T-dwarf shape; Barnard's Star and R Draconis are refused because they saturate) and in the real Spectrum page.)*
   Dep: P0-16, D-5, A10. Done: `GET /objects/{id}/spectrum` returns `SpectralData` for one target from the chosen source; gaps are `available: false`; units stated; bands count honestly reported vs `expectedBandCount`.
 - [ ] **P1-14 Selected band/wavelength in AI context.**
   Dep: P1-13, P0-29. Done: `ChatContext` selection reaches tools; test shows a band-specific question uses that band's data.

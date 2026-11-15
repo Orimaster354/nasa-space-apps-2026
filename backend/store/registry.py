@@ -22,6 +22,7 @@ class Registry:
             c.execute("CREATE TABLE IF NOT EXISTS comparisons (id TEXT PRIMARY KEY, body TEXT NOT NULL)")
             c.execute("CREATE TABLE IF NOT EXISTS measurements (id TEXT PRIMARY KEY, body TEXT NOT NULL)")
             c.execute("CREATE TABLE IF NOT EXISTS discoveries (id TEXT PRIMARY KEY, body TEXT NOT NULL)")
+            c.execute("CREATE TABLE IF NOT EXISTS spectra (id TEXT PRIMARY KEY, body TEXT NOT NULL)")
             c.execute("CREATE TABLE IF NOT EXISTS investigations (id TEXT PRIMARY KEY, owner TEXT NOT NULL, updated TEXT NOT NULL, body TEXT NOT NULL)")
             c.execute("CREATE INDEX IF NOT EXISTS investigations_owner ON investigations (owner, updated)")
 
@@ -61,6 +62,30 @@ class Registry:
 
     def get_measurement(self, measurement_id: str) -> dict | None:
         return self._get("measurements", measurement_id)
+
+    def put_observations(self, items: list[tuple[str, dict]]) -> None:
+        """Store many observation records in ONE transaction (listing a target with thousands of files must not open a connection per file)."""
+        if not items:
+            return
+        with self._lock, self._conn() as c:
+            c.executemany("INSERT INTO observations (id, body) VALUES (?, ?) ON CONFLICT(id) DO UPDATE SET body = excluded.body",
+                          [(k, json.dumps(v)) for k, v in items])
+
+    def get_observations(self, ids: list[str]) -> dict[str, dict]:
+        """Read many observation records with a few queries (SQLite limits the number of parameters, so in chunks)."""
+        out: dict[str, dict] = {}
+        with self._conn() as c:
+            for i in range(0, len(ids), 500):
+                chunk = ids[i:i + 500]
+                rows = c.execute(f"SELECT id, body FROM observations WHERE id IN ({','.join('?' * len(chunk))})", chunk).fetchall()
+                out.update({r[0]: json.loads(r[1]) for r in rows})
+        return out
+
+    def put_spectrum(self, spectrum_id: str, body: dict) -> None:
+        self._put("spectra", spectrum_id, body)
+
+    def get_spectrum(self, spectrum_id: str) -> dict | None:
+        return self._get("spectra", spectrum_id)
 
     def put_discovery(self, key: str, body: dict) -> None:
         self._put("discoveries", key, body)

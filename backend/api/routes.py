@@ -12,7 +12,7 @@ from services.investigations import TooMany
 
 from processing.imaging import DEFAULT_FOV_ARCMIN
 
-from .schemas import (AIResponse, Investigation, InvestigationInput, InvestigationSummary, AstronomicalObject, ComparisonResult, CreateComparisonRequest, CreateMeasurementRequest, Measurement,
+from .schemas import (AIResponse, SpectralData, Investigation, InvestigationInput, InvestigationSummary, AstronomicalObject, ComparisonResult, CreateComparisonRequest, CreateMeasurementRequest, Measurement,
                       Observation, ObservationImage, Page, PixelToSky, SendChatMessageRequest)
 
 router = APIRouter()
@@ -65,6 +65,15 @@ def list_observations(
     return svc(request).list_observations(
         object_id, date_from=from_, date_to=to, data_release=dataRelease, bandpass=bandpass, min_wl=minWavelengthUm, max_wl=maxWavelengthUm,
         limit=limit, offset=offset, sort=sort)
+
+
+@router.get("/objects/{object_id}/spectrum", response_model=SpectralData, **_EXCLUDE)
+def get_spectrum(request: Request, object_id: str, ra: float | None = None, dec: float | None = None,
+                 apertureRadiusArcsec: float = Query(12.0, ge=3.0, le=60.0), response: Response = None):
+    result = svc(request).get_spectrum(object_id, ra=ra, dec=dec, radius=apertureRadiusArcsec)
+    if result["availability"]["status"] == "processing":
+        response.status_code = 202                    # contract: 202 + processing, the client polls the same GET
+    return result
 
 
 @router.get("/objects/{object_id}/candidates", response_model=Page, **_EXCLUDE)

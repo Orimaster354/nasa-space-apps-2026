@@ -40,7 +40,10 @@ class FakeCutouts:
                                            flag_value=(1 << 21))
                       for i, (u, s) in enumerate(URIS.items())}
 
-    def get(self, url):
+    def is_cached(self, url):
+        return any(uri in url for uri in self.files)
+
+    def get(self, url, **kw):
         self.calls += 1
         if self.gate is not None:
             self.gate.wait(timeout=15)
@@ -427,3 +430,16 @@ def test_a_truncated_listing_says_how_much_of_it_is_shown(env):
     beyond = c.get(f"/api/v1/objects/{oid}/observations", params={"offset": 10}).json()
     assert beyond["items"] == [] and "coverageNote" not in beyond                # nothing shown, nothing to describe
     assert c.get(f"/api/v1/objects/{oid}/observations", params={"limit": 201}).status_code == 400   # the cap is 200
+
+
+def test_bulk_registry_calls_match_the_single_ones(tmp_path):
+    from store.registry import Registry
+    r = Registry(tmp_path / "r.sqlite")
+    items = [(f"obs_{i}", {"n": i}) for i in range(1200)]                                              # more than one 500-id read chunk
+    r.put_observations(items)
+    r.put_observations([])                                                                                # an empty write is fine
+    got = r.get_observations([k for k, _ in items] + ["obs_missing"])
+    assert len(got) == 1200 and got["obs_777"] == {"n": 777} and "obs_missing" not in got
+    assert r.get_observation("obs_5") == {"n": 5}
+    r.put_observations([("obs_5", {"n": "changed"})])
+    assert r.get_observation("obs_5") == {"n": "changed"} and r.get_observations([]) == {}

@@ -131,10 +131,15 @@ def test_op08_and_op09_comparisons(env):
     assert _ok(c.get(f"/api/v1/comparisons/{created['comparisonId']}")) == created
 
 
-def test_op10_spectrum_is_not_implemented_yet(env):
-    c, *_ = env
+def test_op10_spectrum(env, tmp_path):
+    from tests.test_spectrum import _waves
+    c, cut, _ = env
+    _waves(cut, tmp_path)
     oid = _object(c)["objectId"]
-    assert c.get(f"/api/v1/objects/{oid}/spectrum").status_code in (404, 405)       # documented gap: the model exists, the endpoint does not
+    body = _ok(c.get(f"/api/v1/objects/{oid}/spectrum"))
+    m = schemas.SpectralData.model_validate(body)
+    assert m.availability.status == "available" and sum(p.available for p in m.points) == 3
+    _no_nulls(body)
 
 
 def test_op11_measurement(env):
