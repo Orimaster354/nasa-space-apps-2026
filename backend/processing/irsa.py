@@ -16,6 +16,7 @@ import hashlib
 import io
 import logging
 import math
+import os
 import re
 import threading
 import time
@@ -131,7 +132,9 @@ def sia_url(collection: str, ra: float, dec: float, radius_deg: float = SEARCH_R
 
 
 SIA_ATTEMPTS = 2
-SIA_TIMEOUT_S = 20.0
+# On 2026-11-15, after DR1 came out, IRSA's search answered correctly but took about 22 s, which a 20 s limit counted as a failure. The limit is now
+# 45 s (override with SPX_SIA_TIMEOUT_S). A timeout is NOT retried (a second wait of the same length would only double the cost); a quick 502 still is.
+SIA_TIMEOUT_S = float(os.environ.get("SPX_SIA_TIMEOUT_S", "45"))
 SIA_BACKOFF_S = 1.0
 
 
@@ -146,6 +149,10 @@ def _default_fetch(collection: str, ra: float, dec: float):
             time.sleep(SIA_BACKOFF_S * attempt)
         try:
             r = httpx.get(url, timeout=SIA_TIMEOUT_S, follow_redirects=True)
+        except httpx.TimeoutException as exc:
+            last, r = IrsaError(f"The SPHEREx archive did not answer within {SIA_TIMEOUT_S:g} s."), None
+            last.__cause__ = exc
+            break                                           # waiting again as long would only double the cost
         except httpx.HTTPError as exc:
             last, r = IrsaError("The SPHEREx archive could not be reached."), None
             last.__cause__ = exc

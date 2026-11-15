@@ -25,8 +25,8 @@ TRIAL_TIMEOUT_S = 30.0          # a trial that never reports back must not block
 PROBE_URL = ("https://irsa.ipac.caltech.edu/SIA?COLLECTION=spherex_dr1&POS=circle+162.0+-53.0+0.001&RESPONSEFORMAT=votable")
 
 
-def default_probe(timeout_s: float = 6.0) -> bool:
-    """True when the archive's search service answers properly (any answer below 500 that is not 'too many requests')."""
+def default_probe(timeout_s: float = 40.0) -> bool:      # the probe runs in the background, so it can be as patient as the real search
+    """True when the archive's search service answers properly (any answer below 500 that is not 'too many requests'), however slowly."""
     try:
         r = httpx.get(PROBE_URL, timeout=timeout_s, follow_redirects=True)
     except httpx.HTTPError:

@@ -237,7 +237,7 @@ def test_default_fetch_retries_a_transient_502_then_succeeds(monkeypatch):
     monkeypatch.setattr(irsa.httpx, "get", fake_get)
     t = irsa._default_fetch("spherex_dr1", 10.0, 10.0)
     assert len(calls) == irsa.SIA_ATTEMPTS == 2 and sleeps == [irsa.SIA_BACKOFF_S] and float(t["t_min"][0]) == 60800.7
-    assert calls == [irsa.SIA_TIMEOUT_S] * 2 and irsa.SIA_TIMEOUT_S <= 20            # a hanging archive costs at most about 40 s, not minutes
+    assert calls == [irsa.SIA_TIMEOUT_S] * 2 and irsa.SIA_TIMEOUT_S <= 60            # a quick 502 is retried once; a hanging archive costs one timeout, not minutes
 
 
 def test_default_fetch_does_not_retry_a_client_error(monkeypatch):
@@ -264,3 +264,27 @@ def test_a_single_call_can_use_fewer_retries_and_a_shorter_timeout(tmp_path):
     with pytest.raises(irsa.IrsaError):
         cache.get("https://irsa.ipac.caltech.edu/y.fits?center=1,2d&size=0.1", retries=1, timeout_s=15.0)
     assert len(seen) == 2 and all(t["read"] == 15.0 for t in seen)                                   # this call: one retry, 15 s
+
+
+def test_a_timeout_is_not_retried_and_the_limit_allows_a_slow_but_working_archive(monkeypatch):
+    calls = []
+    monkeypatch.setattr(irsa.time, "sleep", lambda s: None)
+
+    def slow(url, **kw):
+        calls.append(kw["timeout"])
+        raise httpx.ReadTimeout("slow")
+
+    monkeypatch.setattr(irsa.httpx, "get", slow)
+    with pytest.raises(irsa.IrsaError) as e:
+        irsa._default_fetch("spherex_dr1", 10.0, 10.0)
+    assert len(calls) == 1 and "did not answer within" in str(e.value) and e.value.retryable is True
+    assert irsa.SIA_TIMEOUT_S >= 40                                                    # IRSA answered in about 22 s on 2026-11-15: that must count as success
+
+
+def test_the_limit_can_be_set_from_the_environment():
+    import os
+    import subprocess
+    import sys
+    out = subprocess.run([sys.executable, "-c", "from processing import irsa; print(irsa.SIA_TIMEOUT_S)"], capture_output=True, text=True,
+                         env={**os.environ, "PYTHONPATH": os.getcwd(), "SPX_SIA_TIMEOUT_S": "90"}, cwd=os.getcwd())
+    assert out.stdout.strip() == "90.0", out.stderr
