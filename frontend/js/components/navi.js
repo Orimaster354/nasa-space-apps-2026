@@ -702,7 +702,9 @@ export function mountNavi(opts = {}) {
     const s = getState(), r = route();
     const activeView = comparing() ? "comparison" : r === "/investigate" ? "viewer" : r === "/spectrum" ? "spectrum" : "workspace";
     const observationIds = comparing() ? [s.compareBaseId, s.compareTargetId].filter(Boolean) : s.observationId ? [s.observationId] : [];
-    return { activeView, ...(s.objectId ? { objectId: s.objectId } : {}), observationIds, ...(s.candidateId ? { candidateId: s.candidateId } : {}) };
+    // On the Spectrum page the selected band goes along, so "this band" questions are answered from that band's measurement.
+    return { activeView, ...(s.objectId ? { objectId: s.objectId } : {}), observationIds, ...(s.candidateId ? { candidateId: s.candidateId } : {}),
+             ...(r === "/spectrum" && s.bandIndex ? { bandIndex: s.bandIndex } : {}) };
   }
 
   /** @param {string} text @param {boolean} [isRetry] */

@@ -16,6 +16,7 @@ import * as investigate from "./views/investigate.js";
 import * as spectrum from "./views/spectrum.js";
 import * as notes from "./views/notes.js";
 import * as learn from "./views/learn.js";
+import * as library from "./views/library.js";
 
 const viewEl = /** @type {HTMLElement} */ (document.getElementById("view"));
 const toolbarEl = /** @type {HTMLElement} */ (document.getElementById("toolbar"));
@@ -27,6 +28,7 @@ const VIEWS = {
   "/investigate": { mount: investigate.mount, title: "Investigate the sky" },
   "/spectrum": { mount: spectrum.mount, title: "Spectral explorer" },
   "/notes": { mount: notes.mount, title: "Investigation notes" },
+  "/library": { mount: library.mount, title: "Library of stored targets" },
   "/learn": { mount: learn.mount, title: "Learn" },
 };
 

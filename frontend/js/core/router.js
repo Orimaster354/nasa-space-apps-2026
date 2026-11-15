@@ -7,13 +7,14 @@
 
 import { fromQuery, toQuery, getState, update } from "./store.js";
 
-/** @typedef {{ path: string, title: string, group: "investigate"|"learn" }} Route */
+/** @typedef {{ path: string, title: string, group: "investigate"|"learn"|"library" }} Route */
 
 /** @type {Route[]} */
 export const ROUTES = [
   { path: "/investigate", title: "Investigate", group: "investigate" },
   { path: "/spectrum",    title: "Spectrum",    group: "investigate" },
   { path: "/notes",       title: "Notes",       group: "investigate" },
+  { path: "/library",     title: "Library",     group: "library" },
   { path: "/learn",       title: "Learn",       group: "learn" },
 ];
 

@@ -87,6 +87,10 @@ const real = /** @type {any} */ ({
   // Frontend-only operation (not in the contract). The backend builds the definition from a real candidate; if none exists it answers 404 and the card says so.
   getGuidedInvestigation: (/** @type {string} */ id) => http(`/guided/${enc(id)}`),
   getChatSuggestions: () => Promise.resolve([]),
+  // Frontend-only operations (not in the contract): what is stored on the server, the required credits, and a derived stack of stored frames.
+  getLibrary: () => http("/library"),
+  getCredits: () => http("/credits"),
+  getCoadd: (/** @type {string} */ id, opts = {}) => http(`/objects/${enc(id)}/coadd`, { params: opts }),
 });
 
 /** True while illustrative mock data is in use; views show the "illustrative" badge. */
