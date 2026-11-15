@@ -84,7 +84,8 @@ const real = /** @type {any} */ ({
     return { ...(o.objectType ? { classification: o.objectType } : {}), ...(o.properMotion ? { properMotion: o.properMotion } : {}) };
   },
   // FRONTEND-ONLY (not in the contract): guided content and chat suggestions are scripted in the frontend.
-  getGuidedInvestigation: notYet("Guided investigations"),
+  // Frontend-only operation (not in the contract). The backend builds the definition from a real candidate; if none exists it answers 404 and the card says so.
+  getGuidedInvestigation: (/** @type {string} */ id) => http(`/guided/${enc(id)}`),
   getChatSuggestions: () => Promise.resolve([]),
 });
 
