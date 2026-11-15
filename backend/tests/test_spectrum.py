@@ -343,3 +343,18 @@ def test_the_prewarm_is_off_unless_asked_for():
     from app.config import Settings
     assert Settings(_env_file=None).prewarm_spectra is False
     assert Settings(_env_file=None, prewarm_spectra=True).prewarm_spectra is True
+
+
+def test_a_refusal_that_is_not_archive_trouble_is_stored_and_served_without_rebuilding(env, tmp_path):
+    """A saturated star cannot be measured. That answer is kept, so the page does not re-derive it on every visit."""
+    c, cut, _ = env
+    _waves(cut, tmp_path, flags=(1 << 6, 1 << 6, 1 << 6))                    # every pixel flagged unusable: nothing can be measured
+    oid = _object(c)["objectId"]
+    first = _spec(c, oid).json()
+    assert first["availability"]["status"] == "unavailable"
+    svc = c.app.state.services
+    sid = first["spectrumId"]
+    assert svc.registry.get_spectrum(sid)["result"]["availability"]["status"] == "unavailable"            # stored
+    calls = cut.calls
+    again = _spec(c, oid).json()
+    assert again["availability"]["status"] == "unavailable" and cut.calls == calls                          # served from the store: no cutout was read again

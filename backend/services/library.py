@@ -3,7 +3,8 @@
 Frontend-only operation (not in the contract). Everything here is read from what is actually stored (registry rows and files on disk),
 never from a hard-coded list, so a bigger bundle or a target someone searched for shows up by itself.
 
-"Stored frames" means observations whose picture is already rendered on this server: they open instantly and offline.
+"Stored frames" means observations whose picture is already rendered on this server: they open instantly and offline. A target is listed only
+when its observation list is saved too; without that it could not be opened while the archive is down.
 """
 from __future__ import annotations
 
@@ -75,6 +76,9 @@ def _compute(svc) -> dict:
         o = objects.get(obj_id)
         if o is None or p["stored"] == 0:
             continue
+        c0 = o["coordinates"]
+        if svc.registry.get_discovery(f"{round(c0['raDeg'], 4):.4f},{round(c0['decDeg'], 4):.4f}") is None:
+            continue                                     # pictures but no saved observation list: it would not open offline, so it is not listed
         sp = svc.registry.get_spectrum(spectrum_mod.spectrum_id(obj_id, None, None, spectrum_mod.DEFAULT_RADIUS_ARCSEC))
         spectrum = None
         if sp:

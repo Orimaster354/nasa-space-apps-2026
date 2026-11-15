@@ -72,3 +72,14 @@ def test_the_library_is_cached_briefly_and_fresh_bypasses_the_cache(env):
         c.get(f"/api/v1/observations/{o['observationId']}/image", params={"fovArcmin": 2})
     assert c.get("/api/v1/library").json() == a                                      # still the cached answer
     assert c.get("/api/v1/library", params={"fresh": True}).json()["totals"]["storedFrames"] == 3
+
+
+def test_a_target_without_a_saved_observation_list_is_not_listed_as_working_offline(env):
+    c, *_ = env
+    oid = _object(c)["objectId"]
+    for o in c.get(f"/api/v1/objects/{oid}/observations").json()["items"]:
+        c.get(f"/api/v1/observations/{o['observationId']}/image", params={"fovArcmin": 2})
+    assert c.get("/api/v1/library", params={"fresh": True}).json()["totals"]["targets"] == 1
+    with c.app.state.services.registry._conn() as conn:
+        conn.execute("DELETE FROM discoveries")                                      # pictures remain, the saved list is gone
+    assert c.get("/api/v1/library", params={"fresh": True}).json()["totals"]["targets"] == 0

@@ -483,8 +483,14 @@ class Services:
             raise NotFound("Unknown object.")
         sid = spectrum.spectrum_id(object_id, ra, dec, radius)
         stored = self.registry.get_spectrum(sid)
-        if stored and (not stored.get("partial") or self._age_s(stored.get("savedAt")) < self.spectrum_partial_ttl_s):
-            return stored["result"]
+        if stored:
+            res_status = stored["result"]["availability"]["status"]
+            if res_status == "available":
+                fresh = not stored.get("partial") or self._age_s(stored.get("savedAt")) < self.spectrum_partial_ttl_s
+            else:
+                fresh = not stored.get("partial") and self._age_s(stored.get("savedAt")) < 30 * 86400.0
+            if fresh:
+                return stored["result"]
         created = False
         with self._lock:
             fut = self._spectrum_jobs.get(sid)
@@ -504,9 +510,10 @@ class Services:
 
     def _build_spectrum(self, obj: dict, ra, dec, radius: float, sid: str) -> dict:
         result, partial = spectrum.build(self, obj, ra, dec, radius, sid, now_iso)
-        if result["availability"]["status"] == "available":
+        if result["availability"]["status"] == "available" or not partial:
             # A complete spectrum is kept for good. One that is missing frames because the archive was slow or down is only kept briefly,
-            # so the next visit tries again instead of showing an old gap for ever.
+            # so the next visit tries again instead of showing an old gap for ever. A REFUSAL that is not caused by archive trouble (a saturated
+            # star cannot be measured) is an answer too: it is kept (for 30 days) so the page does not re-derive it on every visit.
             self.registry.put_spectrum(sid, {"result": result, "partial": partial, "savedAt": now_iso()})
         return result
 
