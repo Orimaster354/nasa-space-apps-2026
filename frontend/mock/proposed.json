@@ -1,0 +1,172 @@
+{
+  "_note": "ILLUSTRATIVE mock content for capabilities NOT yet in the shared contract (see docs/proposals/CONTRACT_PROPOSAL_0.2.0.md). Candidates are sample records, never discoveries. Motion is exaggerated for the demo.",
+
+  "imageSize": { "width": 1000, "height": 600 },
+
+  "catalogue": {
+    "mock-obj-barnard":  { "classification": "M dwarf (red dwarf)", "properMotion": { "value": 10.31, "unit": "arcsec/yr", "provenanceKind": "catalog", "source": "Catalogue value, quoted for illustration" } },
+    "mock-obj-wise0855": { "classification": "Y dwarf (brown dwarf)", "properMotion": { "value": 8.1, "unit": "arcsec/yr", "provenanceKind": "catalog", "source": "Catalogue value, quoted for illustration" } },
+    "mock-obj-rwaur":    { "classification": "T Tauri star (young, variable)" },
+    "mock-obj-rdra":     { "classification": "Mira variable (red giant)" },
+    "mock-obj-epsindib": { "classification": "T dwarf (brown dwarf)", "properMotion": { "value": 4.7, "unit": "arcsec/yr", "provenanceKind": "catalog", "source": "Catalogue value, quoted for illustration" } }
+  },
+
+  "candidates": {
+    "mock-obj-barnard": [
+      { "candidateId": "mock-cand-barnard-1", "label": "SX-0017", "kind": "positional_change", "score": 0.81,
+        "scoreBasis": "Illustrative: size of apparent shift relative to alignment residual (sample value).",
+        "description": "Bright source that drifts across the field between dates.",
+        "startPx": { "x": 220, "y": 430 }, "velPx": { "x": 24, "y": -6 }, "brightnessAmp": 0,
+        "evidence": ["Position differs in every observation.", "Shift is larger than the sample alignment residual.", "Moves in a consistent direction."],
+        "warnings": ["One observation has an edge-of-detector quality flag.", "Illustrative: motion exaggerated."] },
+      { "candidateId": "mock-cand-barnard-2", "label": "SX-0032", "kind": "brightness_change", "score": 0.67,
+        "scoreBasis": "Illustrative: brightness change relative to its sample uncertainty.",
+        "description": "Stays in place but its brightness rises and falls.",
+        "startPx": { "x": 690, "y": 150 }, "velPx": { "x": 0, "y": 0 }, "brightnessAmp": 0.6,
+        "evidence": ["Position is stable.", "Brightness varies between dates."],
+        "warnings": ["Different data release on the last date; brightness may not be directly comparable."] },
+      { "candidateId": "mock-cand-barnard-3", "label": "SX-0089", "kind": "brightness_change", "score": 0.58,
+        "scoreBasis": "Illustrative: brightness change relative to its sample uncertainty.",
+        "description": "Faint source with a small brightness change.",
+        "startPx": { "x": 820, "y": 470 }, "velPx": { "x": 0, "y": 0 }, "brightnessAmp": 0.35,
+        "evidence": ["Small brightness change near the noise level."],
+        "warnings": ["Change is close to the sample uncertainty."] }
+    ],
+    "mock-obj-wise0855": [
+      { "candidateId": "mock-cand-wise0855-1", "label": "SX-0104", "kind": "positional_change", "score": 0.74,
+        "scoreBasis": "Illustrative: apparent shift relative to alignment residual (sample value).",
+        "description": "Faint source drifting to the right.",
+        "startPx": { "x": 430, "y": 300 }, "velPx": { "x": 16, "y": 3 }, "brightnessAmp": 0,
+        "evidence": ["Position changes between dates."], "warnings": ["One observation covers a different wavelength range and cannot be compared."] },
+      { "candidateId": "mock-cand-wise0855-2", "label": "SX-0107", "kind": "brightness_change", "score": 0.52,
+        "scoreBasis": "Illustrative: brightness change relative to its sample uncertainty.",
+        "description": "Stationary source with variable brightness.",
+        "startPx": { "x": 740, "y": 190 }, "velPx": { "x": 0, "y": 0 }, "brightnessAmp": 0.4,
+        "evidence": ["Brightness varies."], "warnings": [] }
+    ],
+    "mock-obj-rwaur": [
+      { "candidateId": "mock-cand-rwaur-1", "label": "SX-0211", "kind": "brightness_change", "score": 0.69,
+        "scoreBasis": "Illustrative: brightness change relative to its sample uncertainty.",
+        "description": "Young variable star; brightness changes between dates.",
+        "startPx": { "x": 520, "y": 310 }, "velPx": { "x": 0, "y": 0 }, "brightnessAmp": 0.7,
+        "evidence": ["Large brightness changes.", "Stationary position."], "warnings": ["One observation has masked pixels near this region."] },
+      { "candidateId": "mock-cand-rwaur-2", "label": "SX-0214", "kind": "positional_change", "score": 0.45,
+        "scoreBasis": "Illustrative: apparent shift relative to alignment residual (sample value).",
+        "description": "Faint source with a possible small shift.",
+        "startPx": { "x": 700, "y": 200 }, "velPx": { "x": -8, "y": 5 }, "brightnessAmp": 0,
+        "evidence": ["Possible shift, close to the alignment residual."], "warnings": ["Low score: likely alignment effects."] }
+    ],
+    "mock-obj-rdra": [
+      { "candidateId": "mock-cand-rdra-1", "label": "SX-0306", "kind": "brightness_change", "score": 0.77,
+        "scoreBasis": "Illustrative: brightness change relative to its sample uncertainty.",
+        "description": "Mira-type variable; strong brightness swings.",
+        "startPx": { "x": 500, "y": 300 }, "velPx": { "x": 0, "y": 0 }, "brightnessAmp": 0.8,
+        "evidence": ["Large brightness variation across dates."], "warnings": ["One observation has no image."] },
+      { "candidateId": "mock-cand-rdra-2", "label": "SX-0309", "kind": "positional_change", "score": 0.41,
+        "scoreBasis": "Illustrative: apparent shift relative to alignment residual (sample value).",
+        "description": "Faint source drifting diagonally.",
+        "startPx": { "x": 250, "y": 160 }, "velPx": { "x": 10, "y": 10 }, "brightnessAmp": 0,
+        "evidence": ["Diagonal drift."], "warnings": [] }
+    ],
+    "mock-obj-epsindib": [
+      { "candidateId": "mock-cand-epsindib-1", "label": "SX-0412", "kind": "positional_change", "score": 0.71,
+        "scoreBasis": "Illustrative: apparent shift relative to alignment residual (sample value).",
+        "description": "Brown dwarf drifting up and to the right.",
+        "startPx": { "x": 450, "y": 330 }, "velPx": { "x": 9, "y": -4 }, "brightnessAmp": 0,
+        "evidence": ["Consistent drift."], "warnings": [] },
+      { "candidateId": "mock-cand-epsindib-2", "label": "SX-0415", "kind": "positional_change", "score": 0.55,
+        "scoreBasis": "Illustrative: apparent shift relative to alignment residual (sample value).",
+        "description": "Faint source drifting down and to the left.",
+        "startPx": { "x": 600, "y": 180 }, "velPx": { "x": -12, "y": 6 }, "brightnessAmp": 0,
+        "evidence": ["Position changes between dates."], "warnings": ["Near the edge of the field."] },
+      { "candidateId": "mock-cand-epsindib-3", "label": "SX-0418", "kind": "brightness_change", "score": 0.33,
+        "scoreBasis": "Illustrative: brightness change relative to its sample uncertainty.",
+        "description": "Faint, possibly noisy.",
+        "startPx": { "x": 300, "y": 470 }, "velPx": { "x": 0, "y": 0 }, "brightnessAmp": 0.25,
+        "evidence": ["Small brightness change."], "warnings": ["Within sample noise."] }
+    ]
+  },
+
+  "guided": {
+    "spot-the-shift": {
+      "guidedId": "spot-the-shift",
+      "title": "Spot the shift",
+      "objectId": "mock-obj-barnard",
+      "answerCandidateId": "mock-cand-barnard-1",
+      "tolerancePx": 60,
+      "intro": "Some objects change position between observations. Can you find one?",
+      "steps": [
+        { "id": "browse", "title": "Step through the dates",
+          "prompt": "Use the timeline or press play. Watch the stars between dates.",
+          "done": "Nice. Most stars stay put, which is what makes movers stand out." },
+        { "id": "find", "title": "Click what moved",
+          "prompt": "Click the object you think changed position. (Candidate markers are hidden for this step.)",
+          "hints": ["Look for a bright dot that is not in the same place on every date.", "It is in the lower-left part of the field on the earliest date.", "It moves up and to the right as the dates advance."],
+          "correct": "Yes, that is the one. Candidate SX-0017 shifts between dates.",
+          "incorrect": "Not quite. That source stays put. Try another, or ask for a hint." },
+        { "id": "confirm", "title": "Confirm with a blink comparison",
+          "prompt": "Switch the viewer to Blink, pick two dates and watch. Does the source jump?",
+          "done": "Blinking is a classic way to spot movement." }
+      ],
+      "explanation": "Sources that appear to move are candidates, not discoveries. Real confirmation needs alignment checks, uncertainty estimates and follow-up outside this app. All content here is illustrative."
+    }
+  },
+
+  "chat": {
+    "suggestions": {
+      "investigate": ["What am I looking at?", "Why is this candidate listed?", "Why does the score not mean probability?", "What should I do next?"],
+      "compare": ["What does the difference image show?", "Are these two dates comparable?", "What could cause a false difference?"],
+      "spectrum": ["What is a spectrum?", "Why are some bands missing?", "What do the error bars mean?"],
+      "notes": ["Summarise my investigation"],
+      "learn": ["Why infrared?", "What is proper motion?"],
+      "default": ["What can I do here?"]
+    },
+    "rules": [
+      { "keywords": ["infrared", "why infra"],
+        "beginner": ["Infrared is light with a longer wavelength than your eyes can see. It passes through dust better than visible light, so it shows cooler and dustier things."],
+        "advanced": ["Near-infrared bands trace cool photospheres and warm dust. Broad spectral coverage lets one source be characterised across wavelength."],
+        "caveats": ["General background, not a finding about this data."], "actions": [] },
+      { "keywords": ["proper motion"],
+        "beginner": ["Proper motion is how far a star appears to drift across the sky each year. Nearby stars drift faster."],
+        "advanced": ["Proper motion is the angular rate of change of position on the sky, usually in arcsec per year. Catalogue values are shown separately from anything this app derives."],
+        "caveats": ["Catalogue values in this sample are quoted for illustration."], "actions": [] },
+      { "keywords": ["probab", "score"],
+        "beginner": ["The score only ranks candidates. A higher number means the sample method found a clearer change. It does not mean 'more likely to be real'."],
+        "advanced": ["The ranking score is unitless and defined by its basis string. It is not a calibrated probability or confidence level."],
+        "caveats": ["Mock score. Real score semantics come from the backend (`scoreBasis`)."], "actions": [] },
+      { "keywords": ["why is this", "listed", "candidate"],
+        "beginner": ["It is listed because something about it changes between dates. Check the evidence list under the candidates panel to see what."],
+        "advanced": ["Candidates are listed by the backend from positional or brightness change between aligned observations. The evidence and warnings fields explain each one."],
+        "caveats": ["A candidate is not a confirmed object."], "actions": [{ "kind": "run_comparison", "label": "Blink two dates", "params": { "mode": "blink" } }] },
+      { "keywords": ["difference", "false", "cause", "noise", "uncertain"],
+        "beginner": ["A difference image can light up for real changes, but also for noise, small alignment errors, or differences in how the images were calibrated."],
+        "advanced": ["Residuals can arise from registration error, resampling, PSF or calibration differences between epochs, and noise. Check the compatibility checks and the stated uncertainty."],
+        "caveats": ["A difference alone is not evidence of real change."], "actions": [{ "kind": "open_comparison", "label": "Show the difference", "params": { "mode": "difference" } }] },
+      { "keywords": ["compar", "two dates"],
+        "beginner": ["Two observations are comparable if they cover similar wavelengths, overlap on the sky and were calibrated the same way. While comparing, each check is listed beside the viewer."],
+        "advanced": ["The backend gates comparison on footprint, wavelength overlap at the position, calibration, alignment residual, quality and data release. `notEvaluated` is not a pass."],
+        "caveats": ["Verdicts here are mock."], "actions": [{ "kind": "open_comparison", "label": "Blink two dates", "params": { "mode": "blink" } }] },
+      { "keywords": ["spectrum", "band", "missing", "error bar", "wavelength"],
+        "beginner": ["A spectrum shows how bright something is at different infrared colours. Missing bands are gaps where no usable observation exists. Error bars appear only when an uncertainty is available."],
+        "advanced": ["The spectrum is assembled from several observations, so points can come from different dates. Gaps are not interpolated; error bars are drawn only where the backend supplied an uncertainty."],
+        "caveats": ["Illustrative synthetic spectrum, not a SPHEREx measurement."], "actions": [{ "kind": "open_spectrum", "label": "Open Spectrum", "params": {} }] },
+      { "keywords": ["summar"],
+        "beginner": ["Here is a short recap of your investigation: you picked a target, looked at observations over time, and may have added notes. Keep going by comparing two dates."],
+        "advanced": ["Summary (mock): target selected, observations reviewed, notes and bookmarks recorded. No result here is a confirmed detection."],
+        "caveats": ["Mock summary generated without an LLM."], "actions": [{ "kind": "add_note", "label": "Add a note", "params": { "text": "Reviewed observations; next: compare two dates." } }] },
+      { "keywords": ["next", "do here", "what should"],
+        "beginner": ["Try pressing play to blink through the dates. Then click a candidate to see why it is listed."],
+        "advanced": ["Select a candidate, review its evidence and warnings, then run a difference comparison between the dates either side of the change."],
+        "caveats": [], "actions": [{ "kind": "run_comparison", "label": "Blink two dates", "params": { "mode": "blink" } }, { "kind": "open_spectrum", "label": "Open Spectrum", "params": {} }] },
+      { "keywords": ["looking at", "what am i"],
+        "beginner": ["You are looking at a sample sky image of your selected target on one date. The circles mark candidates that seem to change."],
+        "advanced": ["A display raster of one observation with candidate markers. The viewer applies no scientific processing. Brightness and contrast are cosmetic."],
+        "caveats": ["Image is procedurally generated for this demo."], "actions": [] }
+    ],
+    "default": {
+      "beginner": ["I can explain infrared light, candidates, comparisons and spectra. Try one of the suggested questions."],
+      "advanced": ["No scripted answer matched. Try asking about candidates, comparisons, uncertainty, proper motion or spectra."],
+      "caveats": ["Mock companion: scripted replies only."], "actions": []
+    }
+  }
+}

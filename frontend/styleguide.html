@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SPHERE X Style Guide</title>
+  <link rel="stylesheet" href="css/tokens.css">
+  <link rel="stylesheet" href="css/base.css">
+  <link rel="stylesheet" href="css/components.css">
+  <style>
+    .sg { max-width: 1000px; margin: 0 auto; padding: var(--sp-6) var(--gutter); display: grid; gap: var(--sp-6); }
+    .swatches { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: var(--sp-3); }
+    .sw { border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; font-size: var(--fs-sm); }
+    .sw i { display: block; height: 56px; }
+    .sw span { display: block; padding: var(--sp-2) var(--sp-3); font-family: var(--font-mono); }
+    .row { display: flex; gap: var(--sp-3); flex-wrap: wrap; align-items: center; }
+    .grad { height: 36px; border-radius: var(--radius); border: 1px solid var(--border); }
+  </style>
+</head>
+<body>
+  <header class="topnav">
+    <a class="brand" href="index.html"><span aria-hidden="true">✦</span> SPHERE<span class="slash">/</span>X</a>
+    <span class="divider"></span><nav aria-label="Primary"><a href="#" aria-current="page">Style guide</a></nav>
+  </header>
+  <main class="sg" id="main">
+    <h1 class="pixel">Style guide</h1>
+
+    <section><h2 class="label">Approved palette</h2><div class="swatches">
+      <div class="sw"><i style="background:#101820"></i><span>Midnight Charcoal #101820</span></div>
+      <div class="sw"><i style="background:#1B2B33"></i><span>Deep Slate #1B2B33</span></div>
+      <div class="sw"><i style="background:#75BFE8"></i><span>Glacier Blue #75BFE8</span></div>
+      <div class="sw"><i style="background:#405A6B"></i><span>Slate Blue #405A6B (borders only)</span></div>
+      <div class="sw"><i style="background:#F2F0E9"></i><span>Warm Ivory #F2F0E9</span></div>
+      <div class="sw"><i style="background:#42BFAE"></i><span>Aurora Teal #42BFAE</span></div>
+      <div class="sw"><i style="background:#F28C58"></i><span>Solar Orange #F28C58</span></div>
+    </div></section>
+
+    <section><h2 class="label">Page gradient (every page) and spectrum gradient (placeholder)</h2>
+      <div class="grad" style="background:var(--bg-page)"></div><br>
+      <div class="grad" style="background:var(--spectrum-gradient)"></div></section>
+
+    <section><h2 class="label">Typography</h2>
+      <p class="pixel" style="font-size:var(--fs-2xl)">The sky is never still</p>
+      <p>Body text in IBM Plex Sans for scientific information. <span class="muted">Muted text for secondary details.</span></p>
+      <p class="mono">RA 17h 57m 48.50s · Dec +04° 41′ 36.2″</p>
+      <p class="label">Uppercase label</p></section>
+
+    <section><h2 class="label">Buttons and controls</h2><div class="row">
+      <button class="btn btn-primary">[ Begin exploring → ]</button>
+      <button class="btn">Secondary</button><button class="btn btn-icon" aria-label="Play">▶</button>
+      <button class="btn" disabled>Disabled</button>
+      <input class="input" placeholder="Input" aria-label="Sample input">
+      <input class="range" type="range" aria-label="Sample slider" style="max-width:160px">
+    </div></section>
+
+    <section><h2 class="label">Tabs, badges, notices</h2>
+      <div class="row"><a class="tab" aria-current="page" href="#">Investigate</a><a class="tab" href="#">Compare</a>
+      <span class="badge badge-illustrative">Sample / illustrative</span><span class="badge badge-ok">Available</span><div class="spinner" aria-label="Loading"></div></div><br>
+      <p class="notice">Informational notice.</p><br><p class="notice notice-warn">Warning notice.</p><br><p class="notice notice-error">Error notice.</p></section>
+
+    <section class="panel"><h2>Candidates (3)</h2>
+      <ul class="list">
+        <li><button class="list-item" aria-selected="true"><span>SX-0017</span><span class="score">0.81</span></button></li>
+        <li><button class="list-item" aria-selected="false"><span>SX-0032</span><span class="score">0.67</span></button></li>
+      </ul>
+      <dl class="kv" style="margin-top:var(--sp-4)"><dt>Target</dt><dd>Barnard's Star</dd><dt>RA</dt><dd>17h 57m 48.50s</dd></dl>
+    </section>
+  </main>
+</body>
+</html>

@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SPHERE X Investigation</title>
+  <meta name="description" content="Investigate the changing infrared sky with SPHEREx observations. Sample data is illustrative.">
+  <link rel="icon" href="assets/navi/navi.png" type="image/png">
+  <link rel="stylesheet" href="css/tokens.css">
+  <link rel="stylesheet" href="css/base.css">
+  <link rel="stylesheet" href="css/components.css">
+  <link rel="stylesheet" href="css/workspace.css">
+  <link rel="stylesheet" href="css/navi.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to main content</a>
+
+  <header class="topnav">
+    <a class="brand" href="index.html" aria-label="SPHERE X home"><span aria-hidden="true">✦</span> SPHERE<span class="slash">/</span>X</a>
+    <span class="divider" aria-hidden="true"></span>
+    <nav aria-label="Primary" id="primary-nav">
+      <a href="index.html#mission">Mission</a>
+      <a href="#/investigate" data-group="investigate">Investigate</a>
+      <a href="#/learn" data-group="learn">Learn</a>
+    </nav>
+    <!-- Safe zone: the empty end of the nav bar. Navi may wander here (never over the links). -->
+    <span class="navi-zone navi-zone-top" data-navi-zone data-navi-size="small" aria-hidden="true"></span>
+  </header>
+
+  <main id="main" tabindex="-1">
+    <div class="page-head">
+      <h1 class="pixel" id="page-title">Investigate the sky</h1>
+      <span class="label" id="data-badge"></span>
+      <!-- Safe zone: unused space in the title row. -->
+      <span class="navi-zone navi-zone-head" data-navi-zone data-navi-size="small" aria-hidden="true"></span>
+      <div class="toolbar" id="toolbar" role="navigation" aria-label="Investigation tools"></div>
+    </div>
+    <div id="view" aria-live="polite"></div>
+    <!-- Safe zone: the sky above the scenery, below all scientific content. -->
+    <div class="navi-zone navi-zone-bottom" data-navi-zone aria-hidden="true"></div>
+  </main>
+
+
+  <!-- Decorative pixel-art landscape (js/components/scene.js), hidden from assistive tech -->
+  <div id="scene" class="scene" aria-hidden="true"></div>
+
+
+
+  <noscript><p class="notice notice-warn">SPHERE X needs JavaScript to display observations.</p></noscript>
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>

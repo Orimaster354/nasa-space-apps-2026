@@ -1,0 +1,56 @@
+/* Base reset, page background, typography, accessibility primitives. */
+
+*, *::before, *::after { box-sizing: border-box; }
+html { color-scheme: dark; -webkit-text-size-adjust: 100%; }
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--bg-page) fixed, var(--bg);
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: var(--fs-md);
+  line-height: 1.55;
+}
+
+[hidden] { display: none !important; }
+h1, h2, h3 { margin: 0; line-height: 1.15; }
+p { margin: 0 0 var(--sp-3); }
+a { color: var(--accent); text-underline-offset: 3px; }
+a:hover { color: var(--warm-ivory); }
+img, canvas, svg { display: block; max-width: 100%; }
+button, input, select, textarea { font: inherit; color: inherit; }
+
+/* Pixel headings are for selected titles only. */
+.pixel { font-family: var(--font-pixel); font-weight: 700; letter-spacing: 0.02em; text-transform: uppercase; }
+.label {
+  font-size: var(--fs-xs); font-weight: 600; letter-spacing: var(--tracking-label);
+  text-transform: uppercase; color: var(--text-muted);
+}
+.mono { font-family: var(--font-mono); }
+/* Units keep their case inside uppercased labels/badges ("µm" must not become "ΜM", which reads as millimetres). */
+.unit { text-transform: none; letter-spacing: 0; }
+.muted { color: var(--text-muted); }
+
+/* Visible keyboard focus everywhere. */
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+.sr-only {
+  position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+.skip-link {
+  position: absolute; left: var(--sp-3); top: -100px; z-index: 100;
+  background: var(--warm-ivory); color: var(--midnight-charcoal);
+  padding: var(--sp-2) var(--sp-4); border-radius: var(--radius); text-decoration: none;
+}
+.skip-link:focus { top: var(--sp-3); }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
