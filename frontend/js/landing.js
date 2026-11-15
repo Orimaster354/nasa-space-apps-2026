@@ -7,6 +7,7 @@
 
 import { mountNavi } from "./components/navi.js";
 import { mountScene } from "./components/scene.js";
+import { pickIdleLine } from "./components/naviBrain.js";
 
 mountScene(document.getElementById("scene"));
 const navi = mountNavi({
@@ -14,8 +15,11 @@ const navi = mountNavi({
   // Her whisper must never cover the art, the headline, the call to action or the navigation.
   avoid: ".ship, .planet, .hero-copy h1, .hero-copy .lede, .cta-row, .skip, .demo-note, .hero-nav, .down, .skip-intro, .m-intro h2, .m-lede, .m-points, .m-figure, .steps, .m-close, .m-how-head h2",
   panelAvoid: ".ship, .hero-copy, .hero-nav, .m-figure",
-  critical: ".ship, .planet, .hero-copy, .m-figure",          // she hops rather than flying across these
+  critical: ".art, .m-diagram",                              // cover art (ship, planet, Earth) and the diagram; text is avoided line by line
 });
+
+// Occasional spontaneous remarks while she idles (same personality as in the workspace).
+navi.idleLines = () => pickIdleLine({ route: "/landing" });
 
 // A few lines of her own on the landing page (all respect the Comments setting).
 setTimeout(() => navi.say("psst… did that star just move?", { kind: "ambient" }), 1600);
