@@ -23,7 +23,7 @@ Each SPHEREx band covers a range of wavelengths, and an object lands at a differ
 | Earlier | 29 April 2025 | 1.647 micrometres |
 | Later | 28 September 2025 | 1.638 micrometres |
 
-They are 153 days apart and differ by 0.009 micrometres, well inside the band's local width of 0.039 micrometres.
+They are 153 days apart and differ by 0.009 micrometres, under a quarter of the band's local width of 0.039 micrometres (the rule for calling two frames matched).
 
 ### 3. Measure brightness, with uncertainty
 Aperture photometry, 12 arcsecond radius, local background ring, uncertainty from the archive's variance plane (scaled up where the sky scatter is larger than the archive predicts).
@@ -34,7 +34,7 @@ Aperture photometry, 12 arcsecond radius, local background ring, uncertainty fro
 | 28 September 2025 | **31.42 ± 0.19 mJy** | 163 times |
 
 ### 4. Measure the change
-Later minus earlier: **-0.74 ± 0.34 mJy**, which is **2.2 times its uncertainty**. The tool's own verdict: *within 3 sigma, so it is consistent with no change.*
+Later minus earlier: **-0.74 ± 1.39 mJy**, which is **0.5 times its uncertainty**. The tool's own verdict: *within 3 sigma, so it is consistent with no change.* The uncertainty combines the statistical error (0.34 mJy) with a 3 percent repeatability floor per frame (1.35 mJy): frames at the same wavelength were found to disagree by a few percent, more than their formal errors, so the formal error alone would overstate how well a change can be detected.
 
 **The safeguard works.** The tool refuses to report a change between frames at different wavelengths. Example: 28 September (1.638 micrometres) against 1 October (2.396 micrometres), 0.76 micrometres apart, was refused with the explanation that a brightness difference there would be a colour difference, not a change over time.
 
@@ -55,21 +55,21 @@ The target clearly moves relative to the field stars (about 7 sigma in each dire
 ### 7. Ask the companion
 Question: *"Did this brown dwarf get brighter or fainter between those two dates?"* Navi's answer (written by the AI from the results above, every number checked against them):
 
-> The measurements show a change of -0.7434 with an uncertainty of 0.336 mJy. Because this change is only 2.2 times its uncertainty, it is consistent with no change. The two pictures were matched in wavelength, so colour does not explain a difference. You could try selecting another pair of observations to see if they show a different result.
+> The measurements show a flux change of -0.7434 with an uncertainty of 1.39 mJy, which is 0.5 times its uncertainty. This means the result is consistent with no change in brightness. The two pictures were matched in wavelength, so colour does not explain a difference. You could try selecting another pair of observations to compare.
 
 Cited results: the flux-change measurement and the comparison. The AI is told to keep evidence and hypotheses apart, and it did not claim a finding.
 
 ## What is established
 
 - Real SPHEREx observations of the target were retrieved, and their metadata (band, date, quality flags, wavelength at the object) was interpreted.
-- The target is detected strongly in every usable frame and its brightness is **32 mJy, measured to about 1 percent** in each of the two chosen frames (statistical uncertainty only).
-- Between those two dates (153 days, matched wavelength) there is **no significant change in brightness**: -0.74 ± 0.34 mJy.
+- The target is detected strongly in every usable frame and its brightness is **about 32 mJy**, with a statistical error near 1 percent in each chosen frame and a real frame-to-frame repeatability of a few percent.
+- Between those two dates (153 days, matched wavelength) there is **no significant change in brightness**: -0.74 ± 1.39 mJy, about 4 percent of the flux.
 - The target **moves** relative to the field stars in the direction and at about the speed of its catalogue proper motion.
 - The tool refuses comparisons that would be misleading (different wavelengths), and says so in plain words.
 
 ## What is NOT established
 
-- **That the brightness is constant.** One pair of dates, with a limit of about 1 percent (2.2 sigma on -0.74 mJy). A longer or different pattern of variability is not ruled out.
+- **That the brightness is constant.** One pair of dates, with a limit of roughly 4 percent. A smaller change, or a different pattern of variability, is not ruled out. Across 8 same-wavelength pairs the largest difference was 3.9 times its uncertainty.
 - **That the flux calibration of the two frames is equivalent.** This check was not evaluated.
 - **Absolute brightness.** There is no aperture correction (light outside the 12 arcsecond circle is not added back) and no colour correction. The values are only comparable with each other, in the same band, with the same aperture.
 - **The motion as a validated measurement.** The two components differ from the catalogue by 1.7 and 2.2 sigma, and the fit assumes the frames' errors are independent over a baseline of only about half a year. This is a good consistency check, not an independent proper-motion measurement. The component differences hint that our uncertainties are somewhat optimistic.
@@ -81,3 +81,7 @@ Cited results: the flux-change measurement and the comparison. The AI is told to
 - 6 of the 50 frames could not be measured (aperture masked, or outside the stored image).
 - The listing shows only the first 50 of the 99 D3 observations; later epochs (into 2026) exist but were not used.
 - Two of the five challenge targets, Barnard's Star and R Draconis, saturate SPHEREx, so brightness cannot be measured on them at all (the tool refuses, rather than guess).
+
+## What the tool does with this result
+- The motion above is stored as a **candidate** (SX-6655, positional change, score 0.74 as a ranking, not a probability) with its evidence and limitations, and listed in the app's Candidates panel with a marker on the star. Brightness did not stand out, so the candidate is positional only.
+- The guided "Spot the shift" exercise is built from this candidate: its hints, direction and size of the shift (about 2 arcseconds between the earliest and latest dates, one or two pixels on screen) are the real ones.

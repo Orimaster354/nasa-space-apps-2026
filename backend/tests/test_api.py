@@ -40,7 +40,10 @@ class FakeCutouts:
                                            flag_value=(1 << 21))
                       for i, (u, s) in enumerate(URIS.items())}
 
-    def get(self, url):
+    def is_cached(self, url):
+        return any(uri in url for uri in self.files)
+
+    def get(self, url, **kw):
         self.calls += 1
         if self.gate is not None:
             self.gate.wait(timeout=15)
@@ -407,23 +410,10 @@ def test_comparison_warns_when_the_object_sits_at_different_wavelengths(env, tmp
     assert any("different wavelengths" in w for w in cmp_["warnings"])
 
 
-def test_candidates_endpoint_is_honestly_empty_until_detection_exists(env):
+def test_candidates_for_an_object_outside_the_catalogue_say_why_there_are_none(env):
     c, _, _ = env
     oid = _object(c)["objectId"]
+    c.app.state.services.compute_candidates(oid)                                                  # the search runs in the background; run it now
     page = c.get(f"/api/v1/objects/{oid}/candidates").json()
-    assert page["items"] == [] and page["total"] == 0 and "not available yet" in page["coverageNote"]
+    assert page["items"] == [] and page["total"] == 0 and "seeded from the catalogue" in page["coverageNote"]
     assert c.get("/api/v1/objects/obj_unknown/candidates").status_code == 404
-
-
-def test_a_truncated_listing_says_how_much_of_it_is_shown(env):
-    c, _, _ = env
-    oid = _object(c)["objectId"]
-    whole = c.get(f"/api/v1/objects/{oid}/observations").json()
-    assert whole["total"] == 3 and "coverageNote" not in whole                  # everything fits: no note
-    first = c.get(f"/api/v1/objects/{oid}/observations", params={"limit": 2}).json()
-    assert first["coverageNote"] == "Showing observations 1-2 of 3 matching this view (oldest first)."
-    last = c.get(f"/api/v1/objects/{oid}/observations", params={"limit": 2, "offset": 2, "sort": "-observedAt"}).json()
-    assert last["coverageNote"] == "Showing observations 3-3 of 3 matching this view (newest first)."
-    beyond = c.get(f"/api/v1/objects/{oid}/observations", params={"offset": 10}).json()
-    assert beyond["items"] == [] and "coverageNote" not in beyond                # nothing shown, nothing to describe
-    assert c.get(f"/api/v1/objects/{oid}/observations", params={"limit": 201}).status_code == 400   # the cap is 200

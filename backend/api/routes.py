@@ -12,7 +12,7 @@ from services.investigations import TooMany
 
 from processing.imaging import DEFAULT_FOV_ARCMIN
 
-from .schemas import (AIResponse, Investigation, InvestigationInput, InvestigationSummary, AstronomicalObject, ComparisonResult, CreateComparisonRequest, CreateMeasurementRequest, Measurement,
+from .schemas import (AIResponse, Candidate, SpectralData, Investigation, InvestigationInput, InvestigationSummary, AstronomicalObject, ComparisonResult, CreateComparisonRequest, CreateMeasurementRequest, Measurement,
                       Observation, ObservationImage, Page, PixelToSky, SendChatMessageRequest)
 
 router = APIRouter()
@@ -67,12 +67,30 @@ def list_observations(
         limit=limit, offset=offset, sort=sort)
 
 
+@router.get("/objects/{object_id}/spectrum", response_model=SpectralData, **_EXCLUDE)
+def get_spectrum(request: Request, object_id: str, ra: float | None = None, dec: float | None = None,
+                 apertureRadiusArcsec: float = Query(12.0, ge=3.0, le=60.0), response: Response = None):
+    result = svc(request).get_spectrum(object_id, ra=ra, dec=dec, radius=apertureRadiusArcsec)
+    if result["availability"]["status"] == "processing":
+        response.status_code = 202                    # contract: 202 + processing, the client polls the same GET
+    return result
+
+
 @router.get("/objects/{object_id}/candidates", response_model=Page, **_EXCLUDE)
-def list_candidates(request: Request, object_id: str, limit: int = Query(20, ge=1, le=100), offset: int = Query(0, ge=0)):
-    """Candidate generation is not built yet. An honest empty page (never a made-up candidate) so the UI shows 'none' instead of an error."""
-    svc(request).get_object(object_id)                      # 404 for an unknown object
-    return {"items": [], "total": 0, "limit": limit, "offset": offset,
-            "coverageNote": "Automated candidate detection is not available yet; compare the observations yourself."}
+def list_candidates(request: Request, object_id: str, limit: int = Query(20, ge=1, le=100), offset: int = Query(0, ge=0),
+                    minScore: float | None = Query(None, ge=0, le=1), sort: Literal["-score", "score"] = "-score"):
+    return svc(request).get_candidates(object_id, limit=limit, offset=offset, min_score=minScore, sort=sort)
+
+
+@router.get("/guided/{guided_id}", **_EXCLUDE)
+def get_guided(request: Request, guided_id: str, objectId: str | None = None):
+    """Frontend-only operation (not in the contract): the guided investigation definition, built from a real candidate."""
+    return svc(request).get_guided(guided_id, objectId)
+
+
+@router.get("/candidates/{candidate_id}", response_model=Candidate, **_EXCLUDE)
+def get_candidate(request: Request, candidate_id: str):
+    return svc(request).get_candidate(candidate_id)
 
 
 @router.get("/observations/{observation_id}", response_model=Observation, **_EXCLUDE)

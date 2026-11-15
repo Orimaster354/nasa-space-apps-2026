@@ -45,6 +45,7 @@ class Fact:
     numbers: list[float] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
     plain: str | None = None                # friendly rendering for the no-AI fallback; None = not shown there
+    in_summary: bool = False                # shown in the fallback summary although it is not a referencable result (the user's own notes)
 
 
 @dataclass
@@ -99,16 +100,16 @@ _VERDICT_WORDS = {
 }
 
 
-def build(services: Services, ctx: dict | None) -> EvidencePack:
+def build(services: Services, ctx: dict | None, investigation: dict | None = None) -> EvidencePack:
     ctx = ctx or {}
     facts: list[Fact] = [Fact("F0", MISSION_FACT)]
     facts += [Fact(f"G{i}", t) for i, t in enumerate(GUIDE_FACTS, 1)]
     pack = EvidencePack(facts)
     n = [0]
 
-    def add(text, tt=None, tid=None, numbers=None, warnings=None, plain=None) -> Fact:
+    def add(text, tt=None, tid=None, numbers=None, warnings=None, plain=None, summary=False) -> Fact:
         n[0] += 1
-        f = Fact(f"F{n[0]}", text, tt, tid, list(numbers or []), list(warnings or []), plain)
+        f = Fact(f"F{n[0]}", text, tt, tid, list(numbers or []), list(warnings or []), plain, summary)
         facts.append(f)
         return f
 
@@ -227,10 +228,47 @@ def build(services: Services, ctx: dict | None) -> EvidencePack:
                 plain += f" That is {snr:.1f} times its uncertainty, so it is a clear signal."
         add(txt, "measurement", mid, nums, list(m.get("warnings", [])), plain)
 
+    if investigation:
+        notes = investigation.get("notes", [])
+        add(f"The user's saved investigation is titled '{investigation['title'][:120]}'. It has {len(notes)} note(s), {len(investigation.get('bookmarks', []))} bookmark(s) "
+            f"and {len(investigation.get('history', []))} recorded step(s).", None, None,
+            [len(notes), len(investigation.get("bookmarks", [])), len(investigation.get("history", []))],
+            plain=f"Your saved investigation '{investigation['title'][:120]}' has {len(notes)} note(s) and {len(investigation.get('bookmarks', []))} bookmark(s).", summary=True)
+        for note in notes[-8:]:
+            body = note["text"].strip().replace("\n", " ")[:300]
+            if body:
+                add(f"A note WRITTEN BY THE USER (their own observation, not a measurement): \"{body}\"", None, None,
+                    plain=f"You noted: \"{body}\"", summary=True)
     if ctx.get("candidateId"):
-        add("Candidate details are not available from the backend yet, so nothing about this candidate can be stated.",
-            plain="Candidate details are not available yet, so I can't say anything about that candidate.")
+        try:
+            cd = services.get_candidate(ctx["candidateId"])
+        except NotFound:
+            pack.missing.append("the selected candidate")
+        else:
+            nums = [cd["score"]] + ([cd["motion"]["value"], cd["motion"]["uncertainty"]] if cd.get("motion") and cd["motion"].get("uncertainty") is not None else [])
+            text = (f"Candidate {cd['label']} ({cd['kind'].replace('_', ' ')}): {cd['description']} Ranking score {cd['score']:.2f} on a 0 to 1 scale. "
+                    f"This is a ranking heuristic and not a probability. Evidence: {' '.join(cd.get('evidence', []))} "
+                    f"Limitations: {' '.join(cd.get('limitations', []))}")
+            if cd.get("warnings"):
+                text += " Notes from the software: " + " ".join(w[:220] for w in cd["warnings"][:3])
+            plain = (f"{cd['label']} is flagged as worth a closer look. {cd['description']} Its heuristic ranking score is {cd['score']:.2f} out of 1; "
+                     "that is a way to order leads, not a probability, and it is not an established finding.")
+            add(text, "candidate", cd["candidateId"], nums, list(cd.get("warnings", [])), plain)
     if ctx.get("spectrumId"):
-        add("Spectrum data is not available from the backend yet, so nothing about this spectrum can be stated.",
-            plain="Spectrum data is not available yet, so I can't say anything about that spectrum.")
+        try:
+            sp = services.get_stored_spectrum(ctx["spectrumId"])
+        except NotFound:
+            pack.missing.append("the selected spectrum")
+        else:
+            ok = [p for p in sp["points"] if p.get("available")]
+            lo, hi = min(p["wavelengthUm"] for p in ok), max(p["wavelengthUm"] for p in ok)
+            top, bottom = max(ok, key=lambda p: p["flux"]), min(ok, key=lambda p: p["flux"])
+            nums = [len(ok), lo, hi, top["wavelengthUm"], top["flux"], bottom["wavelengthUm"], bottom["flux"]]
+            text = (f"Spectrum: {len(ok)} bands have a measurement, between {lo:.2f} and {hi:.2f} micrometres, in {sp['fluxUnit']} "
+                    f"(aperture radius {sp.get('apertureRadiusArcsec', 'unknown')} arcsec). Brightest at {top['wavelengthUm']:.2f} micrometres "
+                    f"({_g(top['flux'])} {sp['fluxUnit']}); faintest at {bottom['wavelengthUm']:.2f} micrometres ({_g(bottom['flux'])} {sp['fluxUnit']}). "
+                    f"Method: {sp['extractionMethod']}.")
+            plain = (f"The spectrum has {len(ok)} measured bands from {lo:.2f} to {hi:.2f} micrometres. It is brightest near {top['wavelengthUm']:.2f} "
+                     f"micrometres and faintest near {bottom['wavelengthUm']:.2f} micrometres.")
+            add(text, "spectrum", sp["spectrumId"], nums, list(sp.get("warnings", [])), plain)
     return pack

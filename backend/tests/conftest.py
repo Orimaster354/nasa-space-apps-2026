@@ -17,7 +17,8 @@ CENTER = (133.795129, -7.245147)       # near WISE 0855's challenge coordinate; 
 
 def make_cutout_fits(path: Path, star_ra: float, star_dec: float, rotation_deg: float = 0.0, n: int = 29,
                      scale_arcsec: float = 6.2, peak: float = 100.0, mjd: float = 60800.7, detector: int = 3,
-                     flag_value: int = 0, center=CENTER, with_wave: bool = True, wave_shift_x: float = 0.0) -> Path:
+                     flag_value: int = 0, center=CENTER, with_wave: bool = True, wave_shift_x: float = 0.0, wave_offset: float = 0.0,
+                     stars=None, noise: float = 0.0, noise_seed: int = 0) -> Path:
     w = WCS(naxis=2)
     w.wcs.ctype = ["RA---TAN", "DEC--TAN"]
     w.wcs.crval = list(center)
@@ -27,9 +28,14 @@ def make_cutout_fits(path: Path, star_ra: float, star_dec: float, rotation_deg: 
     w.wcs.cd = [[-s * np.cos(t), s * np.sin(t)], [s * np.sin(t), s * np.cos(t)]]
     w.wcs.cunit = ["deg", "deg"]
 
-    x0, y0 = w.wcs_world2pix([[star_ra, star_dec]], 0)[0]
     yy, xx = np.mgrid[0:n, 0:n]
-    image = (peak * np.exp(-((xx - x0) ** 2 + (yy - y0) ** 2) / (2 * 1.2 ** 2)) + 1.0).astype(np.float32)
+    image = np.full((n, n), 1.0)
+    for ra_s, dec_s, pk in (stars if stars is not None else [(star_ra, star_dec, peak)]):
+        x0, y0 = w.wcs_world2pix([[ra_s, dec_s]], 0)[0]
+        image = image + pk * np.exp(-((xx - x0) ** 2 + (yy - y0) ** 2) / (2 * 1.2 ** 2))
+    if noise:
+        image = image + np.random.default_rng(noise_seed).normal(0, noise, image.shape)
+    image = image.astype(np.float32)
     flags = np.full((n, n), flag_value, dtype=np.int32)
     variance = np.full((n, n), 0.25, dtype=np.float32)
     zodi = np.full((n, n), 0.5, dtype=np.float32)
@@ -48,7 +54,7 @@ def make_cutout_fits(path: Path, star_ra: float, star_dec: float, rotation_deg: 
         # Synthetic WCS-WAVE: wavelength = 1 + 0.001*x_det + 0.0005*y_det (um), bandwidth 0.03; cutout pixel p -> detector p + offset.
         xs, ys = np.array([1, 500, 1000, 1500, 2040]), np.array([1, 700, 1400, 2040])
         vals = np.zeros((4, 5, 2), dtype=np.float32)
-        vals[..., 0] = 1.0 + 0.001 * xs[None, :] + 0.0005 * ys[:, None]
+        vals[..., 0] = 1.0 + 0.001 * xs[None, :] + 0.0005 * ys[:, None] + wave_offset
         vals[..., 1] = 0.03
         tab = fits.BinTableHDU.from_columns([
             fits.Column("X", "5J", array=xs[None, :].astype(np.int32)), fits.Column("Y", "4J", array=ys[None, :].astype(np.int32)),

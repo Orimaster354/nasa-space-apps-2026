@@ -255,7 +255,9 @@ class CutoutCache:
     def is_cached(self, url: str) -> bool:
         return self.path_for(url).exists()
 
-    def get(self, url: str) -> Path:
+    def get(self, url: str, *, retries: int | None = None, timeout_s: float | None = None) -> Path:
+        """Path of the cached cutout, downloading it if needed. `retries` and `timeout_s` override the defaults for this call only
+        (used when many frames are fetched in one request and a slow archive must not stall everything)."""
         path = self.path_for(url)
         if path.exists():
             return path
@@ -265,14 +267,15 @@ class CutoutCache:
             if path.exists():
                 return path
             with self._slots:
-                self._download(url, path)
+                self._download(url, path, retries, timeout_s)
         return path
 
-    def _download(self, url: str, path: Path) -> None:
+    def _download(self, url: str, path: Path, retries: int | None = None, timeout_s: float | None = None) -> None:
         last: Exception | None = None
-        for attempt in range(self.retries + 1):
+        n = self.retries if retries is None else retries
+        for attempt in range(n + 1):
             try:
-                resp = self.client.get(url)
+                resp = self.client.get(url, **({} if timeout_s is None else {"timeout": timeout_s}))
                 if resp.status_code == 404:
                     raise IrsaError("The requested SPHEREx data is not available.", retryable=False)
                 if resp.status_code >= 500 or resp.status_code == 429:
@@ -290,6 +293,6 @@ class CutoutCache:
                     raise
             except httpx.HTTPError as exc:
                 last = exc
-            if attempt < self.retries:
+            if attempt < n:
                 time.sleep(self.backoff_s * (2 ** attempt))
         raise IrsaError("The SPHEREx archive could not be reached.") from last

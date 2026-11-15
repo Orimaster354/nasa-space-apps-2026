@@ -247,3 +247,20 @@ def test_default_fetch_does_not_retry_a_client_error(monkeypatch):
     with pytest.raises(irsa.IrsaError):
         irsa._default_fetch("spherex_dr1", 10.0, 10.0)
     assert len(calls) == 1
+
+
+def test_a_single_call_can_use_fewer_retries_and_a_shorter_timeout(tmp_path):
+    seen = []
+
+    def handler(req):
+        seen.append(req.extensions.get("timeout"))
+        return httpx.Response(503)
+
+    cache = irsa.CutoutCache(tmp_path, client=httpx.Client(transport=httpx.MockTransport(handler)), retries=3, backoff_s=0)
+    with pytest.raises(irsa.IrsaError):
+        cache.get("https://irsa.ipac.caltech.edu/x.fits?center=1,2d&size=0.1")
+    assert len(seen) == 4                                                                            # the default: one try and three retries
+    seen.clear()
+    with pytest.raises(irsa.IrsaError):
+        cache.get("https://irsa.ipac.caltech.edu/y.fits?center=1,2d&size=0.1", retries=1, timeout_s=15.0)
+    assert len(seen) == 2 and all(t["read"] == 15.0 for t in seen)                                   # this call: one retry, 15 s

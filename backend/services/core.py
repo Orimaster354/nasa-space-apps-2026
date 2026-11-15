@@ -28,7 +28,7 @@ from processing import alignment, compare, imaging, irsa, photometry, quality
 from processing.fits_io import FitsReadError, read_cutout
 from store.registry import Registry
 
-from . import targets
+from . import candidates, guided, spectrum, targets
 from .investigations import InvestigationStore
 
 log = logging.getLogger("spx.core")
@@ -121,6 +121,14 @@ class Services:
         self.image_wait_s = image_wait_s
         self._pool = ThreadPoolExecutor(max_workers=render_workers, thread_name_prefix="render")
         self._jobs: dict[str, Future] = {}
+        self._spectrum_pool = ThreadPoolExecutor(max_workers=2, thread_name_prefix="spectrum")
+        self._spectrum_jobs: dict[str, Future] = {}
+        self._candidate_pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="candidates")
+        self._candidate_jobs: dict[str, Future] = {}
+        self.candidate_cached_only = False                # True: the candidate search uses only stored frames (building the demo bundle, no downloads)
+        self.candidate_partial_ttl_s = 600.0              # a candidate search that missed frames (archive trouble) is redone after this long
+        self.spectrum_partial_ttl_s = 600.0               # an incomplete spectrum is reused for this long, then rebuilt
+        self.spectrum_wait_s = 25.0                       # a request waits this long for a spectrum before answering 202 processing
         self.snapshot_max_age_s = snapshot_max_age_s     # a saved archive listing this young is served at once (see _discover_cached)
         self._refreshing: set[str] = set()
         self._disc_cache: dict[tuple[float, float], tuple[float, list[irsa.ArchiveFile]]] = {}
@@ -304,16 +312,19 @@ class Services:
         keep.sort(key=lambda f: (f.mjd_start is None, f.mjd_start or 0.0), reverse=(sort == "-observedAt"))
 
         items = []
+        priors = self.registry.get_observations([observation_id_for(f.uri) for f in keep])        # one read for the whole listing
+        stored = []
         for f in keep:
             oid = observation_id_for(f.uri)
-            prior = self.registry.get_observation(oid)
+            prior = priors.get(oid)
             observation = self._observation_dict(f, obj, (prior or {}).get("quality"))
             self._with_wave(observation, prior or {})
             object_ids = sorted(set((prior or {}).get("observation", {}).get("objectIds", [])) | {object_id})
             observation["objectIds"] = object_ids
-            self.registry.put_observation(oid, {"observation": observation, "file": asdict(f), "quality": (prior or {}).get("quality"),
-                                                **({"wavelengthAtObject": prior["wavelengthAtObject"]} if prior and prior.get("wavelengthAtObject") else {})})
+            stored.append((oid, {"observation": observation, "file": asdict(f), "quality": (prior or {}).get("quality"),
+                                 **({"wavelengthAtObject": prior["wavelengthAtObject"]} if prior and prior.get("wavelengthAtObject") else {})}))
             items.append(observation)
+        self.registry.put_observations(stored)                                                       # and one write
 
         note = None
         if not files:
@@ -441,15 +452,133 @@ class Services:
         ra, dec = grid.raster_to_sky(x, y)
         return {"sky": {"raDeg": ra, "decDeg": dec}}
 
+    # ---- spectrum --------------------------------------------------------------------------------------------------
+    def _spectrum_stub(self, obj: dict, sid: str, ra, dec, radius: float, status: dict) -> dict:
+        pos = {"raDeg": ra, "decDeg": dec} if ra is not None else obj["coordinates"]
+        return {"spectrumId": sid, "objectId": obj["objectId"], "availability": status, "position": pos, "apertureRadiusArcsec": radius,
+                "extractionMethod": "Aperture photometry on each SPHEREx observation, one point per band.", "wavelengthUnit": "um",
+                "fluxUnit": "mJy", "points": [], "warnings": [], "generatedAt": now_iso()}
+
+    def get_spectrum(self, object_id: str, *, ra: float | None = None, dec: float | None = None,
+                     radius: float = spectrum.DEFAULT_RADIUS_ARCSEC, wait_s: float | None = None) -> dict:
+        if (ra is None) != (dec is None):
+            raise BadRequest("Provide both ra and dec, or neither.")
+        if ra is not None:
+            try:
+                ra, dec = irsa.validate_position(ra, dec)
+            except ValueError as exc:
+                raise BadRequest(str(exc)) from exc
+        if not (3.0 <= radius <= 60.0):
+            raise BadRequest("apertureRadiusArcsec must be between 3 and 60.")
+        obj = self.registry.get_object(object_id)
+        if obj is None:
+            raise NotFound("Unknown object.")
+        sid = spectrum.spectrum_id(object_id, ra, dec, radius)
+        stored = self.registry.get_spectrum(sid)
+        if stored and (not stored.get("partial") or self._age_s(stored.get("savedAt")) < self.spectrum_partial_ttl_s):
+            return stored["result"]
+        created = False
+        with self._lock:
+            fut = self._spectrum_jobs.get(sid)
+            if fut is None:
+                fut = self._spectrum_pool.submit(self._build_spectrum, obj, ra, dec, radius, sid)
+                self._spectrum_jobs[sid] = fut
+                created = True
+        if created:
+            fut.add_done_callback(lambda f, k=sid: self._spectrum_done(k))
+        try:
+            return fut.result(timeout=self.spectrum_wait_s if wait_s is None else wait_s)
+        except FutureTimeout:
+            return self._spectrum_stub(obj, sid, ra, dec, radius, {"status": "processing", "retryAfterSeconds": 3,
+                                                                    "statusReason": "Measuring this position in many SPHEREx observations."})
+        except irsa.IrsaError as exc:
+            raise Upstream(str(exc), exc.retryable) from exc
+
+    def _build_spectrum(self, obj: dict, ra, dec, radius: float, sid: str) -> dict:
+        result, partial = spectrum.build(self, obj, ra, dec, radius, sid, now_iso)
+        if result["availability"]["status"] == "available":
+            # A complete spectrum is kept for good. One that is missing frames because the archive was slow or down is only kept briefly,
+            # so the next visit tries again instead of showing an old gap for ever.
+            self.registry.put_spectrum(sid, {"result": result, "partial": partial, "savedAt": now_iso()})
+        return result
+
+    def _spectrum_done(self, sid: str) -> None:
+        with self._lock:
+            self._spectrum_jobs.pop(sid, None)
+
+    def get_stored_spectrum(self, spectrum_id: str) -> dict:
+        rec = self.registry.get_spectrum(spectrum_id)
+        if rec is None:
+            raise NotFound("Unknown spectrum.")
+        return rec["result"]
+
+    # ---- candidates ------------------------------------------------------------------------------------------------
+    def compute_candidates(self, object_id: str) -> dict:
+        """Run the candidate search now (blocking) and store the result. Used by the background job and by the bundle script."""
+        obj = self.registry.get_object(object_id)
+        if obj is None:
+            raise NotFound("Unknown object.")
+        found, info = candidates.build(self, obj, now_iso)
+        run = {"computedAt": now_iso(), "note": info["note"], "partial": info["partial"], "candidateIds": [c["candidateId"] for c in found]}
+        self.registry.put_candidates(object_id, found, run)
+        return run
+
+    def _candidate_job_done(self, object_id: str) -> None:
+        with self._lock:
+            self._candidate_jobs.pop(object_id, None)
+
+    def get_candidates(self, object_id: str, *, limit: int = 20, offset: int = 0, min_score: float | None = None, sort: str = "-score") -> dict:
+        if not (1 <= limit <= 100) or offset < 0:
+            raise BadRequest("limit must be 1-100 and offset >= 0.")
+        if sort not in ("-score", "score"):
+            raise BadRequest("sort must be -score or score.")
+        if self.registry.get_object(object_id) is None:
+            raise NotFound("Unknown object.")
+        run = self.registry.get_candidate_run(object_id)
+        fresh = run is not None and (not run.get("partial") or self._age_s(run.get("computedAt")) < self.candidate_partial_ttl_s)
+        running = False
+        if not fresh:
+            created = False
+            with self._lock:
+                if object_id not in self._candidate_jobs:
+                    fut = self._candidate_pool.submit(self.compute_candidates, object_id)
+                    self._candidate_jobs[object_id] = fut
+                    created = True
+                running = True
+            if created:
+                fut.add_done_callback(lambda f, k=object_id: self._candidate_job_done(k))
+        items = self.registry.list_candidates(object_id)
+        if min_score is not None:
+            items = [c for c in items if c["score"] >= min_score]
+        items.sort(key=lambda c: c["score"], reverse=(sort == "-score"))
+        out = {"items": items[offset:offset + limit], "total": len(items), "limit": limit, "offset": offset}
+        if not items:
+            out["coverageNote"] = ("Looking for candidates in this target's observations. This can take a minute; reload to see the result."
+                                   if running else (run or {}).get("note") or "No candidates were found.")
+        return out
+
+    def get_candidate(self, candidate_id: str) -> dict:
+        c = self.registry.get_candidate(candidate_id)
+        if c is None:
+            raise NotFound("Unknown candidate.")
+        return c
+
+    def get_guided(self, guided_id: str, object_id: str | None = None) -> dict:
+        if guided_id != "spot-the-shift":
+            raise NotFound("Unknown guided investigation.")
+        return guided.spot_the_shift(self, object_id)
+
     # ---- measurements --------------------------------------------------------------------------------------------
-    def _cutout_for_measurement(self, rec: dict, ra: float, dec: float, outer_arcsec: float):
-        """Prefer the object-centred cutout the viewer already fetched; fall back to one centred on the region."""
+    def _cutout_for_measurement(self, rec: dict, ra: float, dec: float, outer_arcsec: float, quick: bool = False):
+        """Prefer the object-centred cutout the viewer already fetched; fall back to one centred on the region.
+        `quick` limits a download to one retry and 15 s (used by the spectrum, which fetches many frames in one request)."""
+        kw = {"retries": 1, "timeout_s": 15.0} if quick else {}
         grid = self._grid(rec, None, None, imaging.DEFAULT_FOV_ARCMIN)
-        cutout = read_cutout(self.cutouts.get(irsa.cutout_url(rec["file"]["uri"], grid.center_ra, grid.center_dec, grid.cutout_size_deg)))
+        cutout = read_cutout(self.cutouts.get(irsa.cutout_url(rec["file"]["uri"], grid.center_ra, grid.center_dec, grid.cutout_size_deg), **kw))
         if photometry.fits_in_image(cutout, ra, dec, outer_arcsec):
             return cutout
         size = min(1.0, max(0.05, 2 * outer_arcsec * 1.15 / 3600.0))
-        return read_cutout(self.cutouts.get(irsa.cutout_url(rec["file"]["uri"], ra, dec, size)))
+        return read_cutout(self.cutouts.get(irsa.cutout_url(rec["file"]["uri"], ra, dec, size), **kw))
 
     def _measure_one(self, rec: dict, ra: float, dec: float, radius: float):
         """Fetch the cutout and run aperture photometry. Raises Upstream / DataUnavailable with user-safe messages."""
@@ -521,7 +650,9 @@ class Services:
                                   + checks["wavelength"]["detail"]
                                   + " Measure each frame separately (aperture_flux) and compare them as a spectrum instead.")
         value = res_t.flux_mjy - res_b.flux_mjy
-        sigma = math.sqrt(res_b.uncertainty_mjy ** 2 + res_t.uncertainty_mjy ** 2)
+        stat = math.sqrt(res_b.uncertainty_mjy ** 2 + res_t.uncertainty_mjy ** 2)
+        sys_floor = photometry.SYSTEMATIC_FRACTION * math.hypot(res_b.flux_mjy, res_t.flux_mjy)
+        sigma = math.sqrt(stat ** 2 + sys_floor ** 2)
         snr = value / sigma
         warnings = [f"Base frame: {w}" for w in res_b.warnings] + [f"Target frame: {w}" for w in res_t.warnings]
         warnings += [f"{c['name']}: {c['detail']}" for c in verdict["checks"]
@@ -538,12 +669,14 @@ class Services:
         flags = ([{**f, "description": f"Base frame: {f['description']}"} for f in res_b.quality_flags]
                  + [{**f, "description": f"Target frame: {f['description']}"} for f in res_t.quality_flags])
         return {"measurementId": mid, "kind": "flux_change", "value": value, "unit": photometry.FLUX_UNIT, "uncertainty": sigma,
-                "uncertaintyBasis": "Quadrature sum of the two aperture-flux uncertainties (the frames are independent exposures). "
-                                    f"Base: {res_b.uncertainty_basis} Target: {res_t.uncertainty_basis}",
+                "uncertaintyBasis": (f"Quadrature sum of the two statistical aperture-flux uncertainties ({stat:.3g} mJy, the frames are independent exposures) "
+                                     f"and a systematic floor of {photometry.SYSTEMATIC_FRACTION * 100:g} percent of each frame's flux ({sys_floor:.3g} mJy), "
+                                     "the repeatability observed between frames at matching wavelength. "
+                                     f"Base: {res_b.uncertainty_basis} Target: {res_t.uncertainty_basis}"),
                 "signalToNoise": snr, "observationIds": list(ids),
                 "region": {"center": {"raDeg": ra, "decDeg": dec}, "radiusArcsec": radius},
                 "method": (f"Target minus base. Both measured with the same aperture. Base: {res_b.method} Target: {res_t.method} "
-                           f"The two frames sample the object at {res_b.wavelength_um:.3f} and {res_t.wavelength_um:.3f} um, matched within one bandwidth."),
+                           f"The two frames sample the object at {res_b.wavelength_um:.3f} and {res_t.wavelength_um:.3f} um, matched to within a quarter of one bandwidth."),
                 "qualityFlags": flags, "warnings": warnings, "createdAt": now_iso()}
 
     def get_measurement(self, measurement_id: str) -> dict:

@@ -11,7 +11,7 @@ GENERAL = ("Navi's AI helper isn't available right now. Meanwhile, here is how t
 
 
 def summarize(pack: EvidencePack) -> str:
-    shown = [f for f in pack.facts if f.target_type and f.plain]
+    shown = [f for f in pack.facts if (f.target_type or f.in_summary) and f.plain]
     if not shown:
         return GENERAL + "\n\nA good next step: " + (next_step(pack) or "")
     lines = [LABEL, ""]

@@ -76,9 +76,16 @@ def test_difference_at_unmatched_wavelengths_warns_not_refuses():
     assert r["verdict"] == "comparable_with_caveats" and results(r)["wavelength"] == "warn"
 
 
-def test_wavelengths_within_one_bandwidth_pass():
-    r = assess(S(wl=2.00), S(wl=2.04), "blink")
-    assert results(r)["wavelength"] == "pass"
+def test_wavelengths_within_a_quarter_of_a_bandwidth_pass_and_wider_gaps_warn():
+    """A whole bandwidth is too loose for steep spectra (Epsilon Indi B falls 27 to 14 mJy across 0.056 um); the limit is a quarter."""
+    assert results(assess(S(wl=2.000, bw=0.05), S(wl=2.010, bw=0.05), "blink"))["wavelength"] == "pass"      # 0.010 <= 0.0125
+    assert results(assess(S(wl=2.000, bw=0.05), S(wl=2.0125, bw=0.05), "blink"))["wavelength"] == "pass"     # exactly at the limit
+    near = assess(S(wl=2.000, bw=0.05), S(wl=2.030, bw=0.05), "blink")                                         # inside one bandwidth, but not matched
+    assert results(near)["wavelength"] == "warn"
+    detail = next(k["detail"] for k in near["checks"] if k["name"] == "wavelength")
+    assert "slightly different wavelengths" in detail and "under 0.013 um" in detail and "steeply" in detail
+    far = assess(S(wl=2.000, bw=0.05), S(wl=2.300, bw=0.05), "blink")
+    assert "different wavelengths" in next(k["detail"] for k in far["checks"] if k["name"] == "wavelength") and "slightly" not in next(k["detail"] for k in far["checks"] if k["name"] == "wavelength")
 
 
 def test_unknown_wavelength_is_not_evaluated_not_pass():
