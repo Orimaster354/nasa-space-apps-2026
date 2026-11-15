@@ -147,6 +147,34 @@ def test_archive_down_is_a_retryable_503(env):
     assert r.status_code == 503 and r.json()["error"] == {**r.json()["error"], "code": "UPSTREAM_UNAVAILABLE", "retryable": True}
 
 
+def test_archive_down_serves_the_last_saved_listing_with_a_note(env):
+    c, _, state = env
+    oid = _object(c)["objectId"]
+    first = c.get(f"/api/v1/objects/{oid}/observations").json()
+    assert first["total"] == 3 and "coverageNote" not in first
+    c.app.state.services._disc_cache.clear()                                    # forget the in-memory copy; the saved snapshot remains
+    state["discover_error"] = irsa.IrsaError("archive down")
+    r = c.get(f"/api/v1/objects/{oid}/observations")
+    assert r.status_code == 200
+    page = r.json()
+    assert page["total"] == 3 and "last saved listing" in page["coverageNote"] and "may be out of date" in page["coverageNote"]
+    assert [i["observationId"] for i in page["items"]] == [i["observationId"] for i in first["items"]]
+    assert all(i["footprint"] for i in page["items"])                           # polygons survive the save and reload
+
+
+def test_a_listing_missing_a_collection_is_flagged_and_never_saved(env):
+    c, _, state = env
+    oid = _object(c)["objectId"]
+    partial = irsa.Discovery(state["files"][:2])
+    partial.incomplete = ["spherex_qr3"]
+    state["files"] = partial
+    page = c.get(f"/api/v1/objects/{oid}/observations").json()
+    assert page["total"] == 2 and "may be incomplete" in page["coverageNote"] and "spherex_qr3" in page["coverageNote"]
+    c.app.state.services._disc_cache.clear()
+    state["discover_error"] = irsa.IrsaError("archive down")
+    assert c.get(f"/api/v1/objects/{oid}/observations").status_code == 503      # the partial listing was not saved as a snapshot
+
+
 def _observations(c):
     oid = _object(c)["objectId"]
     return oid, c.get(f"/api/v1/objects/{oid}/observations").json()["items"]
@@ -311,3 +339,11 @@ def test_comparison_warns_when_the_object_sits_at_different_wavelengths(env, tmp
     wl = next(k for k in cmp_["compatibility"]["checks"] if k["name"] == "wavelength")
     assert wl["result"] == "warn" and "different wavelengths" in wl["detail"]
     assert any("different wavelengths" in w for w in cmp_["warnings"])
+
+
+def test_candidates_endpoint_is_honestly_empty_until_detection_exists(env):
+    c, _, _ = env
+    oid = _object(c)["objectId"]
+    page = c.get(f"/api/v1/objects/{oid}/candidates").json()
+    assert page["items"] == [] and page["total"] == 0 and "not available yet" in page["coverageNote"]
+    assert c.get("/api/v1/objects/obj_unknown/candidates").status_code == 404
