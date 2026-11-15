@@ -61,7 +61,7 @@ Priorities: **P0** essential for a functioning submission · **P1** important di
 
 ### Comparison and measurement
 
-- [ ] **P0-21 Validate image alignment between two observations.**
+- [x] **P0-21 Validate image alignment between two observations.** *(Done: `processing/alignment.py` matches bright stars between the two grid images and takes the median offset (robust to a moving object); wired into comparisons as the `alignment` check and `Alignment.residualArcsec`; `notEvaluated` when fewer than 3 stars match. 6 synthetic tests recover a known shift within 0.5 arcsec. Real data: 38 frame pairs, median offset 0.41 arcsec, max 1.4. It measures a residual only; it does not re-register the images.)*
   Dep: P0-16, P0-04. Done: reprojection of target onto base grid; residual (arcsec) computed from reference sources or stated as unmeasured; synthetic test with a known shift recovers it within a stated tolerance.
 - [x] **P0-22 Compatibility checks and verdicts.** *(Done in `processing/compare.py` with 8 tests. `alignment` and `calibration` stay `notEvaluated`, so a comparison is at best `comparable_with_caveats`. The zodi threshold, 5%, is our heuristic.)*
   Dep: P0-21, P0-19. Done: checks for footprint, wavelength/bandpass, calibration/release, background (zodi), alignment, quality; verdict mapping implemented as in the pipeline doc; `notEvaluated` never counts as pass (unit tests for every verdict).
@@ -71,7 +71,7 @@ Priorities: **P0** essential for a functioning submission · **P1** important di
   Dep: P0-16, P0-21. Done: `POST /measurements` returns `aperture_flux` with value, unit, uncertainty and `uncertaintyBasis`, method string (aperture, background, unit conversion); synthetic test matches the injected flux; a masked or non-detected region reports that, not zero.
 - [x] **P0-25 Unit conversion documented and tested.** *(Flux density in mJy = sum of background-subtracted MJy/sr over the aperture x pixel solid angle (from the WCS) x 1e9; written in the module docstring and in every result's `method`; validated on an injected star of known total. It is a unit identity, so no external citation is needed beyond the IRSA statement that IMAGE is in MJy/sr. No aperture or colour correction.)*
   Dep: P0-24, A6. Done: MJy/sr → flux density conversion method written down, cited, and validated on a synthetic or known source.
-- [ ] **P0-26 Basic change detection.**
+- [x] **P0-26 Basic change detection.** *(Done: `POST /measurements` kind `flux_change` = target minus base in mJy, uncertainty in quadrature, `signalToNoise`, refused with 422 unless both frames are comparable AND at matched wavelength (within one bandwidth). Real-data check: 96 matched-wavelength pairs of one star gave |z| median 0.31, max 1.7; 715 unmatched pairs reached 4.5 sigma, which the rule prevents from being reported as change.)*
   Dep: P0-23, P0-24. Done: `flux_change` measurement with propagated uncertainty and caveats from the compatibility result; ratio-to-uncertainty is reported with no “detection” wording.
 
 ### AI (core)

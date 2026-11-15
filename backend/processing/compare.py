@@ -9,8 +9,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from .alignment import AlignmentEstimate
+
 # Relative difference of the modelled zodiacal-light level above which we warn that the BACKGROUND, not the sources, may differ.
 ZODI_WARN_FRACTION = 0.05
+# Measured star-position offset between the two frames above which we warn (about half a native 6.15 arcsec pixel). Our heuristic.
+ALIGN_WARN_ARCSEC = 3.0
 
 
 @dataclass(frozen=True)
@@ -52,7 +56,20 @@ def _wavelength_within_band(base: Side, target: Side) -> dict:
                   "A brightness difference may be spectral (the source's flux changes with wavelength), not a change over time.")
 
 
-def assess(base: Side, target: Side, mode: str) -> dict:
+def _alignment_check(est: AlignmentEstimate | None) -> dict:
+    base = "Each image was resampled onto a common sky grid using its own WCS. "
+    if est is None:
+        return _check("alignment", "notEvaluated", base + "The alignment residual was not measured.")
+    if not est.measured:
+        return _check("alignment", "notEvaluated", base + f"The alignment residual could not be measured: {est.reason}")
+    detail = (base + f"Matching {est.n_matched} bright stars between the frames, the median position offset is {est.residual_arcsec:.1f} arcsec "
+              f"(scatter {est.scatter_arcsec:.1f} arcsec, so the median is uncertain by about {est.uncertainty_arcsec:.1f} arcsec).")
+    if est.residual_arcsec <= ALIGN_WARN_ARCSEC:
+        return _check("alignment", "pass", detail)
+    return _check("alignment", "warn", detail + f" That is more than {ALIGN_WARN_ARCSEC:g} arcsec, so a difference image will show false bright/dark pairs at stars.")
+
+
+def assess(base: Side, target: Side, mode: str, alignment: AlignmentEstimate | None = None) -> dict:
     """Returns {"verdict", "checks", "comparisonKind", "warnings"} for the contract."""
     kind = comparison_kind(base, target)
     checks = [_check("footprint", "pass", "Both observations were found covering this position.")]
@@ -71,7 +88,7 @@ def assess(base: Side, target: Side, mode: str) -> dict:
         checks.append(_check("dataRelease", "pass", "Same data release."))
         checks.append(_check("calibration", "notEvaluated", "Calibration equivalence between these observations was not independently verified."))
 
-    checks.append(_check("alignment", "notEvaluated", "Each image was resampled onto a common sky grid using its own WCS; the alignment residual was not measured."))
+    checks.append(_alignment_check(alignment))
 
     worst = _worse(base.quality, target.quality)
     if worst == "good":

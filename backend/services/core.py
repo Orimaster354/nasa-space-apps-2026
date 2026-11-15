@@ -11,6 +11,7 @@ Deviations worth knowing (documented, not hidden):
 from __future__ import annotations
 
 import hashlib
+import math
 import re
 import threading
 import time
@@ -21,7 +22,7 @@ from typing import Callable
 
 import numpy as np
 
-from processing import compare, imaging, irsa, photometry, quality
+from processing import alignment, compare, imaging, irsa, photometry, quality
 from processing.fits_io import FitsReadError, read_cutout
 from store.registry import Registry
 
@@ -315,46 +316,97 @@ class Services:
         size = min(1.0, max(0.05, 2 * outer_arcsec * 1.15 / 3600.0))
         return read_cutout(self.cutouts.get(irsa.cutout_url(rec["file"]["uri"], ra, dec, size)))
 
-    def create_measurement(self, kind: str, observation_ids: list[str], region: dict | None) -> dict:
-        if kind != "aperture_flux":
-            raise BadRequest(f"Measurement kind '{kind}' is not supported yet; only 'aperture_flux' is available.")
-        if len(observation_ids) != 1:
-            raise BadRequest("aperture_flux needs exactly one observation id.")
-        if region is None:
-            raise BadRequest("aperture_flux needs a region (center and radiusArcsec).")
-        rec = self.registry.get_observation(observation_ids[0])
-        if rec is None:
-            raise NotFound("Unknown observation.")
-        c, radius = region["center"], float(region["radiusArcsec"])
-        try:
-            ra, dec = irsa.validate_position(c["raDeg"], c["decDeg"])
-        except ValueError as exc:
-            raise BadRequest(str(exc)) from exc
+    def _measure_one(self, rec: dict, ra: float, dec: float, radius: float):
+        """Fetch the cutout and run aperture photometry. Raises Upstream / DataUnavailable with user-safe messages."""
         annulus = (2 * radius, 3 * radius)
-        mid = "meas_" + hashlib.sha1(f"{kind}|{observation_ids[0]}|{ra:.6f}|{dec:.6f}|{radius:.3f}".encode()).hexdigest()[:10]
-        existing = self.registry.get_measurement(mid)
-        if existing:
-            return existing
         try:
             cutout = self._cutout_for_measurement(rec, ra, dec, annulus[1])
-            res = photometry.aperture_flux(cutout, ra, dec, radius_arcsec=radius, annulus_arcsec=annulus)
+            return cutout, photometry.aperture_flux(cutout, ra, dec, radius_arcsec=radius, annulus_arcsec=annulus)
         except irsa.IrsaError as exc:
             raise Upstream(str(exc), exc.retryable) from exc
         except FitsReadError as exc:
             raise DataUnavailable(f"The data file could not be read: {exc}") from exc
         except photometry.Unmeasurable as exc:
             raise DataUnavailable(str(exc)) from exc
-        out = {"measurementId": mid, "kind": kind, "value": res.flux_mjy, "unit": photometry.FLUX_UNIT,
+
+    @staticmethod
+    def _parse_region(region: dict | None) -> tuple[float, float, float]:
+        if region is None:
+            raise BadRequest("This measurement needs a region (center and radiusArcsec).")
+        c, radius = region["center"], float(region["radiusArcsec"])
+        try:
+            ra, dec = irsa.validate_position(c["raDeg"], c["decDeg"])
+        except ValueError as exc:
+            raise BadRequest(str(exc)) from exc
+        return ra, dec, radius
+
+    def create_measurement(self, kind: str, observation_ids: list[str], region: dict | None) -> dict:
+        if kind not in ("aperture_flux", "flux_change"):
+            raise BadRequest(f"Measurement kind '{kind}' is not supported yet; available: aperture_flux, flux_change.")
+        want = 1 if kind == "aperture_flux" else 2
+        if len(observation_ids) != want or len(set(observation_ids)) != want:
+            raise BadRequest(f"{kind} needs exactly {want} different observation id{'s' if want > 1 else ''}.")
+        recs = []
+        for oid in observation_ids:
+            rec = self.registry.get_observation(oid)
+            if rec is None:
+                raise NotFound("Unknown observation.")
+            recs.append(rec)
+        ra, dec, radius = self._parse_region(region)
+        mid = "meas_" + hashlib.sha1(f"{kind}|{'|'.join(observation_ids)}|{ra:.6f}|{dec:.6f}|{radius:.3f}".encode()).hexdigest()[:10]
+        existing = self.registry.get_measurement(mid)
+        if existing:
+            return existing
+        out = (self._aperture_flux_measurement(mid, observation_ids[0], recs[0], ra, dec, radius) if kind == "aperture_flux"
+               else self._flux_change_measurement(mid, observation_ids, recs, ra, dec, radius))
+        self.registry.put_measurement(mid, out)
+        return out
+
+    def _aperture_flux_measurement(self, mid: str, obs_id: str, rec: dict, ra: float, dec: float, radius: float) -> dict:
+        cutout, res = self._measure_one(rec, ra, dec, radius)
+        out = {"measurementId": mid, "kind": "aperture_flux", "value": res.flux_mjy, "unit": photometry.FLUX_UNIT,
                "uncertainty": res.uncertainty_mjy, "uncertaintyBasis": res.uncertainty_basis, "signalToNoise": res.snr,
-               "observationIds": list(observation_ids), "region": {"center": {"raDeg": ra, "decDeg": dec}, "radiusArcsec": radius},
+               "observationIds": [obs_id], "region": {"center": {"raDeg": ra, "decDeg": dec}, "radiusArcsec": radius},
                "method": res.method, "qualityFlags": res.quality_flags, "warnings": list(cutout.warnings) + res.warnings,
                "createdAt": now_iso()}
         if res.wavelength_um is not None:
             out["wavelengthUm"] = res.wavelength_um
         if res.bandwidth_um is not None:
             out["bandwidthUm"] = res.bandwidth_um
-        self.registry.put_measurement(mid, out)
         return out
+
+    def _flux_change_measurement(self, mid: str, ids: list[str], recs: list[dict], ra: float, dec: float, radius: float) -> dict:
+        """target minus base, in mJy, for one sky region. Refused unless the two frames are comparable at matched wavelength."""
+        (cut_b, res_b), (cut_t, res_t) = self._measure_one(recs[0], ra, dec, radius), self._measure_one(recs[1], ra, dec, radius)
+        verdict = compare.assess(self._side(recs[0], cut_b, (res_b.wavelength_um, res_b.bandwidth_um)),
+                                 self._side(recs[1], cut_t, (res_t.wavelength_um, res_t.bandwidth_um)), "difference")
+        checks = {c["name"]: c for c in verdict["checks"]}
+        if verdict["verdict"] == "not_comparable" or checks["wavelength"]["result"] != "pass":
+            raise DataUnavailable("A flux change was not computed because the two frames cannot be compared at the same wavelength. "
+                                  + checks["wavelength"]["detail"]
+                                  + " Measure each frame separately (aperture_flux) and compare them as a spectrum instead.")
+        value = res_t.flux_mjy - res_b.flux_mjy
+        sigma = math.sqrt(res_b.uncertainty_mjy ** 2 + res_t.uncertainty_mjy ** 2)
+        snr = value / sigma
+        warnings = [f"Base frame: {w}" for w in res_b.warnings] + [f"Target frame: {w}" for w in res_t.warnings]
+        warnings += [f"{c['name']}: {c['detail']}" for c in verdict["checks"] if c["result"] in ("warn", "notEvaluated") and c["name"] != "wavelength"]
+        if res_b.snr < photometry.LOW_SNR and res_t.snr < photometry.LOW_SNR:
+            warnings.append("Neither frame significantly detects a source here, so a change in brightness is not meaningful.")
+        if abs(snr) < photometry.LOW_SNR:
+            warnings.append(f"The change is {abs(snr):.1f} times its uncertainty (within {photometry.LOW_SNR:g} sigma), so it is consistent with no change.")
+        else:
+            warnings.append(f"The change is {abs(snr):.1f} times its uncertainty. That does not by itself show the source varied: "
+                            "calibration, pointing, resampling and background differences are not ruled out.")
+        flags = ([{**f, "description": f"Base frame: {f['description']}"} for f in res_b.quality_flags]
+                 + [{**f, "description": f"Target frame: {f['description']}"} for f in res_t.quality_flags])
+        return {"measurementId": mid, "kind": "flux_change", "value": value, "unit": photometry.FLUX_UNIT, "uncertainty": sigma,
+                "uncertaintyBasis": "Quadrature sum of the two aperture-flux uncertainties (the frames are independent exposures). "
+                                    f"Base: {res_b.uncertainty_basis} Target: {res_t.uncertainty_basis}",
+                "signalToNoise": snr, "observationIds": list(ids),
+                "region": {"center": {"raDeg": ra, "decDeg": dec}, "radiusArcsec": radius},
+                "method": (f"Target minus base. Both measured with the same aperture. Base: {res_b.method} Target: {res_t.method} "
+                           f"The two frames sample the object at {res_b.wavelength_um:.3f} and {res_t.wavelength_um:.3f} um, matched within one bandwidth."),
+                "qualityFlags": flags, "warnings": warnings, "createdAt": now_iso()}
 
     def get_measurement(self, measurement_id: str) -> dict:
         rec = self.registry.get_measurement(measurement_id)
@@ -420,11 +472,14 @@ class Services:
             return {**out, "availability": {"status": "failed", "statusReason": f"A data file could not be read: {exc}"},
                     "compatibility": {"verdict": "unknown", "checks": []}}
 
+        est = alignment.estimate_offset(arr_b, arr_t, grid.scale_arcsec)
         a = compare.assess(self._side(base, cut_b, self._wave_at(cut_b, grid.center_ra, grid.center_dec)),
-                           self._side(target, cut_t, self._wave_at(cut_t, grid.center_ra, grid.center_dec)), mode)
+                           self._side(target, cut_t, self._wave_at(cut_t, grid.center_ra, grid.center_dec)), mode, est)
         out.update(availability={"status": "available"}, comparisonKind=a["comparisonKind"], warnings=a["warnings"],
                    compatibility={"verdict": a["verdict"], "checks": a["checks"]},
-                   alignment={"method": "Each cutout was resampled (bilinear) onto a common north-up TAN grid using its own WCS."})
+                   alignment={"method": "Each cutout was resampled (bilinear) onto a common north-up TAN grid using its own WCS."
+                                        + (" Residual = median offset of matched bright stars between the two frames." if est.measured else ""),
+                              **({"residualArcsec": est.residual_arcsec} if est.measured else {})})
         if a["verdict"] != "not_comparable":
             out["baseImage"] = self.get_image(base_id)
             out["targetImage"] = self.get_image(target_id)

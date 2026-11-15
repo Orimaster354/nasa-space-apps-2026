@@ -90,3 +90,90 @@ def test_archive_failure_is_an_upstream_error(env):
     cut.fail = irsa.IrsaError("IRSA is busy", retryable=True)
     r = c.post("/api/v1/measurements", json=_body(obs, *STAR))
     assert r.status_code == 503 and r.json()["error"]["code"] == "UPSTREAM_UNAVAILABLE" and r.json()["error"]["retryable"] is True
+
+
+# ---- flux_change -------------------------------------------------------------------------------------------------------
+def _obs_ids(c):
+    oid = _object(c)["objectId"]
+    return [i["observationId"] for i in c.get(f"/api/v1/objects/{oid}/observations").json()["items"]]    # [D3 2025-05, D3 2025-11, D6 2026-03]
+
+
+def _change(c, base, target, ra=STAR[0], dec=STAR[1], radius=20.0):
+    return c.post("/api/v1/measurements", json=_body(None, ra, dec, radius=radius, kind="flux_change", ids=[base, target]))
+
+
+def _flux_of(peak):
+    sigma = 1.2
+    return peak * 2 * math.pi * sigma ** 2 * (1 - math.exp(-((20 / 6.2) ** 2) / (2 * sigma ** 2))) * OMEGA * 1e9
+
+
+def _brighten(cut, tmp_path, peak):
+    uri = list(URIS)[1]
+    cut.files[uri] = make_cutout_fits(tmp_path / "brighter.fits", *STAR, rotation_deg=60.0, mjd=60990.2, detector=3,
+                                      flag_value=(1 << 21), peak=peak)
+
+
+def test_flux_change_measures_an_injected_brightening_with_propagated_uncertainty(env, tmp_path):
+    c, cut, _ = env
+    ids = _obs_ids(c)
+    _brighten(cut, tmp_path, peak=150.0)
+    r = _change(c, ids[0], ids[1])
+    assert r.status_code == 200, r.text
+    m = r.json()
+    _no_nulls(m)
+    assert m["kind"] == "flux_change" and m["unit"] == "mJy" and m["observationIds"] == ids[:2]
+    assert m["value"] == pytest.approx(_flux_of(150.0) - _flux_of(100.0), rel=0.06)
+    one = c.post("/api/v1/measurements", json=_body(ids[0], *STAR, radius=20)).json()
+    two = c.post("/api/v1/measurements", json=_body(ids[1], *STAR, radius=20)).json()
+    assert m["uncertainty"] == pytest.approx(math.hypot(one["uncertainty"], two["uncertainty"]))
+    assert m["signalToNoise"] == pytest.approx(m["value"] / m["uncertainty"]) and m["signalToNoise"] > 3
+    assert "Quadrature sum" in m["uncertaintyBasis"] and "matched within one bandwidth" in m["method"]
+    assert any("does not by itself show the source varied" in w for w in m["warnings"])
+    assert not any("detect" in w.lower() and "significantly detects" not in w and "does not" not in w for w in m["warnings"])   # no detection claims
+    assert any(w.startswith("calibration:") for w in m["warnings"]) and any(w.startswith("alignment:") for w in m["warnings"])
+    assert _change(c, ids[0], ids[1]).json()["measurementId"] == m["measurementId"]             # stable and stored
+    swapped = _change(c, ids[1], ids[0]).json()
+    assert swapped["value"] == pytest.approx(-m["value"], rel=1e-6) and swapped["measurementId"] != m["measurementId"]
+
+
+def test_unchanged_source_is_consistent_with_no_change(env):
+    c, _, _ = env
+    ids = _obs_ids(c)
+    m = _change(c, ids[0], ids[1]).json()
+    assert abs(m["signalToNoise"]) < 3
+    assert any("consistent with no change" in w for w in m["warnings"])
+
+
+def test_empty_sky_says_neither_frame_detects_a_source(env):
+    c, _, _ = env
+    ids = _obs_ids(c)
+    m = _change(c, ids[0], ids[1], ra=CENTER[0], dec=CENTER[1] - 0.011, radius=12).json()
+    assert any("Neither frame significantly detects a source" in w for w in m["warnings"])
+
+
+def test_different_wavelengths_are_refused_not_reported_as_change(env, tmp_path):
+    c, cut, _ = env
+    ids = _obs_ids(c)
+    cut.files[list(URIS)[1]] = make_cutout_fits(tmp_path / "shifted.fits", *STAR, rotation_deg=60.0, mjd=60990.2, detector=3,
+                                                flag_value=(1 << 21), wave_shift_x=400.0)
+    r = _change(c, ids[0], ids[1])
+    assert r.status_code == 422
+    err = r.json()["error"]
+    assert err["code"] == "DATA_UNAVAILABLE" and "same wavelength" in err["message"] and "as a spectrum" in err["message"]
+
+
+def test_different_bands_are_refused(env):
+    c, _, _ = env
+    ids = _obs_ids(c)
+    r = _change(c, ids[0], ids[2])
+    assert r.status_code == 422 and "same wavelength" in r.json()["error"]["message"]
+
+
+def test_flux_change_needs_two_different_measurable_frames(env, tmp_path):
+    c, cut, _ = env
+    ids = _obs_ids(c)
+    assert _change(c, ids[0], ids[0]).status_code == 400
+    assert c.post("/api/v1/measurements", json=_body(ids[0], *STAR, kind="flux_change", ids=[ids[0]])).status_code == 400
+    cut.files[list(URIS)[1]] = make_cutout_fits(tmp_path / "bad2.fits", *STAR, flag_value=quality.UNUSABLE_MASK & -quality.UNUSABLE_MASK)
+    r = _change(c, ids[0], ids[1])
+    assert r.status_code == 422 and r.json()["error"]["code"] == "DATA_UNAVAILABLE"

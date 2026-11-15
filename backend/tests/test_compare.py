@@ -85,3 +85,15 @@ def test_unknown_wavelength_is_not_evaluated_not_pass():
     r = assess(S(wl=None, bw=None), S(), "blink")
     assert results(r)["wavelength"] == "notEvaluated"
     assert assess(S(bw=None), S(bw=None), "blink")["checks"][1]["result"] == "notEvaluated"
+
+
+def test_alignment_check_uses_the_measured_residual_and_never_invents_one():
+    from processing.alignment import AlignmentEstimate
+    ok = AlignmentEstimate(True, 9, 0.3, 0.2, 0.36, 0.8, 0.33)
+    bad = AlignmentEstimate(True, 9, 4.0, 1.0, 4.1, 0.8, 0.33)
+    none = AlignmentEstimate(False, 1, reason="Only 1 sources matched between the frames (need 3).")
+    check = lambda est: next(c for c in assess(S(), S(), "difference", est)["checks"] if c["name"] == "alignment")
+    assert check(ok)["result"] == "pass" and "9 bright stars" in check(ok)["detail"] and "0.4 arcsec" in check(ok)["detail"]
+    assert check(bad)["result"] == "warn" and "bright/dark pairs" in check(bad)["detail"]
+    assert check(none)["result"] == "notEvaluated" and "could not be measured" in check(none)["detail"]
+    assert check(None)["result"] == "notEvaluated"
