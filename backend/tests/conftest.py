@@ -5,7 +5,7 @@ from pathlib import Path
 # Hermetic tests: never read real AI keys from backend/.env and never reach a live provider. Environment variables take priority
 # over the .env file, and this runs before app.config is imported by any test module.
 for _name in ("PROVIDER", "API_KEY", "MODEL", "BASE_URL"):
-    for _i in (1, 2):
+    for _i in (1, 2, 3):
         os.environ[f"SPX_LLM_{_name}_{_i}"] = ""
 
 import numpy as np

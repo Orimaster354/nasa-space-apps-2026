@@ -108,7 +108,8 @@ class Services:
     def __init__(self, registry: Registry, cutouts: irsa.CutoutCache, images_dir: str | Path,
                  discover: Callable[[float, float], list[irsa.ArchiveFile]] = irsa.discover,
                  resolver: Callable[[str], tuple[float, float]] = _astropy_resolver,
-                 discovery_ttl_s: float = 600.0, image_wait_s: float = 20.0, render_workers: int = 6):
+                 discovery_ttl_s: float = 600.0, image_wait_s: float = 20.0, render_workers: int = 6,
+                 snapshot_max_age_s: float = 3 * 86400.0):
         self.registry, self.cutouts = registry, cutouts
         self.investigations = InvestigationStore(registry)
         self.images_dir = Path(images_dir)
@@ -120,6 +121,8 @@ class Services:
         self.image_wait_s = image_wait_s
         self._pool = ThreadPoolExecutor(max_workers=render_workers, thread_name_prefix="render")
         self._jobs: dict[str, Future] = {}
+        self.snapshot_max_age_s = snapshot_max_age_s     # a saved archive listing this young is served at once (see _discover_cached)
+        self._refreshing: set[str] = set()
         self._disc_cache: dict[tuple[float, float], tuple[float, list[irsa.ArchiveFile]]] = {}
         self._lock = threading.Lock()
 
@@ -172,12 +175,53 @@ class Services:
         return obj
 
     # ---- observations --------------------------------------------------------------------------------------------
+    @staticmethod
+    def _age_s(saved_at: str | None) -> float:
+        try:
+            return (datetime.now(timezone.utc) - datetime.fromisoformat(saved_at.replace("Z", "+00:00"))).total_seconds()
+        except (AttributeError, ValueError):
+            return float("inf")
+
+    @staticmethod
+    def _files_from_snapshot(snap: dict) -> list[irsa.ArchiveFile]:
+        return [irsa.ArchiveFile(**{**d, "footprint": tuple(tuple(p) for p in d["footprint"]) if d.get("footprint") else d.get("footprint")})
+                for d in snap["files"]]
+
+    def _live_discover(self, ra: float, dec: float, key: tuple[float, float], skey: str) -> list[irsa.ArchiveFile]:
+        """Ask the archive; on a complete answer save it as the snapshot and cache it in memory. May raise IrsaError."""
+        files = self._discover(ra, dec)
+        if getattr(files, "incomplete", []):
+            return files                                   # a partial listing is returned to the caller but never saved or cached
+        self.registry.put_discovery(skey, {"savedAt": now_iso(), "files": [asdict(f) for f in files]})
+        with self._lock:
+            self._disc_cache[key] = (time.monotonic(), list(files))
+        return files
+
+    def _refresh_in_background(self, ra: float, dec: float, key: tuple[float, float], skey: str) -> None:
+        with self._lock:
+            if skey in self._refreshing:
+                return
+            self._refreshing.add(skey)
+
+        def run():
+            try:
+                self._live_discover(ra, dec, key, skey)
+            except Exception as exc:                       # the saved listing keeps serving; nothing to tell the user
+                log.info("background refresh of %s failed: %s", skey, exc)
+            finally:
+                with self._lock:
+                    self._refreshing.discard(skey)
+
+        threading.Thread(target=run, name="discovery-refresh", daemon=True).start()
+
     def _discover_cached(self, ra: float, dec: float) -> tuple[list[irsa.ArchiveFile], str | None]:
         """Archive listing for a position, plus an optional note for the user.
 
-        Live results are cached for a few minutes and saved as a snapshot. If the archive is down, the last saved snapshot is used
-        (clearly noted) instead of failing; with no snapshot the error is raised. A listing that is missing a collection is never
-        cached or saved, so the next request retries, and it carries a note saying it may be incomplete.
+        1. A listing fetched in the last few minutes is reused.
+        2. Otherwise, a saved snapshot younger than `snapshot_max_age_s` is returned AT ONCE and refreshed in the background, so a slow or
+           broken archive never makes the page wait (the demo bundle ships such snapshots).
+        3. Otherwise the archive is asked; if it fails, an older snapshot is used (and the user is told) or the error is raised.
+        A listing that is missing a collection is never cached or saved, and carries a note.
         """
         key = (round(ra, 4), round(dec, 4))
         skey = f"{key[0]:.4f},{key[1]:.4f}"
@@ -185,23 +229,22 @@ class Services:
             hit = self._disc_cache.get(key)
         if hit and time.monotonic() - hit[0] < self._ttl:
             return hit[1], None
+        snap = self.registry.get_discovery(skey)
+        if snap and self._age_s(snap.get("savedAt")) < self.snapshot_max_age_s:
+            self._refresh_in_background(ra, dec, key, skey)
+            return self._files_from_snapshot(snap), None
         try:
-            files = self._discover(ra, dec)
+            files = self._live_discover(ra, dec, key, skey)
         except irsa.IrsaError as exc:
-            snap = self.registry.get_discovery(skey)
             if snap:
                 log.warning("archive unavailable (%s); serving the saved listing from %s", exc, snap.get("savedAt"))
-                return ([irsa.ArchiveFile(**{**d, "footprint": tuple(tuple(p) for p in d["footprint"]) if d.get("footprint") else d.get("footprint")})
-                         for d in snap["files"]],
+                return (self._files_from_snapshot(snap),
                         f"The SPHEREx archive is not responding right now, so this is the last saved listing ({snap.get('savedAt', 'earlier')}). It may be out of date.")
             raise Upstream(str(exc), exc.retryable) from exc
         incomplete = list(getattr(files, "incomplete", []))
         if incomplete:
             return list(files), (f"Some archive collections did not respond ({', '.join(incomplete)}), so this list may be incomplete. "
                                  "Reload in a moment to check again.")
-        self.registry.put_discovery(skey, {"savedAt": now_iso(), "files": [asdict(f) for f in files]})
-        with self._lock:
-            self._disc_cache[key] = (time.monotonic(), list(files))
         return list(files), None
 
     def _observation_dict(self, f: irsa.ArchiveFile, obj: dict, quality_info: dict | None) -> dict:

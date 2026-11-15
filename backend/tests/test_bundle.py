@@ -116,8 +116,12 @@ def test_offline_resolve_listing_and_images(built):
     svc = _offline(data, archive)
     oid = _object_ids(data)[0]
     page = svc.list_observations(oid, bandpass="SPHEREx-D3")
-    assert page["total"] == 2 and "last saved listing" in page["coverageNote"]
+    assert page["total"] == 2 and "coverageNote" not in page                        # a recent saved listing is served as if nothing were wrong
     _no_nulls({k: v for k, v in page.items() if k != "items"})
+    svc.snapshot_max_age_s = 0                                                       # an OLD saved listing with the archive down: served, and the user is told
+    svc._disc_cache.clear()
+    assert "last saved listing" in svc.list_observations(oid, bandpass="SPHEREx-D3")["coverageNote"]
+    svc.snapshot_max_age_s = 3 * 86400.0
     before = archive.requests
     for item in page["items"]:
         img = svc.get_image(item["observationId"], wait_s=5)

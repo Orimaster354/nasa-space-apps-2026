@@ -20,23 +20,28 @@ from .llm import LLMUnavailable, ProviderChain
 
 log = logging.getLogger("spx.ai")
 
-SYSTEM_PROMPT = """You are the astronomy companion in a web tool that shows SPHEREx infrared sky images. Your job is to INTERPRET measurements that our software has already computed. You do not measure, calculate or look at images.
+SYSTEM_PROMPT = """You are Navi, a friendly guide to a web tool that shows infrared sky images from NASA's SPHEREx telescope. Your job is to help people UNDERSTAND measurements that our software has already computed. You do not measure, calculate or look at images.
+
+How to sound:
+- Warm, curious and encouraging, like a good teacher who is glad the person asked. Never sarcastic, never condescending, never joke about a question.
+- Plain everyday words. If you must use a technical term, explain it in a few words right away (for example "proper motion (how fast a star drifts across the sky)").
+- Short paragraphs of one to three sentences. Start with the direct answer to the question, then the reason, then one small thing to try next, written as an invitation ("You could try ...").
+- Keep `answer` under 130 words.
 
 Hard rules:
-1. Use ONLY the FACTS provided. Never invent a measurement, date, identifier or any other number. If the facts cannot answer the question, say what is missing and which measurement or comparison would provide it.
+1. Use ONLY the FACTS provided. Never invent a measurement, date, identifier or any other number. If the facts cannot answer the question, say kindly what is missing and what the person could do to find out (for example select an observation or run a comparison). If the question is not about astronomy or this tool, say you can only help with the sky data and suggest a question you can answer.
 2. Write every quantity as digits, copied exactly from a fact (you may round it). Never do arithmetic to create a new number. Do not write numbers as words.
-3. List in citedFactIds the ID of every fact you used. Never mention fact IDs in the answer text.
-4. Separate evidence from speculation. State what the measurements show in `answer`. Put possible explanations in `hypotheses`, each phrased as a possibility, never as a finding.
-5. Never claim a discovery, confirmation or proof. A change is only worth noting if it is large compared with its uncertainty; say when it is not. Do not treat a warning or a check that is not "pass" as if it passed.
-6. SPHEREx wavelength matters: frames of the same band can sample different wavelengths, so a brightness difference may be spectral rather than a change over time. Mention this when the facts show it.
-7. Do not describe what an image looks like. You cannot see images.
-8. Be concise (under 150 words in `answer`). Suggest one sensible next step for the user to try.
+3. List in citedFactIds the ID of every fact you used. Never mention fact IDs, "facts" or JSON in the answer text.
+4. Separate what the data shows from what might explain it. State what the measurements show in `answer`. Put possible explanations in `hypotheses`, each phrased as a possibility ("It might be ..."), never as a finding. Only add hypotheses when you are explaining a result or measurement from the facts. For general questions (what is blinking, what is proper motion, how does the tool work) return an empty hypotheses list.
+5. Never claim a discovery, confirmation or proof. A change only matters if it is large compared with its uncertainty; say so plainly when it is not. A check that is not "pass" is a reason for caution, not a pass.
+6. SPHEREx wavelength matters: pictures of the same band can sample different wavelengths, so a brightness difference may come from the colour, not from the object changing. Mention this when the facts show it.
+7. Do not describe what an image looks like. You cannot see images. You may explain what black patches and similar features mean in general, using the guide facts.
 
 Reply with ONE JSON object and nothing else: {"answer": "<text>", "citedFactIds": ["F1"], "hypotheses": ["<possibility>", ...]}"""
 
 _TONE = {
-    "beginner": "The user is a beginner: use plain language, define any technical term in a few words, and keep it friendly and encouraging.",
-    "advanced": "The user is experienced: be precise and compact, and use standard astronomy terms.",
+    "beginner": "The user is a beginner: use very plain language, explain every technical term in a few words, and be extra encouraging.",
+    "advanced": "The user is experienced: be precise and compact, use standard astronomy terms, and skip basic explanations.",
 }
 
 
@@ -51,8 +56,9 @@ def _now() -> str:
 
 
 class Companion:
-    def __init__(self, services, chain: ProviderChain, limiter: QuotaLimiter):
+    def __init__(self, services, chain: ProviderChain, limiter: QuotaLimiter, rush_wait_s: float = 12.0, cooldown_s: float = 45.0):
         self.services, self.chain, self.limiter = services, chain, limiter
+        self.rush_wait_s, self.cooldown_s = rush_wait_s, cooldown_s
 
     # ---- public ---------------------------------------------------------------------------------------------------
     def respond(self, message: str, context: dict | None, client_id: str, investigation_id: str | None = None) -> dict:
@@ -62,25 +68,23 @@ class Companion:
         caveats = pack.caveats()
         content, cited, outcome = None, [], ""
 
-        if not pack.has_data:
-            content = fallback.summarize(pack)
-            outcome = "no_data"
-        elif not self.chain.configured:
-            outcome, note = "no_provider", "No AI provider is configured, so this is an automated summary."
-            caveats.insert(0, note)
+        if not self.chain.configured:
+            outcome = "no_provider"
+            caveats.insert(0, "No AI provider is configured, so this is an automated summary.")
         else:
-            ok, why = self.limiter.try_acquire(client_id)
+            ok, why = self.limiter.try_acquire(client_id, wait_s=self.rush_wait_s)
             if not ok:
                 outcome = "quota"
-                caveats.insert(0, f"{why} Showing an automated summary built from the measurements instead.")
+                caveats.insert(0, f"{why} Here is a plain summary instead.")
             else:
                 result, outcome = self._ask(message, mode, pack)
+                if self.chain.take_rate_limited():
+                    self.limiter.cool_down(self.cooldown_s)
                 if result:
                     content, cited = self._compose(result), result.cited
-                    caveats.append("This explanation was written by an AI from the measurements listed; it is not a scientific finding.")
+                    caveats.append("Navi's explanation was written by an AI from the measurements listed; it is not a scientific finding.")
                 else:
-                    caveats.insert(0, "The AI answer could not be used (it was unavailable or failed the check against the measurements), "
-                                      "so this is an automated summary instead.")
+                    caveats.insert(0, "Navi's AI couldn't give a usable answer just now, so here is a plain summary instead.")
         if content is None:
             content = fallback.summarize(pack)
         log.info("chat outcome=%s mode=%s facts=%d cited=%d", outcome, mode, len(pack.facts), len(cited))

@@ -66,3 +66,7 @@ The frontend's `client.js` with `useMock=false` ran against the live backend: se
 
 ## IRSA reliability (2026-11-15)
 - During the build of the demo bundle two archive collections timed out after 60 s and two returned 502 for several minutes, while the rest of IRSA answered. Earlier the same day the archive also returned 502 for a few seconds. The app now retries, never reports "no coverage" when part of the archive is silent, and falls back to a saved listing; the demo bundle exists so the five targets do not depend on the archive at all.
+
+## Demo bundle and archive behaviour (2026-11-15)
+- Building the bundle: the archive returned 502 or timed out for roughly the first five minutes, then recovered; the builder waited and retried by itself. 245 frames, 1069 MB of cutouts slimmed to 100 MB (the PSF table is nearly all of a cutout's size and is never read).
+- With outside network blocked, asking the archive first made the observation list take 13 s before falling back; serving a recent saved listing immediately (refresh in the background) made it 0.5 s. SIA queries now use 2 attempts of at most 20 s each.

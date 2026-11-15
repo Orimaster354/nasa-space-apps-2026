@@ -154,7 +154,9 @@ def test_archive_down_serves_the_last_saved_listing_with_a_note(env):
     oid = _object(c)["objectId"]
     first = c.get(f"/api/v1/objects/{oid}/observations").json()
     assert first["total"] == 3 and "coverageNote" not in first
-    c.app.state.services._disc_cache.clear()                                    # forget the in-memory copy; the saved snapshot remains
+    svc = c.app.state.services
+    svc._disc_cache.clear()                                                     # forget the in-memory copy; the saved snapshot remains
+    svc.snapshot_max_age_s = 0                                                  # treat the snapshot as OLD, so the live archive is tried first
     state["discover_error"] = irsa.IrsaError("archive down")
     r = c.get(f"/api/v1/objects/{oid}/observations")
     assert r.status_code == 200
@@ -162,6 +164,68 @@ def test_archive_down_serves_the_last_saved_listing_with_a_note(env):
     assert page["total"] == 3 and "last saved listing" in page["coverageNote"] and "may be out of date" in page["coverageNote"]
     assert [i["observationId"] for i in page["items"]] == [i["observationId"] for i in first["items"]]
     assert all(i["footprint"] for i in page["items"])                           # polygons survive the save and reload
+
+
+def test_a_recent_saved_listing_is_served_at_once_and_refreshed_in_the_background(env):
+    import time
+    c, _, state = env
+    oid = _object(c)["objectId"]
+    calls = []
+    real = state["files"]
+    first = c.get(f"/api/v1/objects/{oid}/observations").json()
+    assert first["total"] == 3
+    svc = c.app.state.services
+    svc._disc_cache.clear()                                                     # no in-memory copy, but a fresh snapshot on disk
+    gate_open = False
+
+    def slow_discover(ra, dec):                                                 # a hanging archive: must NOT make the page wait
+        calls.append(time.monotonic())
+        t = time.monotonic()
+        while not gate_open and time.monotonic() - t < 5:
+            time.sleep(0.02)
+        return real[:2]                                                         # the archive now lists one fewer file
+
+    svc._discover = slow_discover
+    t0 = time.monotonic()
+    page = c.get(f"/api/v1/objects/{oid}/observations").json()
+    assert time.monotonic() - t0 < 2 and page["total"] == 3 and "coverageNote" not in page     # served at once, no scary note
+    gate_open = True
+    t = time.time()
+    while len(calls) == 0 and time.time() - t < 5:
+        time.sleep(0.02)
+    assert len(calls) == 1                                                      # the refresh did run, in the background
+    t = time.time()
+    while time.time() - t < 5:                                                  # ... and the NEXT listing reflects the archive's new answer
+        if c.get(f"/api/v1/objects/{oid}/observations").json()["total"] == 2:
+            break
+        time.sleep(0.05)
+    assert c.get(f"/api/v1/objects/{oid}/observations").json()["total"] == 2
+    assert len(calls) == 1                                                      # one refresh, not one per request
+
+
+def test_a_failed_background_refresh_leaves_the_saved_listing_working(env):
+    import time
+    c, _, state = env
+    oid = _object(c)["objectId"]
+    c.get(f"/api/v1/objects/{oid}/observations")
+    svc = c.app.state.services
+    svc._disc_cache.clear()
+    state["discover_error"] = irsa.IrsaError("archive down")
+    for _ in range(3):
+        page = c.get(f"/api/v1/objects/{oid}/observations").json()
+        assert page["total"] == 3 and "coverageNote" not in page
+        time.sleep(0.1)
+
+
+def test_an_expired_snapshot_is_not_trusted_when_the_archive_answers(env):
+    c, _, state = env
+    oid = _object(c)["objectId"]
+    c.get(f"/api/v1/objects/{oid}/observations")
+    svc = c.app.state.services
+    svc._disc_cache.clear()
+    svc.snapshot_max_age_s = 0
+    state["files"] = state["files"][:1]                                         # the archive's answer changed
+    assert c.get(f"/api/v1/objects/{oid}/observations").json()["total"] == 1
 
 
 def test_a_listing_missing_a_collection_is_flagged_and_never_saved(env):

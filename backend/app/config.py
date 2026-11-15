@@ -26,10 +26,18 @@ class Settings(BaseSettings):
     llm_api_key_2: SecretStr = SecretStr("")
     llm_model_2: str = ""
     llm_base_url_2: str = ""
-    llm_timeout_s: float = 25.0
-    # Protect the free-tier quota: after this many AI messages a visitor gets automated summaries instead.
-    chat_limit_per_client: int = 15
-    chat_limit_global_daily: int = 500
+    llm_provider_3: str = ""
+    llm_api_key_3: SecretStr = SecretStr("")
+    llm_model_3: str = ""
+    llm_base_url_3: str = ""
+    # Per provider. A flash-lite model normally answers in 1 to 2 seconds; waiting longer rarely helps, so fail over to the next one.
+    llm_timeout_s: float = 12.0
+    # Protect the free-tier quota; when a limit is hit the visitor gets the friendly automated summary instead of an error.
+    # Free tiers typically allow about 10 to 15 requests a minute and a few hundred a day, depending on the model: check yours in
+    # Google AI Studio and set these to match. The real ceiling is the provider's, not ours.
+    chat_limit_per_client: int = 60
+    chat_limit_global_daily: int = 1500
+    chat_limit_per_minute: int = 10
 
 
 settings = Settings()

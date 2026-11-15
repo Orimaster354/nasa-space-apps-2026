@@ -10,6 +10,7 @@ public documentation and are exercised in tests with a mock transport.
 from __future__ import annotations
 
 import logging
+import time
 from typing import Protocol
 
 import httpx
@@ -19,6 +20,10 @@ log = logging.getLogger("spx.ai")
 
 class LLMError(Exception):
     """One provider failed. The message is safe to log (never contains a key or the prompt)."""
+
+
+class RateLimited(LLMError):
+    """The provider answered HTTP 429: too many requests or the free quota is used up."""
 
 
 class LLMUnavailable(Exception):
@@ -34,7 +39,7 @@ class Provider(Protocol):
 class GeminiProvider:
     name = "gemini"
 
-    def __init__(self, api_key: str, model: str, base_url: str = "", timeout: float = 25.0, client: httpx.Client | None = None):
+    def __init__(self, api_key: str, model: str, base_url: str = "", timeout: float = 12.0, client: httpx.Client | None = None):
         self._key, self.model = api_key, model
         self._base = (base_url or "https://generativelanguage.googleapis.com/v1beta").rstrip("/")
         self._client = client or httpx.Client(timeout=timeout)
@@ -55,8 +60,10 @@ class GeminiProvider:
             r = self._client.post(url, headers=headers, json=body)
         except httpx.HTTPError as exc:
             raise LLMError(f"gemini request failed ({type(exc).__name__})") from None
+        if r.status_code == 429:
+            raise RateLimited("gemini returned HTTP 429 (quota or rate limit)")
         if r.status_code != 200:
-            raise LLMError(f"gemini returned HTTP {r.status_code}" + (" (quota or rate limit)" if r.status_code == 429 else ""))
+            raise LLMError(f"gemini returned HTTP {r.status_code}")
         try:
             parts = r.json()["candidates"][0]["content"]["parts"]
             return "".join(p.get("text", "") for p in parts)
@@ -69,7 +76,7 @@ class OpenAICompatibleProvider:
 
     name = "openai_compatible"
 
-    def __init__(self, api_key: str, model: str, base_url: str, timeout: float = 25.0, client: httpx.Client | None = None):
+    def __init__(self, api_key: str, model: str, base_url: str, timeout: float = 12.0, client: httpx.Client | None = None):
         self._key, self.model, self._base = api_key, model, base_url.rstrip("/")
         self._client = client or httpx.Client(timeout=timeout)
 
@@ -85,6 +92,8 @@ class OpenAICompatibleProvider:
             r = self._client.post(url, headers=headers, json=body)
         except httpx.HTTPError as exc:
             raise LLMError(f"openai-compatible request failed ({type(exc).__name__})") from None
+        if r.status_code == 429:
+            raise RateLimited("openai-compatible service returned HTTP 429 (quota or rate limit)")
         if r.status_code != 200:
             raise LLMError(f"openai-compatible service returned HTTP {r.status_code}")
         try:
@@ -96,8 +105,14 @@ class OpenAICompatibleProvider:
 class ProviderChain:
     """Try providers in order; the first that returns text wins."""
 
-    def __init__(self, providers: list[Provider]):
+    def __init__(self, providers: list[Provider], max_total_s: float = 20.0, clock=time.monotonic):
         self.providers = providers
+        self.max_total_s, self._clock = max_total_s, clock          # stop trying further providers after this long: a visitor should not stare at a spinner
+        self.rate_limited = False               # set when any provider said 429 during generate(); read with take_rate_limited()
+
+    def take_rate_limited(self) -> bool:
+        flag, self.rate_limited = self.rate_limited, False
+        return flag
 
     @property
     def configured(self) -> bool:
@@ -106,9 +121,16 @@ class ProviderChain:
     def generate(self, system: str, user: str) -> tuple[str, str]:
         if not self.providers:
             raise LLMUnavailable("no AI provider is configured")
+        started = self._clock()
         for p in self.providers:
+            if self._clock() - started > self.max_total_s:
+                log.warning("AI chain gave up after %.0f s", self._clock() - started)
+                break
             try:
                 return p.generate(system, user), p.name
+            except RateLimited as exc:
+                self.rate_limited = True
+                log.warning("AI provider %s failed: %s", p.name, exc)
             except LLMError as exc:
                 log.warning("AI provider %s failed: %s", p.name, exc)
         raise LLMUnavailable("every configured AI provider failed")
@@ -116,7 +138,7 @@ class ProviderChain:
 
 def providers_from_settings(s) -> list[Provider]:
     out: list[Provider] = []
-    for i in (1, 2):
+    for i in (1, 2, 3):
         kind = getattr(s, f"llm_provider_{i}").strip().lower()
         key = getattr(s, f"llm_api_key_{i}").get_secret_value().strip()
         model = getattr(s, f"llm_model_{i}").strip()

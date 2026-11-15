@@ -76,7 +76,7 @@ def test_visitor_allowance_is_enforced_per_client_id_over_http(rich):
     assert not _post(c, ctx, headers=a).json()["message"]["content"].startswith(LABEL)
     assert not _post(c, ctx, headers=a).json()["message"]["content"].startswith(LABEL)
     third = _post(c, ctx, headers=a).json()
-    assert third["message"]["content"].startswith(LABEL) and any("AI messages" in x for x in third["caveats"]) and len(p.prompts) == 2
+    assert third["message"]["content"].startswith(LABEL) and any("free AI answers" in x for x in third["caveats"]) and len(p.prompts) == 2
     assert not _post(c, ctx, headers=b).json()["message"]["content"].startswith(LABEL)          # a different visitor is unaffected
 
 
