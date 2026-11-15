@@ -120,6 +120,12 @@ body.landing { background: var(--bg-page) fixed, #070b10; overflow-x: hidden; }
 .btn-pixel:hover { background: var(--warm-ivory); color: var(--midnight-charcoal); }
 .skip { color: var(--text); font-size: var(--fs-sm); letter-spacing: var(--tracking-label); text-transform: uppercase; font-weight: 600; }
 .demo-note { margin-top: var(--sp-5); }
+/* The deployed build swaps this badge to a plain .badge ("Real SPHEREx data…"), whose default text colour is
+   the dark-theme white; on the light cover it must be black to be readable. */
+.demo-note .badge:not(.badge-illustrative) {
+  color: #000; border: 2px solid #000; background: #ffd66b;
+  font-size: 0.95rem; font-weight: 800; padding: 6px 14px; box-shadow: 3px 3px 0 rgba(0, 0, 0, 0.85);
+}
 
 @media (max-width: 900px) {
   .ship { left: 52%; top: 42%; width: 40vw; opacity: 0.85; } .planet { width: 38vw; opacity: 0.7; }
@@ -211,3 +217,15 @@ body.landing { background: var(--bg-page) fixed, #070b10; overflow-x: hidden; }
   .cloud-right { width: 70vw; }
   .orbits { width: 34vw; left: 52%; top: 64px; }
 }
+
+/* ---- Text never sits unreadable on the artwork ----------------------------------------------------
+   The hero copy can land on the bright clouds/planet (short laptop screens), and Navi's whisper is a
+   see-through bubble. Give every piece of hero text a solid or haloed backing on the cover. */
+.demo-note .badge-illustrative { background: #0b1119; color: #ffb37f; border: 2px solid #ffb37f; padding: 5px 12px;
+  font-weight: 800; box-shadow: 3px 3px 0 #000; }
+.hero .lede, .hero .skip { text-shadow: 0 0 2px #050a0f, 0 0 8px rgba(5, 10, 15, 0.95), 0 1px 3px #000; }
+.hero .skip { display: inline-block; background: #0b1119; color: #fff; padding: 5px 10px; margin-left: -10px; font-weight: 800;
+  box-shadow: 3px 3px 0 #000; }
+body.landing .navi-whisper { --wash: rgba(16, 24, 32, 0.9); color: #fff; }
+/* On short screens the copy would run under the sketch strip: reserve room so the hero grows instead. */
+.hero-copy { padding-bottom: calc(var(--strip-h) + var(--sp-5)); }
