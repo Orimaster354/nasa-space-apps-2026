@@ -10,7 +10,7 @@ CENTER = (133.795129, -7.245147)       # WISE 0855, used only as a convenient sk
 
 def make_cutout_fits(path: Path, star_ra: float, star_dec: float, rotation_deg: float = 0.0, n: int = 29,
                      scale_arcsec: float = 6.2, peak: float = 100.0, mjd: float = 60800.7, detector: int = 3,
-                     flag_value: int = 0, center=CENTER) -> Path:
+                     flag_value: int = 0, center=CENTER, with_wave: bool = True, wave_shift_x: float = 0.0) -> Path:
     w = WCS(naxis=2)
     w.wcs.ctype = ["RA---TAN", "DEC--TAN"]
     w.wcs.crval = list(center)
@@ -37,5 +37,17 @@ def make_cutout_fits(path: Path, star_ra: float, star_dec: float, rotation_deg: 
     hdus = [prim, im, fits.ImageHDU(flags, header=hdr, name="FLAGS"),
             fits.ImageHDU(variance, header=hdr, name="VARIANCE"), fits.ImageHDU(zodi, header=hdr, name="ZODI")]
     hdus[3].header["MJD-OBS"] = mjd
+    if with_wave:
+        # Synthetic WCS-WAVE: wavelength = 1 + 0.001*x_det + 0.0005*y_det (um), bandwidth 0.03; cutout pixel p -> detector p + offset.
+        xs, ys = np.array([1, 500, 1000, 1500, 2040]), np.array([1, 700, 1400, 2040])
+        vals = np.zeros((4, 5, 2), dtype=np.float32)
+        vals[..., 0] = 1.0 + 0.001 * xs[None, :] + 0.0005 * ys[:, None]
+        vals[..., 1] = 0.03
+        tab = fits.BinTableHDU.from_columns([
+            fits.Column("X", "5J", array=xs[None, :].astype(np.int32)), fits.Column("Y", "4J", array=ys[None, :].astype(np.int32)),
+            fits.Column("VALUES", "40E", dim="(2,5,4)", array=vals[None])], name="WCS-WAVE")
+        for k, v in {"CRPIX1W": -999.0 - wave_shift_x, "CRPIX2W": -1499.0, "CDELT1W": 1, "CDELT2W": 1, "CRVAL1W": 1, "CRVAL2W": 1}.items():
+            im.header[k] = v
+        hdus.append(tab)
     fits.HDUList(hdus).writeto(path, overwrite=True)
     return path

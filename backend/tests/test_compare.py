@@ -5,8 +5,8 @@ from processing.compare import Side, assess
 pytestmark = pytest.mark.synthetic
 
 
-def S(band="SPHEREx-D3", rel="dr1", q="good", z=1.0):
-    return Side(band, rel, q, z)
+def S(band="SPHEREx-D3", rel="dr1", q="good", z=1.0, wl=2.0, bw=0.05):
+    return Side(band, rel, q, z, wl, bw)
 
 
 def results(r):
@@ -59,3 +59,29 @@ def test_difference_always_carries_the_false_positive_warning():
 def test_footprint_check_present_and_missing_bandpass_is_cross_band():
     r = assess(S(band=None), S(band=None), "blink")
     assert r["comparisonKind"] == "cross_band" and results(r)["footprint"] == "pass"
+
+
+def test_same_band_but_different_wavelength_at_the_object_warns():
+    r = assess(S(wl=1.70), S(wl=2.30), "blink")
+    c = results(r)
+    assert c["wavelength"] == "warn" and r["verdict"] == "comparable_with_caveats" and r["comparisonKind"] == "same_band_epochs"
+    assert any("different wavelengths" in w for w in r["warnings"])
+    detail = next(k["detail"] for k in r["checks"] if k["name"] == "wavelength")
+    assert "1.700 um" in detail and "2.300 um" in detail and "spectral" in detail
+
+
+def test_difference_at_unmatched_wavelengths_warns_not_refuses():
+    """Positional change is still visible, so the difference is allowed, but it is clearly caveated."""
+    r = assess(S(wl=1.70), S(wl=2.30), "difference")
+    assert r["verdict"] == "comparable_with_caveats" and results(r)["wavelength"] == "warn"
+
+
+def test_wavelengths_within_one_bandwidth_pass():
+    r = assess(S(wl=2.00), S(wl=2.04), "blink")
+    assert results(r)["wavelength"] == "pass"
+
+
+def test_unknown_wavelength_is_not_evaluated_not_pass():
+    r = assess(S(wl=None, bw=None), S(), "blink")
+    assert results(r)["wavelength"] == "notEvaluated"
+    assert assess(S(bw=None), S(bw=None), "blink")["checks"][1]["result"] == "notEvaluated"

@@ -18,7 +18,7 @@ Priorities: **P0** essential for a functioning submission · **P1** important di
   Dep: P0-01. Done: columns of both tables are listed in a note; release identifier and observation ID columns are identified or confirmed absent (closes A1).
 - [x] **P0-03 🛰 Retrieve one actual SPHEREx FITS cutout and inspect its HDU structure.**
   Dep: P0-01. Done: a cutout is downloaded via `?center=<ra>,<dec>d&size=<deg>`; script prints every HDU name, shape, dtype, units and key headers; findings written down, including any difference from the IRSA docs (closes A4, A12).
-- [ ] **P0-04 🛰 Extract valid WCS metadata and observation timestamps.** *(WCS built and observation time source confirmed in `backend/scripts/PROBE_FINDINGS.md`; wavelength-at-pixel via WCS-WAVE still to do.)*
+- [x] **P0-04 🛰 Extract valid WCS metadata and observation timestamps.** *(Done: WCS, observation time, and the per-pixel wavelength and bandwidth from the WCS-WAVE table (`processing/fits_io.py`, bilinear from a coarse node grid; the header calls it approximate). Wavelength at the object is now used in the comparison `wavelength` check and reported on every measurement.)*
   Dep: P0-03. Done: `astropy` builds a celestial WCS from the IMAGE header; pixel↔sky round-trip error is reported; the observation time source (TAP column vs header) is confirmed against the file (closes A2); wavelength obtained at a pixel via the WCS-WAVE method.
 - [x] **P0-05 Backend skeleton and health endpoint.**
   Dep: none. Done: FastAPI app starts from a clean venv using `pyproject.toml`; `GET /api/v1/health` returns `{status:"ok", contractVersion:"0.1.0"}`; settings read from env; `.env.example` lists variable names only; one passing test.

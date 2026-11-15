@@ -349,6 +349,10 @@ class Services:
                "observationIds": list(observation_ids), "region": {"center": {"raDeg": ra, "decDeg": dec}, "radiusArcsec": radius},
                "method": res.method, "qualityFlags": res.quality_flags, "warnings": list(cutout.warnings) + res.warnings,
                "createdAt": now_iso()}
+        if res.wavelength_um is not None:
+            out["wavelengthUm"] = res.wavelength_um
+        if res.bandwidth_um is not None:
+            out["bandwidthUm"] = res.bandwidth_um
         self.registry.put_measurement(mid, out)
         return out
 
@@ -365,13 +369,29 @@ class Services:
         return imaging.to_grid(cutout, grid), cutout
 
     @staticmethod
-    def _side(rec: dict, cutout) -> compare.Side:
+    def _wave_at(cutout, ra: float, dec: float) -> tuple[float | None, float | None]:
+        """Wavelength and bandwidth (um) at the object's pixel, or (None, None) when unavailable."""
+        if cutout.wavelength_um is None:
+            return None, None
+        try:
+            x, y = photometry.sky_to_pixel(cutout, ra, dec)
+        except photometry.Unmeasurable:
+            return None, None
+        ny, nx = cutout.wavelength_um.shape
+        i, j = int(round(y)), int(round(x))
+        if not (0 <= i < ny and 0 <= j < nx):
+            return None, None
+        wl, bw = float(cutout.wavelength_um[i, j]), float(cutout.bandwidth_um[i, j])
+        return (wl if np.isfinite(wl) else None), (bw if np.isfinite(bw) else None)
+
+    @staticmethod
+    def _side(rec: dict, cutout, wave: tuple[float | None, float | None] = (None, None)) -> compare.Side:
         obs = rec["observation"]
         zodi = None
         if cutout.zodi is not None and np.isfinite(cutout.zodi).any():
             zodi = float(np.nanmedian(cutout.zodi))
         q = quality.quality_summary(cutout.flags) if cutout.flags is not None else "unknown"
-        return compare.Side(obs.get("bandpass"), obs.get("dataRelease"), q, zodi)
+        return compare.Side(obs.get("bandpass"), obs.get("dataRelease"), q, zodi, wave[0], wave[1])
 
     def create_comparison(self, base_id: str, target_id: str, mode: str) -> dict:
         if mode not in ("blink", "overlay", "difference"):
@@ -400,7 +420,8 @@ class Services:
             return {**out, "availability": {"status": "failed", "statusReason": f"A data file could not be read: {exc}"},
                     "compatibility": {"verdict": "unknown", "checks": []}}
 
-        a = compare.assess(self._side(base, cut_b), self._side(target, cut_t), mode)
+        a = compare.assess(self._side(base, cut_b, self._wave_at(cut_b, grid.center_ra, grid.center_dec)),
+                           self._side(target, cut_t, self._wave_at(cut_t, grid.center_ra, grid.center_dec)), mode)
         out.update(availability={"status": "available"}, comparisonKind=a["comparisonKind"], warnings=a["warnings"],
                    compatibility={"verdict": a["verdict"], "checks": a["checks"]},
                    alignment={"method": "Each cutout was resampled (bilinear) onto a common north-up TAN grid using its own WCS."})

@@ -21,6 +21,8 @@ class Side:
     release: str | None
     quality: str                 # good | degraded | poor | unknown
     zodi_median: float | None    # median of the ZODI plane (MJy/sr), if the file has one
+    wavelength_um: float | None = None   # wavelength at the OBJECT's pixel (WCS-WAVE), not the whole band
+    bandwidth_um: float | None = None    # bandwidth at that pixel
 
 
 def comparison_kind(base: Side, target: Side) -> str:
@@ -32,13 +34,31 @@ def _check(name: str, result: str, detail: str) -> dict:
     return {"name": name, "result": result, "detail": detail}
 
 
+def _wavelength_within_band(base: Side, target: Side) -> dict:
+    """Same bandpass is NOT the same wavelength: each SPHEREx band spans a range and the object lands at a different wavelength
+    on each pointing (measured on real data: a star's flux fell 45% across one band as its wavelength moved from 1.64 to 2.40 um).
+    We call the wavelengths matched when they differ by no more than one bandwidth. That threshold is our heuristic."""
+    head = f"Both use the same bandpass ({base.bandpass})."
+    if base.wavelength_um is None or target.wavelength_um is None:
+        return _check("wavelength", "notEvaluated", head + " The wavelength at the object was not available for both frames, so whether they match within the band is unknown.")
+    bw = max(b for b in (base.bandwidth_um, target.bandwidth_um) if b is not None) if (base.bandwidth_um or target.bandwidth_um) else None
+    delta = abs(target.wavelength_um - base.wavelength_um)
+    where = f"{base.wavelength_um:.3f} um and {target.wavelength_um:.3f} um"
+    if bw is None:
+        return _check("wavelength", "notEvaluated", head + f" The object falls at {where}; the bandwidth was not available to judge the difference.")
+    if delta <= bw:
+        return _check("wavelength", "pass", head + f" The object falls at {where}, within one bandwidth ({bw:.3f} um).")
+    return _check("wavelength", "warn", head + f" But the object falls at different wavelengths in the two frames ({where}; bandwidth about {bw:.3f} um). "
+                  "A brightness difference may be spectral (the source's flux changes with wavelength), not a change over time.")
+
+
 def assess(base: Side, target: Side, mode: str) -> dict:
     """Returns {"verdict", "checks", "comparisonKind", "warnings"} for the contract."""
     kind = comparison_kind(base, target)
     checks = [_check("footprint", "pass", "Both observations were found covering this position.")]
 
     if kind == "same_band_epochs":
-        checks.append(_check("wavelength", "pass", f"Both use the same bandpass ({base.bandpass})."))
+        checks.append(_wavelength_within_band(base, target))
     elif mode == "difference":
         checks.append(_check("wavelength", "fail", "The observations use different bandpasses; subtracting them would compare different wavelengths, not change over time."))
     else:
@@ -82,6 +102,8 @@ def assess(base: Side, target: Side, mode: str) -> dict:
     warnings = []
     if mode == "difference" and verdict != "not_comparable":
         warnings.append("A difference image shows noise, alignment error, calibration and background differences as well as real change. Treat it as a pointer for follow-up, not a detection.")
+    if kind == "same_band_epochs" and any(c["name"] == "wavelength" and c["result"] == "warn" for c in checks):
+        warnings.append("The two frames sample different wavelengths at this position: brightness differences are not a clean time change. Positional changes are still visible.")
     if kind == "cross_band":
         warnings.append("These frames are different wavelengths: differences are spectral, not changes over time.")
     return {"verdict": verdict, "checks": checks, "comparisonKind": kind, "warnings": warnings}

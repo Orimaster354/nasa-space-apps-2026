@@ -62,6 +62,19 @@ class PhotometryResult:
     uncertainty_basis: str
     quality_flags: list[dict] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
+    wavelength_um: float | None = None     # at the aperture centre, from the WCS-WAVE table
+    bandwidth_um: float | None = None
+
+
+def wave_at_pixel(cutout: Cutout, x: float, y: float) -> tuple[float | None, float | None]:
+    if cutout.wavelength_um is None or cutout.bandwidth_um is None:
+        return None, None
+    ny, nx = cutout.wavelength_um.shape
+    i, j = int(round(y)), int(round(x))
+    if not (0 <= i < ny and 0 <= j < nx):
+        return None, None
+    wl, bw = float(cutout.wavelength_um[i, j]), float(cutout.bandwidth_um[i, j])
+    return (wl if math.isfinite(wl) else None), (bw if math.isfinite(bw) else None)
 
 
 def pixel_scale_arcsec(cutout: Cutout) -> float:
@@ -198,10 +211,16 @@ def aperture_flux(cutout: Cutout, ra: float, dec: float, radius_arcsec: float = 
               f"background = sigma-clipped median of {n_ann} usable pixels in the {annulus_arcsec[0]:g}-{annulus_arcsec[1]:g} arcsec ring; "
               f"flux density = sum of background-subtracted surface brightness x pixel solid angle ({omega:.3e} sr); "
               "no aperture correction, no colour correction; measured on the native-pixel image, not the displayed raster.")
+    wl, bw = wave_at_pixel(cutout, x0, y0)
+    if wl is not None:
+        method += (f" Wavelength at the aperture centre: {wl:.3f} um" + (f" (bandwidth about {bw:.3f} um)" if bw is not None else "")
+                   + "; the value is only comparable with measurements at a similar wavelength.")
+    else:
+        warnings.append("The wavelength at this position was not available, so this flux cannot be matched to another frame by wavelength.")
     region = (w_all > 0)
     qflags = quality.summarize(cutout.flags, region) if cutout.flags is not None else []
     return PhotometryResult(
         flux_mjy=flux_mjy, uncertainty_mjy=sigma_mjy, snr=float(snr), background_mjy_sr=bkg, pixel=(x0, y0),
         radius_arcsec=radius_arcsec, annulus_arcsec=tuple(annulus_arcsec), n_aperture_pixels=float(w.sum()), n_annulus_pixels=n_ann,
         usable_fraction=usable_fraction, noise_rescale=rescale, method=method, uncertainty_basis=basis,
-        quality_flags=qflags, warnings=warnings)
+        quality_flags=qflags, warnings=warnings, wavelength_um=wl, bandwidth_um=bw)

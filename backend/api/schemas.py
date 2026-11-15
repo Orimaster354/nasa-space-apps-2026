@@ -153,6 +153,8 @@ class Measurement(_Model):
     uncertainty: float | None = None
     uncertaintyBasis: str | None = None
     signalToNoise: float | None = None          # additive, optional (pending contract addition): value / uncertainty
+    wavelengthUm: float | None = None           # additive, optional (pending contract addition): wavelength at the region centre
+    bandwidthUm: float | None = None
     observationIds: list[str]
     region: Region | None = None
     method: str

@@ -36,6 +36,8 @@ def test_measures_the_injected_star_with_uncertainty_and_provenance(env):
     assert m["value"] == pytest.approx(expected, rel=0.03)
     assert m["uncertainty"] > 0 and m["signalToNoise"] > 3 and m["signalToNoise"] == pytest.approx(m["value"] / m["uncertainty"])
     assert "Archive VARIANCE" in m["uncertaintyBasis"] and "no aperture correction" in m["method"]
+    assert m["wavelengthUm"] == pytest.approx(2.7725, abs=0.01) and m["bandwidthUm"] == pytest.approx(0.03)   # from the synthetic WCS-WAVE table
+    assert "Wavelength at the aperture centre" in m["method"]
     assert m["region"]["radiusArcsec"] == 20 and m["measurementId"].startswith("meas_")
     assert any(f["code"] == "SOURCE" for f in m["qualityFlags"])            # the archive's own flag is passed through
     again = c.post("/api/v1/measurements", json=_body(obs, *STAR, radius=20)).json()

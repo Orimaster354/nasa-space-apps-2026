@@ -298,3 +298,16 @@ def test_comparison_download_failure_is_reported_and_not_stored(env):
     assert r["availability"]["status"] == "failed" and r["compatibility"]["verdict"] == "unknown"
     cut.fail = None                                                # a retry now succeeds, so the failure was not cached
     assert _cmp(c, obs[0]["observationId"], obs[1]["observationId"], "blink").json()["availability"]["status"] == "available"
+
+
+def test_comparison_warns_when_the_object_sits_at_different_wavelengths(env, tmp_path):
+    """Same bandpass, but the second pointing places the object 400 detector pixels further along the band."""
+    c, cut, _ = env
+    _, obs = _observations(c)
+    uris = list(URIS)
+    cut.files[uris[1]] = make_cutout_fits(tmp_path / "shifted.fits", *STAR, rotation_deg=60.0, mjd=60990.2, detector=3,
+                                          flag_value=(1 << 21), wave_shift_x=400.0)
+    cmp_ = _cmp(c, obs[0]["observationId"], obs[1]["observationId"], "blink").json()
+    wl = next(k for k in cmp_["compatibility"]["checks"] if k["name"] == "wavelength")
+    assert wl["result"] == "warn" and "different wavelengths" in wl["detail"]
+    assert any("different wavelengths" in w for w in cmp_["warnings"])

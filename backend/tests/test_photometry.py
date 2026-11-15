@@ -187,3 +187,15 @@ def test_pixel_solid_angle_matches_scale():
     c = _cutout()
     assert photometry.pixel_scale_arcsec(c) == pytest.approx(SCALE, rel=1e-4)
     assert photometry.pixel_solid_angle_sr(c) == pytest.approx(OMEGA, rel=1e-4)
+
+
+def test_wavelength_at_the_aperture_centre_is_reported_and_missing_wavelength_is_flagged():
+    c = _cutout(total_counts=900.0)
+    r0 = photometry.aperture_flux(c, *CENTER, radius_arcsec=30, annulus_arcsec=(45, 70))
+    assert r0.wavelength_um is None and any("wavelength at this position was not available" in w for w in r0.warnings)
+    yy, xx = np.mgrid[0:N, 0:N]
+    c.wavelength_um = (1.0 + 0.01 * xx).astype(np.float32)
+    c.bandwidth_um = np.full((N, N), 0.04, dtype=np.float32)
+    r = photometry.aperture_flux(c, *CENTER, radius_arcsec=30, annulus_arcsec=(45, 70))
+    assert r.wavelength_um == pytest.approx(1.0 + 0.01 * 20, abs=0.011) and r.bandwidth_um == pytest.approx(0.04)
+    assert "Wavelength at the aperture centre" in r.method and not any("wavelength at this position" in w for w in r.warnings)
