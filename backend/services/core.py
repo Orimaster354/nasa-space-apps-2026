@@ -512,6 +512,19 @@ class Services:
             raise NotFound("Unknown spectrum.")
         return rec["result"]
 
+    def prewarm_spectra(self, names: list[str] | None = None) -> int:
+        """Build the spectrum of each curated target one after another (a background job started at server start), so the first visitor to a
+        Spectrum page finds it ready. Failures are logged, never raised. Returns how many were built."""
+        built = 0
+        for name in names or [t.name for t in targets.TARGETS]:
+            try:
+                obj = self.resolve(q=name)
+                res = self.get_spectrum(obj["objectId"], wait_s=600)
+                built += res["availability"]["status"] == "available"
+            except Exception as exc:                                  # a failed warm-up must never take the server down
+                log.warning("spectrum pre-warm for %s failed: %s", name, exc)
+        return built
+
     # ---- candidates ------------------------------------------------------------------------------------------------
     def compute_candidates(self, object_id: str) -> dict:
         """Run the candidate search now (blocking) and store the result. Used by the background job and by the bundle script."""
