@@ -42,6 +42,8 @@ DEFAULT_RADIUS_ARCSEC = 12.0
 MAX_UNCACHED_PER_DETECTOR = 8
 MAX_FRAMES_PER_DETECTOR = 60
 DOWNLOAD_BUDGET_S = 25.0
+MIN_BANDS = 2                    # one measured band is a single measurement, not a spectrum (a saturated star can leave one lucky frame)
+MANY_FRAMES = 8                  # ... judged only when this many frames were processed (with fewer, a short result may just be a partial one)
 WORKERS = 4
 ARCHIVE_FAILURES_TO_GIVE_UP = 3       # consecutive archive errors after which uncached frames are skipped (the archive is down: stop waiting)
 
@@ -276,6 +278,11 @@ def build(svc, obj: dict, ra: float | None, dec: float | None, radius: float, si
     got = [p for p in points if p["available"]]
     dates = sorted(p["observedAt"] for p in got if p.get("observedAt"))
     warnings = []
+    if 0 < len(got) < MIN_BANDS and len(frames) >= MANY_FRAMES:
+        return ({**base, "availability": {"status": "unavailable", "statusReason": (
+            f"Only {len(got)} band could be measured at this position, which is not enough to draw a spectrum (very bright stars saturate the detector, "
+            "so most frames cannot be measured).")}, "extractionMethod": method, "points": points,
+                 "warnings": ["Nearly every point is a gap; see each point's reason."]}, bool(any(f.skipped for f in frames)))
     if not got:
         return ({**base, "availability": {"status": "unavailable", "statusReason": "None of the processed observations could be measured at this position "
                                           "(for example the aperture is masked, as for very bright stars)."},

@@ -63,8 +63,10 @@ def _compute(svc) -> dict:
     for oid, rec in svc.registry.all_observations():
         ob = rec.get("observation") or {}
         for obj_id in ob.get("objectIds", []):
-            p = per.setdefault(obj_id, {"listed": 0, "stored": 0, "byBand": {}})
+            p = per.setdefault(obj_id, {"listed": 0, "stored": 0, "byBand": {}, "listedByBand": {}})
             p["listed"] += 1
+            lb = ob.get("bandpass") or "unknown"
+            p["listedByBand"][lb] = p["listedByBand"].get(lb, 0) + 1
             if oid in rendered:
                 p["stored"] += 1
                 band = ob.get("bandpass") or "unknown"
@@ -94,6 +96,10 @@ def _compute(svc) -> dict:
         items.append({
             "objectId": obj_id, "name": o["name"], "objectType": o.get("objectType"), "coordinates": o["coordinates"], "curated": is_curated,
             "observationsListed": p["listed"], "storedFrames": p["stored"], "storedByBand": dict(sorted(p["byBand"].items())),
+            "listedByBand": dict(sorted(p["listedByBand"].items())),
+            # The default timeline shows ONE detector band. 'listed' counts every detector (six per pointing), so 'stored of listed' would compare
+            # different things; these two numbers are the like-for-like pair.
+            "defaultBand": "SPHEREx-D3", "defaultBandListed": p["listedByBand"].get("SPHEREx-D3", 0), "defaultBandStored": p["byBand"].get("SPHEREx-D3", 0),
             "spectrum": spectrum, "candidates": cands,
             "worksOffline": True,
             "properMotion": ({"value": o["properMotion"]["value"], "unit": o["properMotion"]["unit"]} if o.get("properMotion") else None),

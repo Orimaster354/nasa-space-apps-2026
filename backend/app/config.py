@@ -17,6 +17,8 @@ class Settings(BaseSettings):
     # P2-02: automated source differencing on a comparison. OFF by default: on real SPHEREx pairs it reports mostly star residuals
     # (see docs and processing/differencing.py). Turn on only to experiment.
     auto_differencing: bool = False
+    # Name of a Google Cloud Storage bucket that keeps a copy of saved investigations (they survive redeploys and restarts). Empty = off.
+    backup_bucket: str = ""
     # P2-08: catalogue overlay (Gaia, AllWISE via CDS VizieR). OFF by default: the live query has not been verified against the real service.
     catalog_overlay: bool = False
     data_dir: str = "data"

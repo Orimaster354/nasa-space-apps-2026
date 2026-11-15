@@ -105,7 +105,9 @@ def test_the_band_with_the_best_signal_to_noise_is_shown_not_an_average(env, tmp
     oid = _object(c)["objectId"]
     body = _spec(c, oid, ra=STAR[0], dec=STAR[1]).json()                                          # centred on the star: exact fluxes
     d3 = [p for p in body["points"] if p["available"] and 35 <= p["bandIndex"] <= 51]
-    assert len(d3) == 1 and d3[0]["flux"] == pytest.approx(_flux(250.0), rel=0.03)
+    # rel 5 percent: this synthetic star is far broader (sigma 1.2 pixels, FWHM 17 arcsec) than SPHEREx's (about 6 arcsec), and for a broad star the
+    # fractional-overlap aperture reads about 2.7 percent low (measured in docs/SPECTRUM_VALIDATION.md); at real widths the bias is 0.2 to 2 percent.
+    assert len(d3) == 1 and d3[0]["flux"] == pytest.approx(_flux(250.0), rel=0.05)
     second = c.get(f"/api/v1/objects/{oid}/observations").json()["items"][1]["observationId"]
     assert d3[0]["observationId"] == second
 
@@ -358,3 +360,17 @@ def test_a_refusal_that_is_not_archive_trouble_is_stored_and_served_without_rebu
     calls = cut.calls
     again = _spec(c, oid).json()
     assert again["availability"]["status"] == "unavailable" and cut.calls == calls                          # served from the store: no cutout was read again
+
+
+def test_a_single_lucky_band_among_many_unmeasurable_frames_is_not_a_spectrum(env, tmp_path, monkeypatch):
+    """A saturated star can leave one measurable frame among dozens. One band is a measurement, not a spectrum, so it is refused with that reason."""
+    c, cut, _ = env
+    _waves(cut, tmp_path)
+    oid = _object(c)["objectId"]
+    body = _spec(c, oid).json()
+    assert body["availability"]["status"] == "available"                                   # three bands in a three-frame field: still a (short) spectrum
+    monkeypatch.setattr(spectrum, "MANY_FRAMES", 2)
+    monkeypatch.setattr(spectrum, "MIN_BANDS", 4)                                          # now three measured bands out of three frames is 'too few'
+    c.app.state.services.registry.put_spectrum(body["spectrumId"], {"result": {"availability": {"status": "unavailable"}}, "partial": True, "savedAt": "2000-01-01T00:00:00Z"})
+    again = _spec(c, oid, apertureRadiusArcsec=13.0).json()
+    assert again["availability"]["status"] == "unavailable" and "not enough to draw a spectrum" in again["availability"]["statusReason"]

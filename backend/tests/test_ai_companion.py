@@ -339,3 +339,13 @@ def test_the_fallback_summary_includes_the_users_notes(env):
     comp = Companion(svc, ProviderChain([]), QuotaLimiter())
     text = comp.respond("Summarise my investigation", {}, "c:v-aaaaaaaaa", inv["investigationId"])["message"]["content"]
     assert "You noted:" in text and "A faint source near the edge." in text and "Your saved investigation 'Mine'" in text
+
+
+def test_the_prompt_forbids_the_discovery_words_even_in_denials_and_says_what_to_say_instead():
+    """Real model runs showed answers like 'we cannot confirm' or 'a discovery would need ...' being rejected by the wording check twice and replaced by
+    the generic fallback on the most predictable questions. The model is told never to write those words at all."""
+    from ai import companion
+    p = companion.SYSTEM_PROMPT
+    for w in ("discover", "discovery", "confirm", "confirmed", "confirming", "prove", "proven"):
+        assert w in p.split("5.")[1].split("6.")[0]
+    assert "not even to deny them" in p and "No, nothing new has been established." in p

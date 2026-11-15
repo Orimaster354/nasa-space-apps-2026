@@ -33,7 +33,10 @@ DEFAULT_RADIUS_ARCSEC = 12.0          # about 2 native pixels
 DEFAULT_ANNULUS_ARCSEC = (24.0, 36.0)
 MIN_USABLE_APERTURE_FRACTION = 0.7    # our heuristic: below this the flux is too extrapolated to report
 MIN_ANNULUS_PIXELS = 12               # our heuristic: fewer pixels cannot give a stable background
-_SUBSAMPLE = 7                        # sub-pixels per axis for fractional aperture overlap
+# Sub-pixels per axis for fractional aperture overlap. It was 7, which over-counts the area of a 12 arcsec aperture (about 1.95 native pixels) by up to
+# 1.2 percent depending on where the source sits in its pixel (found by an independent re-measurement, scripts/validate_spectrum.py); 32 is within
+# 0.05 percent of the exact area for any position.
+_SUBSAMPLE = 32
 _MEDIAN_ERR_FACTOR = 1.2533           # standard error of a median relative to the mean, for Gaussian noise
 _RESCALE_WARN = 1.5                   # warn when annulus scatter exceeds the archive sigma by this factor
 # Frame-to-frame repeatability floor for comparing the brightness of two frames. Measured on Epsilon Indi B (44 real frames): frames at the
