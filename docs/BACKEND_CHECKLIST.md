@@ -173,10 +173,10 @@ Priorities: **P0** essential for a functioning submission · **P1** important di
 
 ## Cross-cutting acceptance
 
-- [ ] **X-01 No scientific calculation in the LLM or frontend.** Done: grep/test confirms the AI package does no arithmetic on results; tools return numbers computed in `processing`.
-- [ ] **X-02 Raw / processed / derived / AI tiers are separated in the API.** Done: no endpoint returns AI text in a data field or data in AI text without references.
-- [ ] **X-03 No secrets committed.** Done: `git grep` for key patterns clean; `.env` ignored.
-- [ ] **X-04 Provenance everywhere.** Done: measurements state method/units/uncertainty basis; proper motion states its source kind.
+- [x] **X-01 No scientific calculation in the LLM or frontend.** Done: grep/test confirms the AI package does no arithmetic on results; tools return numbers computed in `processing`. *(Done 2026-11-15, enforced by `tests/test_cross_cutting.py`: an AST scan finds no arithmetic in `ai/` except the numeric tolerance check (grounding.py), time and quota bookkeeping (limits.py, llm.py) and one band-index lookup; a scan of the frontend finds only display arithmetic (nearest band, layout), never flux, uncertainty or signal-to-noise.)*
+- [x] **X-02 Raw / processed / derived / AI tiers are separated in the API.** Done: no endpoint returns AI text in a data field or data in AI text without references. *(Done: AI-written text is produced only by `ai.companion`, which only the app wiring imports, and reaches the API only through `POST /chat/messages` (and the stored assistant messages of an investigation, which carry role 'assistant'); candidate descriptions and evidence are templated from computed numbers, and tests forbid discovery or confirmation wording in them. Guard test: `test_x02_ai_text_enters_the_api_only_through_the_chat_endpoint`.)*
+- [x] **X-03 No secrets committed.** Done: `git grep` for key patterns clean; `.env` ignored. *(Done: no key-like string in any revision of any branch (`git log --all -G` for Google, OpenAI-style, AWS and private-key patterns), `.env` is git-ignored, `.env.example` holds empty key fields; guard test `test_x03_no_secret_is_tracked_and_the_env_file_is_ignored` checks the working tree.)*
+- [x] **X-04 Provenance everywhere.** Done: measurements state method/units/uncertainty basis; proper motion states its source kind. *(Done: measurements carry method, unit and `uncertaintyBasis` (tests in `test_measurements_api.py`), proper motion carries `provenanceKind` and source (`test_contract_models.py`, `test_candidates.py`), the spectrum states its extraction method and warnings, candidates list evidence and limitations; guard test `test_x04_results_carry_their_provenance_fields`.)*
 
 ---
 
@@ -196,3 +196,10 @@ Priorities: **P0** essential for a functioning submission · **P1** important di
 - [ ] Required data acknowledgments and resource citations present.
 - [ ] Demo script run three times consecutively without intervention; backup recording saved.
 - [ ] Freeze time set (D-9) and honored; no feature work after it.
+
+## Validation and polish pass (2026-11-15)
+- [x] **V-01 Independent validation of the spectral calculations.** *(`docs/SPECTRUM_VALIDATION.md`, `scripts/validate_spectrum.py`. Found and fixed a real error: the aperture area was over-counted by up to 1.2 percent. Repeatability, band continuity and the flux outside the aperture are measured and written down, with what is NOT validated.)*
+- [x] **V-02 Stress test of the Epsilon Indi B candidate.** *(`docs/CANDIDATE_VALIDATION.md`, `scripts/validate_candidate.py`: 4.57 +- 0.24 arcsec/yr against the catalogue's 4.68; bootstrap, leave-one-out, odd/even and half splits, negative controls on 14 field stars (none above 3 sigma), wavelength check. It recovers a KNOWN motion; it is not a discovery.)*
+- [x] **V-03 Frame counts explained.** *(`docs/FRAME_COUNTS.md`: why Barnard's Star shows 363 listed and 58 stored; the Library now shows the like-for-like pair.)*
+- [x] **V-04 Browser walk-through of the whole site.** *(16 steps in a real browser against the live site, zero console errors and zero failed requests; it found that every discovery-style question to Navi fell back to the generic summary, fixed by a prompt rule, 10 of 10 now answered by the AI.)*
+- [ ] **V-05 Saved investigations survive a redeploy.** *(Not done by decision: the bucket was not created. `store/backup.py` is written and tested but off. Until then saved investigations are lost on every redeploy; notes and the working state are kept in the visitor's own browser.)*
