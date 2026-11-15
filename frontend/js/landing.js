@@ -13,9 +13,9 @@ mountScene(document.getElementById("scene"));
 const navi = mountNavi({
   inApp: false,
   // Her whisper must never cover the art, the headline, the call to action or the navigation.
-  avoid: ".ship, .planet, .hero-copy h1, .hero-copy .lede, .cta-row, .skip, .demo-note, .hero-nav, .down, .skip-intro, .m-intro h2, .m-lede, .m-points, .m-figure, .steps, .m-close, .m-how-head h2",
+  avoid: ".ship, .planet, .hero-copy h1, .hero-copy .lede, .cta-row, .skip, .demo-note, .hero-nav, .sketch-strip, .skip-intro, .m-intro h2, .m-lede, .m-points, .m-figure, .steps, .m-close, .m-how-head h2",
   panelAvoid: ".ship, .hero-copy, .hero-nav, .m-figure",
-  critical: ".art, .m-diagram",                              // cover art (ship, planet, Earth) and the diagram; text is avoided line by line
+  critical: ".art, .sketch-strip, .m-diagram",                           // cover art (ship, planet, Earth) and the diagram; text is avoided line by line
 });
 
 // Occasional spontaneous remarks while she idles (same personality as in the workspace).

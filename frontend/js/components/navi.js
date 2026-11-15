@@ -304,10 +304,16 @@ export function mountNavi(opts = {}) {
     measureSize();
     const o = obstacles(), b = boxAt(target.x, target.y, 2);
     if (inBounds(target.x, target.y) && clear(b, [...o.hard, ...o.soft])) return;
+    const free = choose("nearest");
+    // Nothing free on this screen and she already sits at the least crowded spot: stay put rather
+    // than hopping between near-equal fallbacks every check. She moves as soon as a free spot opens.
+    if (!free && crowdedSpot && crowdedSpot.x === target.x && crowdedSpot.y === target.y && inBounds(target.x, target.y)) return;
     if (fsm.is(IDLE_DIALOGUE)) hideWhisper(true);           // don't chat from a spot that just got covered
     if (fsm.is(IDLE)) fsm.request(MOVING);                  // same flight, now as a MOVING state (→ IDLE on arrival)
-    setTarget(choose("nearest") ?? leastCrowded(o), 140);
+    crowdedSpot = free ? null : leastCrowded(o);
+    setTarget(free ?? /** @type {{x:number,y:number}} */ (crowdedSpot), 140);
   }
+  /** @type {{x:number,y:number}|null} */ let crowdedSpot = null;
   /** No free space at all: the on-screen spot that covers the least (imagery worst, then controls,
    *  then text), keeping away from corners so she is never pinned there. */
   function leastCrowded(/** @type {ReturnType<typeof obstacles>} */ o) {
@@ -334,10 +340,12 @@ export function mountNavi(opts = {}) {
     const o = obstacles(), covered = !clear(boxAt(target.x, target.y, 2), [...o.hard, ...o.soft]);
     if (!covered) return;
     if ((fsm.is(IDLE, MOVING) && whisper.hidden) || fsm.is(IDLE_DIALOGUE)) scheduleRecheck(0);
-    else if (fsm.is(MISC) && lastSay && whisper.classList.contains("is-shown")) {
+    else if (fsm.is(MISC) && lastSay && !lastSay.moved && whisper.classList.contains("is-shown")) {
       // Mid-sentence and something appeared under her: close the bubble, move, and say it again there.
+      // Only once per line: on a crowded screen the best spot may still touch something, and
+      // repeating would make the bubble blink on and off.
       const again = lastSay; hideWhisper(false);
-      setTimeout(() => { if (panel.hidden && !fsm.is(TOUCHED)) say(again.text, { ...again.o, force: true }); }, 250);
+      setTimeout(() => { if (panel.hidden && !fsm.is(TOUCHED)) { say(again.text, { ...again.o, force: true }); if (lastSay) lastSay.moved = true; } }, 250);
     }
   }, 700);
 
@@ -370,7 +378,7 @@ export function mountNavi(opts = {}) {
   let whisperTimer = 0, lastSaid = 0, lastTip = "", currentKind = "";
   const RANK = { idle: -1, ambient: 0, react: 1, tour: 2, important: 3 };
   /** @type {{ text: string, o: SayOptions }|null} */ let pendingSay = null;
-  /** @type {{ text: string, o: SayOptions }|null} */ let lastSay = null;
+  /** @type {{ text: string, o: SayOptions, moved?: boolean }|null} */ let lastSay = null;
   /** @type {WhisperAction[]} */ let whisperActions = [];
   /** @type {(() => void)|null} */ let onWhisperClosed = null;
   let side = /** @type {"left"|"right"|"top"|"bottom"} */ ("left"), offset = { x: 0, y: 0 };

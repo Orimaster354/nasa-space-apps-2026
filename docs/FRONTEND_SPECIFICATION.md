@@ -118,7 +118,13 @@ explanation, **Based on** references, **Caveats**, **Next steps**. Mock replies 
 
 ## 6a. Landing and Mission
 
-Landing keeps the approved cover; Navi rests beside (never on) the spacecraft. The Mission section uses the same dark
+Landing keeps the approved cover with its sketch details (calm, but maximalist): orbit logo, "!" marks by the
+headline, an orbit diagram with two slowly circling worlds, orange / ivory / blue sparkles that breathe out of phase,
+a dusty Milky Way band, a shooting star, the engine flame, pixel cumulus clouds on the horizon
+(`assets/landing/cloud-*.svg`, generated as pixel art), an ivory "Begin exploring" button, and a warm-paper sketch
+strip along the bottom (telescope, ridgelines, an asteroid's dashed path, a wireframe globe, "▼ The Mission ▼").
+All of it is decorative (aria-hidden), slow (5 s and up), frozen for reduced motion, and cropped rather than shrunk on
+phones. Navi rests beside (never on) the spacecraft, planet, Earth and sketch strip. The Mission section uses the same dark
 page gradient as every page: a short intro, three small points with pixel icons, a diagram explaining blink comparison,
 the four steps, the honesty note, a call to action, and the shared pixel landscape.
 
