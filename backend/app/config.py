@@ -14,6 +14,11 @@ class Settings(BaseSettings):
     prewarm_spectra: bool = False
     # Ask the archive a tiny question now and then (in the background) so the app can show whether it is answering. Off by default: no network in tests.
     archive_probe: bool = False
+    # P2-02: automated source differencing on a comparison. OFF by default: on real SPHEREx pairs it reports mostly star residuals
+    # (see docs and processing/differencing.py). Turn on only to experiment.
+    auto_differencing: bool = False
+    # P2-08: catalogue overlay (Gaia, AllWISE via CDS VizieR). OFF by default: the live query has not been verified against the real service.
+    catalog_overlay: bool = False
     data_dir: str = "data"
     # If set, this folder (the frontend) is served at "/" so the app runs from one origin (no CORS, one URL for judges).
     frontend_dir: str = ""

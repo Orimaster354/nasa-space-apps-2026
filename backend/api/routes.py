@@ -89,6 +89,30 @@ def get_credits():
     return CREDITS
 
 
+@router.get("/objects/{object_id}/spectrum-comparison", **_EXCLUDE)
+def get_spectrum_comparison(request: Request, object_id: str, split: str | None = None, apertureRadiusArcsec: float = Query(12.0)):
+    """Frontend-only operation (not in the contract): the spectrum before versus after a date, band by band, wavelength-matched."""
+    return svc(request).compare_spectrum_epochs(object_id, split=split, radius=apertureRadiusArcsec)
+
+
+@router.get("/objects/{object_id}/challenges", **_EXCLUDE)
+def get_challenges(request: Request, object_id: str):
+    """Frontend-only operation (not in the contract): evidence-backed guided challenges for an object (empty, with the reason, when none is supported)."""
+    return svc(request).challenges(object_id)
+
+
+@router.get("/objects/{object_id}/catalog", **_EXCLUDE)
+def get_catalog(request: Request, object_id: str, source: str = "gaia", fovArcmin: float = Query(DEFAULT_FOV_ARCMIN, gt=0, le=30), epoch: float = 2026.0):
+    """Frontend-only operation (not in the contract): catalogue stars (Gaia DR3, AllWISE) in the object's field, on the image grid, with provenance."""
+    return svc(request).catalog(object_id, source, fovArcmin, epoch)
+
+
+@router.get("/comparisons/{comparison_id}/sources", **_EXCLUDE)
+def get_difference_sources(request: Request, comparison_id: str):
+    """Frontend-only operation (not in the contract), OFF by default: automatic search for compact residuals in a difference picture."""
+    return svc(request).difference_sources(comparison_id)
+
+
 @router.get("/library", **_EXCLUDE)
 def get_library(request: Request, fresh: bool = False):
     """Frontend-only operation (not in the contract): the targets stored on this server (they work with the archive unreachable)."""

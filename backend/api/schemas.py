@@ -372,6 +372,20 @@ class CreateComparisonRequest(_Model):
     mode: Literal["blink", "overlay", "difference"]
 
 
+class DifferenceQuality(_Model):
+    """Frontend-only addition: how the difference picture was made and what its grey scale means (P2-01)."""
+    backgroundMatched: bool
+    baseSkyLevel: float
+    targetSkyLevel: float
+    removedOffset: float
+    unit: str
+    zodiBase: float | None = None
+    zodiTarget: float | None = None
+    noiseSigma: float | None = None
+    fullScaleSigma: float | None = None
+    caveats: list[str] = Field(default_factory=list)
+
+
 class ComparisonResult(_Model):
     comparisonId: str
     mode: Literal["blink", "overlay", "difference"]
@@ -384,6 +398,7 @@ class ComparisonResult(_Model):
     baseImage: ObservationImage | None = None
     targetImage: ObservationImage | None = None
     differenceImage: ObservationImage | None = None
+    differenceQuality: DifferenceQuality | None = None
     measurements: list = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
     createdAt: str
