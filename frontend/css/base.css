@@ -54,3 +54,12 @@ button, input, select, textarea { font: inherit; color: inherit; }
     scroll-behavior: auto !important;
   }
 }
+
+/* Scrollbars: a thin, soft thumb with no visible track, so scrollable areas show they scroll without a heavy bar. */
+* { scrollbar-width: thin; scrollbar-color: rgba(150, 205, 235, 0.38) transparent; }
+@supports not (scrollbar-width: thin) {
+  *::-webkit-scrollbar { width: 8px; height: 8px; background: transparent; }
+  *::-webkit-scrollbar-track, *::-webkit-scrollbar-corner { background: transparent; }
+  *::-webkit-scrollbar-thumb { background: rgba(150, 205, 235, 0.38); border-radius: 8px; border: 2px solid transparent; background-clip: content-box; }
+  *::-webkit-scrollbar-thumb:hover { background: rgba(150, 205, 235, 0.6); background-clip: content-box; }
+}
