@@ -51,3 +51,11 @@ Share of the flux inside 12 arcsec compared with 24 arcsec, on the best-measured
 - **Band numbers**, which are our estimate (17 log-spaced channels per detector); the wavelengths themselves are the archive's.
 - **The wavelength of the faint WISE 0855 near-infrared points**, which probably belong to a neighbouring star (the source at the expected position does not move as WISE 0855 should).
 - **Flagged pixels inside the aperture** are scaled up for, assuming the missing pixels look like the rest.
+
+## A second error, found by adding more targets (2026-11-15)
+
+Running the pipeline on LHS 1140 (a faint red dwarf) showed neighbouring bands, taken within a day, disagreeing by a factor of two or three. Cause: for a frame whose aperture was partly masked (73 to 92 percent usable), the photometry **scaled the usable pixels up** on the assumption that the masked ones look like the rest. When the masked pixels are the star's bright core, that is false: those frames read about 68 mJy against about 200 mJy for the unmasked ones, three times too low, while frames with 96 percent or more usable agreed with each other. The old limit was 70 percent.
+
+Fix (`processing/photometry.py`): a measurement now needs **95 percent of the aperture usable**, and it is **refused when any of the 3 x 3 pixels at the source's centre is masked**. Bright stars that overload the detector are therefore refused instead of reported low. Spectra and candidates of every stored target were rebuilt. Candidate brightness changes also now need corroboration: a difference seen in only one frame (one bad frame sits in many pairs) no longer counts (`services/candidates._corroborated`).
+
+A related finding from the same run: an earlier LHS 1140 measurement of 7 to 19 mJy was made at the wrong place, because validating it re-resolved the target with the name service unreachable and overwrote its stored proper motion. Re-resolving an added target now keeps its identity (`tests/test_dynamic_targets.py`). With the position right, LHS 1140 reads about 190 to 260 mJy between 1.6 and 2.4 micrometres, a smooth red-dwarf spectrum with a signal-to-noise of about 250 per frame. (That is of the order expected for a star of its near-infrared brightness; it was NOT compared with a catalogue magnitude, because the catalogue services were unreachable.)

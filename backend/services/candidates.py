@@ -88,19 +88,36 @@ def _compass(west: float, north: float) -> str:
 
 def brightness_pairs(points: list[dict]) -> dict:
     """Flux differences between frames at the same wavelength (within compare.WAVELENGTH_MATCH_FRACTION of a bandwidth), at least MIN_PAIR_DAYS apart."""
-    zs = []
+    zs, members = [], []
     for i, a in enumerate(points):
-        for b in points[i + 1:]:
+        for j, b in enumerate(points[i + 1:], start=i + 1):
             bw = max(a["bw"] or 0.0, b["bw"] or 0.0)
             if not bw or abs(b["wl"] - a["wl"]) > compare.WAVELENGTH_MATCH_FRACTION * bw or abs(b["mjd"] - a["mjd"]) < MIN_PAIR_DAYS:
                 continue
             sigma = math.sqrt(a["sigma"] ** 2 + b["sigma"] ** 2 + (photometry.SYSTEMATIC_FRACTION * a["flux"]) ** 2 + (photometry.SYSTEMATIC_FRACTION * b["flux"]) ** 2)
             zs.append((b["flux"] - a["flux"]) / sigma)
+            members.append((i, j))
     if not zs:
         return {"n": 0, "max_abs_z": 0.0, "median_abs_z": 0.0, "significant": False}
     az = np.abs(zs)
-    sig = len(zs) >= MIN_PAIRS and (float(np.median(az)) >= BRIGHT_MEDIAN_Z or float(az.max()) >= BRIGHT_MAX_Z)
+    sig = len(zs) >= MIN_PAIRS and (float(np.median(az)) >= BRIGHT_MEDIAN_Z or _corroborated(az, members))
     return {"n": len(zs), "max_abs_z": float(az.max()), "median_abs_z": float(np.median(az)), "rms_z": float(np.sqrt(np.mean(np.square(zs)))), "significant": bool(sig)}
+
+
+def _corroborated(az: np.ndarray, members: list[tuple[int, int]]) -> bool:
+    """A large difference only counts when it survives dropping the ONE frame involved in the most large differences. A single bad frame (a cosmic-ray
+    hit, a neighbouring star in the aperture, a flagged patch) sits in many pairs at once and would otherwise fake a brightness change on its own; real
+    variability shows up in pairs that do not share a frame. Found on real data: LHS 1140 had one 23-sigma 'change' made of a few bad frames."""
+    if float(az.max()) < BRIGHT_MAX_Z:
+        return False
+    counts: dict[int, int] = {}
+    for k, z in enumerate(az):
+        if z >= BRIGHT_MAX_Z:
+            for f in members[k]:
+                counts[f] = counts.get(f, 0) + 1
+    worst = max(counts, key=lambda f: counts[f])
+    rest = [float(az[k]) for k, m in enumerate(members) if worst not in m]
+    return len(rest) >= MIN_PAIRS and max(rest) >= BRIGHT_MAX_Z
 
 
 def score(motion_z: float | None, validated: bool, bright: dict, usable: float) -> float:

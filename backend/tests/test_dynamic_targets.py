@@ -165,3 +165,20 @@ def test_a_curated_name_is_never_looked_up(tmp_path):
     c, svc = make(tmp_path, lambda n: calls.append(n) or moving(n))
     c.get("/api/v1/objects/resolve", params={"q": "Barnard's Star"})
     assert calls == []
+
+
+def test_resolving_a_searched_target_again_never_downgrades_it_even_when_the_lookup_is_down(tmp_path):
+    """Found while validating: re-resolving an added target with the name service unreachable overwrote its proper motion and field centre with a
+    plain record, so every later measurement used the year-2000 position."""
+    c, svc = make(tmp_path, lambda n: moving(n))
+    first = c.get("/api/v1/objects/resolve", params={"q": "Persistent Star"}).json()
+    body = svc.registry.get_object(first["objectId"])
+    assert body["dynamicTarget"] and body["viewCenter"]["decDeg"] != body["coordinates"]["decDeg"]
+
+    def down(name):
+        raise pm_lookup.PmLookupError("The CDS name service could not be reached (ConnectError).")
+    svc._pm_fetch = down
+    again = c.get("/api/v1/objects/resolve", params={"q": "Persistent Star"}).json()
+    after = svc.registry.get_object(first["objectId"])
+    assert again["properMotion"]["pmRaMasPerYr"] == 3000.0 and again["resolver"]["name"] == "CDS Sesame (SIMBAD data)"
+    assert after["dynamicTarget"] == body["dynamicTarget"] and after["viewCenter"] == body["viewCenter"] and after["properMotion"]["source"] == body["properMotion"]["source"]

@@ -169,8 +169,9 @@ class Services:
         if m:
             return self.resolve(ra=float(m.group(1)), dec=float(m.group(2)))
         t = targets.find(q)
-        if t is not None:
-            return self._make_curated(t)                  # works offline and for spellings the name resolver does not know
+        if t is not None:                                  # works offline and for spellings the name resolver does not know
+            added = t not in targets.TARGETS               # a target added at run time by a search keeps its identity when it is resolved again
+            return self._make_curated(t, dynamic=added)
         r_ra, r_dec = self._resolver(q.strip())
         dt, why, src = self._dynamic_target(q.strip())
         if dt is not None:
@@ -183,6 +184,8 @@ class Services:
     def _make_curated(self, t: targets.Target, *, dynamic: bool = False, pm_source: str | None = None) -> dict:
         oid = object_id_for(t.ra, t.dec)
         vra, vdec = targets.view_center(t)
+        if dynamic and pm_source is None:                  # resolved again: keep the source and retrieval date recorded the first time
+            pm_source = ((self.registry.get_object(oid) or {}).get("properMotion") or {}).get("source")
         obj = {"objectId": oid, "name": t.name, "aliases": sorted({a for a in t.aliases if a != t.name}),
                "coordinates": {"raDeg": t.ra, "decDeg": t.dec}, "objectType": t.object_type,
                "properMotion": targets.proper_motion_model(t, pm_source),

@@ -31,7 +31,10 @@ from .fits_io import Cutout
 
 DEFAULT_RADIUS_ARCSEC = 12.0          # about 2 native pixels
 DEFAULT_ANNULUS_ARCSEC = (24.0, 36.0)
-MIN_USABLE_APERTURE_FRACTION = 0.7    # our heuristic: below this the flux is too extrapolated to report
+# Our heuristic. Scaling a partly masked aperture up assumes the missing pixels look like the rest, which is false when the masked pixels are the star's bright
+# core. Real LHS 1140 frames with 73 to 92 percent of the aperture usable read about 68 mJy against about 200 mJy for the unmasked ones (a factor 3 low), while
+# frames with 96 percent or more agreed. So a measurement needs 95 percent of the aperture, and the source's centre must not be masked (see aperture_flux).
+MIN_USABLE_APERTURE_FRACTION = 0.95
 MIN_ANNULUS_PIXELS = 12               # our heuristic: fewer pixels cannot give a stable background
 # Sub-pixels per axis for fractional aperture overlap. It was 7, which over-counts the area of a 12 arcsec aperture (about 1.95 native pixels) by up to
 # 1.2 percent depending on where the source sits in its pixel (found by an independent re-measurement, scripts/validate_spectrum.py); 32 is within
@@ -171,6 +174,11 @@ def aperture_flux(cutout: Cutout, ra: float, dec: float, radius_arcsec: float = 
     w_all = _aperture_weights(img.shape, x0, y0, r_ap)          # weights on the array
     m = int(math.ceil(2 * r_ap)) + 6                             # full-circle weight on a padded virtual array, same sampling,
     total_w = float(_aperture_weights((m, m), m / 2.0, m / 2.0, r_ap).sum())   # so off-image or masked parts count as missing
+    # The pixels at the source's centre carry most of its flux. If any of them is masked, scaling the rest up gives a flux that can be several times too low.
+    ci, cj = int(round(y0)), int(round(x0))
+    core = good[max(0, ci - 1):ci + 2, max(0, cj - 1):cj + 2]
+    if core.size and not core.all():
+        raise Unmeasurable("The centre of the source is masked (flagged pixels at its peak, as for a bright star that overloads the detector), so its flux cannot be measured.")
     w = w_all * good
     usable_fraction = float(w.sum() / total_w)
     if usable_fraction < MIN_USABLE_APERTURE_FRACTION:
