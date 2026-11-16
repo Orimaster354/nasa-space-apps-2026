@@ -93,6 +93,7 @@ export function pickIdleLine(ctx = {}) {
 /** Tour steps. `near` is the element Navi moves beside (she never flies onto it). */
 const TOUR = [
   { id: "welcome", route: "/investigate", near: null, text: "Alright, explorer. Let's see if you can find something interesting." },
+  { id: "ask", route: "/investigate", near: null, text: "Click on me any time and you can ask me questions about what you're looking at." },
   { id: "viewer", route: "/investigate", near: "#viewer-wrap", text: "This is your observation window. Try not to get lost staring into the void." },
   { id: "timeline", route: "/investigate", near: ".timeline-panel", text: "These are observations taken at different times. Try playing them and watch what changes." },
   { id: "candidates", route: "/investigate", near: ".ctx-toggle[data-drawer=left]", text: "Those little circles mark possible objects worth investigating. Don't get too excited yet. We still need evidence." },
@@ -100,7 +101,7 @@ const TOUR = [
   { id: "blink", route: "/investigate", near: ".modebar", text: "See that? Switching between images makes moving objects easier to spot. You're welcome.", waitFor: "blink" },
   { id: "spectrum", route: "/spectrum", near: ".band-selector", text: "Different infrared wavelengths reveal different things. Yes, there's more to space than pretty stars.", waitFor: "route" },
 ];
-const MAIN_FLOW = ["welcome", "viewer", "timeline", "candidates", "modes"];
+const MAIN_FLOW = ["welcome", "ask", "viewer", "timeline", "candidates", "modes"];
 
 /** @param {ReturnType<typeof import("./navi.js").mountNavi>} navi */
 export function attachBrain(navi) {
