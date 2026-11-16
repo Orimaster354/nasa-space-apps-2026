@@ -35,7 +35,6 @@ import { getState, update, subscribe, toQuery } from "../core/store.js";
 import { esc } from "../core/dom.js";
 import { go, currentLocation } from "../core/router.js";
 import { placeBeside, rectsOf, overlap } from "../core/placement.js";
-import { loadJson, saveJson } from "../core/storage.js";
 import { createStateMachine, IDLE, MOVING, TOUCHED, IDLE_DIALOGUE, MISC } from "./naviStates.js";
 
 const SPRITE_W = 88, SPRITE_H = 84;                   // approved asset
@@ -83,12 +82,13 @@ export function mountNavi(opts = {}) {
   panel.innerHTML = `
     <header class="np-head" title="Drag to move">
       <button class="np-grip" type="button" aria-label="Move the chat window (arrow keys)" title="Drag to move">⠿</button>
-      <strong class="pixel">Navi</strong>
-      <span class="muted np-sub">${isMock() ? "Illustrative replies · no AI model" : "Research companion"}</span>
-      <button class="np-min" type="button" aria-label="Minimise chat" aria-expanded="true" title="Minimise">–</button>
+      <strong class="pixel np-name"><span class="np-star" aria-hidden="true">✦</span><span class="np-label"> Navi</span></strong>
+      <span class="np-sub">${isMock() ? "Illustrative replies" : "Research companion"}</span>
+      <button class="np-gear" type="button" aria-expanded="false" aria-controls="np-settings" aria-label="Settings" title="Settings">⚙</button>
+      <button class="np-expand" type="button" aria-pressed="false" aria-label="Larger reading area" title="Larger reading area">⤢</button>
       <button class="np-close" type="button" aria-label="Close chat" title="Close">✕</button>
     </header>
-    <div class="np-settings">
+    <div class="np-settings" id="np-settings" hidden>
       <div class="np-seg" role="radiogroup" aria-label="Explanation level">
         <button type="button" role="radio" data-mode="beginner" aria-checked="true">Beginner</button>
         <button type="button" role="radio" data-mode="advanced" aria-checked="false">Advanced</button>
@@ -132,11 +132,17 @@ export function mountNavi(opts = {}) {
   const vw = () => document.documentElement.clientWidth, vh = () => window.innerHeight;
   const own = [navi, whisper, panel];
   /** Obstacles currently on screen, by severity. */
+  /** Her open dialogue, which she does not rest on (it floats beside her). */
+  const dialogueBox = () => {
+    if (panel.hidden) return [];
+    const r = panel.getBoundingClientRect();
+    return [{ left: r.left - 4, top: r.top - 4, right: r.right + 4, bottom: r.bottom + 4 }];   // + her own 8 px < the 14 px it keeps from her
+  };
   function obstacles() {
     const sel = (/** @type {string} */ s) => rectsOf(s, own).filter(r => r.bottom > 0 && r.top < vh() && r.right > 0 && r.left < vw());
     return {
       hard: sel([opts.critical, CONTROLS].filter(Boolean).join(", ")),                 // never at rest, never crossed
-      soft: sel([TEXT, opts.avoid].filter(Boolean).join(", ")),                        // never at rest
+      soft: [...sel([TEXT, opts.avoid].filter(Boolean).join(", ")), ...dialogueBox()],   // never at rest
       critical: sel(opts.critical ?? ""),
     };
   }
@@ -352,6 +358,8 @@ export function mountNavi(opts = {}) {
 
   /** User is inspecting imagery: retreat away from it and keep quiet for a while. */
   function study(/** @type {Element|null} */ el) {
+    { const g = getState().guided; if (g && !g.done) return; }               // clicking the image IS the guided activity: she stays put and answers
+    if (currentKind === "tour" && !whisper.hidden && whisper.classList.contains("is-shown")) return;   // a tour step stays put while they poke at the image
     const was = studying(); studyUntil = Date.now() + 20000;
     hideWhisper(true);
     navi.classList.add("is-quiet");
@@ -372,7 +380,7 @@ export function mountNavi(opts = {}) {
     const r = el.getBoundingClientRect();
     const p = choose("near", { x: Math.min(vw(), Math.max(0, (r.left + r.right) / 2)), y: Math.min(vh(), Math.max(0, (r.top + r.bottom) / 2)) });
     if (!p || !fsm.request(MISC)) return;                   // a tutorial step is a MISC event
-    holdUntil = Date.now() + holdMs; setTarget(p, 130);
+    holdUntil = Date.now() + holdMs; setTarget(p, 200);
   }
 
   // ---- whispers: settle, then speak --------------------------------------------------------------
@@ -471,8 +479,10 @@ export function mountNavi(opts = {}) {
     followWhisper();
     whisper.classList.remove("is-shown"); void whisper.offsetWidth; whisper.classList.add("is-shown");
     clearTimeout(whisperTimer);
-    const ms = o.ms ?? (kind === "tour" ? 15000 : kind === "important" ? 9000 : Math.min(10000, 4000 + text.length * 55));
-    whisperTimer = window.setTimeout(() => hideWhisper(true), ms);
+    // A tour bubble has no timeout: it stays until the visitor presses Next / Skip or does what it asks. A timeout used to count as
+    // "dismissed" and walked the tour on by itself.
+    const ms = o.ms ?? (kind === "tour" ? 0 : kind === "important" ? 9000 : Math.min(10000, 4000 + text.length * 55));
+    if (ms) whisperTimer = window.setTimeout(() => hideWhisper(true), ms);
     if (reduced()) followWhisper();
   }
   /** Keep the bubble beside her base position (not her hover), inside the viewport, on whole pixels. */
@@ -513,112 +523,412 @@ export function mountNavi(opts = {}) {
     hideWhisper(!act);
     act?.run();
   });
-  function renderTip() { const t = $(".np-tip"); t.hidden = !lastTip; t.textContent = lastTip ? `Navi: “${lastTip}”` : ""; }
+  function renderTip() {
+    const t = $(".np-tip"); t.hidden = !lastTip; t.textContent = lastTip ? `Navi: “${lastTip}”` : "";
+    if (!panel.hidden) { roomForWords(); toLatest(); }
+  }
   /** Viewport rect of where she is resting / heading. */
   const restRect = () => ({ left: target.x, top: target.y, right: target.x + W, bottom: target.y + H });
 
-  // ---- assistant panel: a floating chat window ---------------------------------------------------
-  // Its own open state (store.naviOpen) and geometry; it never opens or closes the Details drawer.
-  // Drag it by the header, resize it from the corner; position and size are remembered (also across
-  // mode switches and reloads) and always kept inside the viewport. Phones get a bottom sheet.
-  const CHAT_KEY = "spherex.navi.chat";
-  const CHAT_W = 400, CHAT_H = 450, CHAT_MIN_W = 300, CHAT_MIN_H = 280;
-  /** @type {{x:number,y:number,w:number,h:number}|null} */ let geom = loadJson(CHAT_KEY, null);
-  if (!geom || ![geom.x, geom.y, geom.w, geom.h].every(Number.isFinite)) geom = null;
+  // ---- assistant: Navi's constellation chat ------------------------------------------------------
+  // A small translucent panel framed by a living constellation. Before it opens, and whenever the layout
+  // changes, the screen is mapped on an 8 px grid (imagery, controls, navigation, side panels, text and
+  // Navi herself are taken) and the chat takes free space near Navi, in one of three forms:
+  //   full — preferred 360 × 400, down to 300 × 260, wherever that fits completely free;
+  //   bar  — when no such room exists, a one-line bar (input + buttons) in free space;
+  //   big  — a larger reading area: from ⤢, or opened by itself when a reply arrives in the bar. It uses
+  //          free space when there is enough; otherwise it may lie over imagery (never over controls,
+  //          navigation, side panels, text or Navi) until the user shrinks, moves or closes it.
+  // Dragging it (header or grip) leaves it where the user put it until the chat is closed. While idle it
+  // trails Navi; it holds still while the user types, reads, points at it or drags it.
+  const PREF = { w: 360, h: 400 }, MIN = { w: 300, h: 260 }, BIG = { w: 600, h: 620 }, BAR = { w: 440, wMin: 300, h: 52 };
+  const CELL = 8, CLEAR = 10;           // grid, and clearance around everything (room for the stars around it)
+  const EDGE_GAP = 12;                  // kept from the viewport edges
+  /** @type {"full"|"bar"|"big"} */ let form = "full";
+  let big = false;                      // the user (or a reply in the bar) asked for the reading area
+  let userPlaced = false;               // dragged by the user: stays put until closed
+  let retries = 0, refitTimer = 0;
+  /** @type {{dx:number,dy:number,id:number}|null} */ let drag = null;      // the user is dragging it
   const sheetMode = () => vw() < 600;
-  const maxW = () => Math.min(720, vw() - 16), maxH = () => Math.max(CHAT_MIN_H, vh() - 16);
   const clampN = (/** @type {number} */ v, /** @type {number} */ lo, /** @type {number} */ hi) => Math.min(hi, Math.max(lo, v));
-  let sizeSet = { w: 0, h: 0 };          // size last applied by code (anything else is a user resize)
-  let minimised = false;                 // collapsed to its title bar
 
-  /** Default spot: beside her if that is clear, else the corner that hides the least imagery. */
-  function defaultSpot(/** @type {number} */ w, /** @type {number} */ h) {
-    const essential = rectsOf(opts.critical ?? "", own), other = rectsOf(opts.panelAvoid ?? "", own);
-    const cost = (/** @type {{x:number,y:number}} */ q) => {
-      const b = { left: q.x, top: q.y, right: q.x + w, bottom: q.y + h };
-      return 3 * essential.reduce((t, r) => t + overlap(b, r), 0) + other.reduce((t, r) => t + overlap(b, r), 0);
+  /** Visible rects matching a selector (not ours, not hidden), clipped to the viewport. */
+  function taken(/** @type {string} */ sel, skip = "") {
+    if (!sel) return [];
+    return [...document.querySelectorAll(sel)]
+      .filter(el => !own.some(x => x === el || x.contains(el) || el.contains(x)) && getComputedStyle(el).visibility !== "hidden" && !(skip && el.matches(skip)))
+      .map(el => el.getBoundingClientRect())
+      .filter(r => r.width > 0 && r.height > 0 && r.bottom > 0 && r.top < vh() && r.right > 0 && r.left < vw());
+  }
+  /**
+   * Occupancy map of the viewport: summed-area table of how costly it is to cover each cell.
+   * `withImagery` false leaves the imagery out (the rest of the interface only).
+   */
+  function spaceMap(withNavi = true, withImagery = true) {
+    const cols = Math.floor(vw() / CELL), rows = Math.floor(vh() / CELL), cost = new Float64Array(cols * rows);
+    const mark = (/** @type {Box} */ r, /** @type {number} */ wgt) => {
+      const c0 = Math.max(0, Math.floor((r.left - CLEAR) / CELL)), c1 = Math.min(cols - 1, Math.floor((r.right + CLEAR) / CELL));
+      const r0 = Math.max(0, Math.floor((r.top - CLEAR) / CELL)), r1 = Math.min(rows - 1, Math.floor((r.bottom + CLEAR) / CELL));
+      for (let y = r0; y <= r1; y++) for (let x = c0; x <= c1; x++) cost[y * cols + x] += wgt;
     };
-    const m = 12, top = Math.min(72, vh() - h - m);
-    const spots = [placeBeside(restRect(), w, h, [...essential, ...other], { sides: ["bottom", "left", "top", "right"], gap: 8, align: "end" }),
-      { x: vw() - w - m, y: vh() - h - m }, { x: m, y: vh() - h - m }, { x: vw() - w - m, y: top }, { x: m, y: top }];
-    return spots.reduce((a, b) => (cost(b) < cost(a) ? b : a));
+    // Imagery first, then controls, then the rest of the interface, then text. Navi is never covered.
+    const img = opts.critical ?? "";
+    if (withImagery) {
+      taken(img).forEach(r => mark(r, 100));
+      // The pictures themselves weigh most: an empty part of the viewer is a better place than the sky.
+      // Each picture only counts where its frame shows it (a zoomed image is far larger than the viewer).
+      if (img) document.querySelectorAll(img).forEach(frame => {
+        const f = frame.getBoundingClientRect();
+        frame.querySelectorAll("img, canvas").forEach(pic => {
+          const p = pic.getBoundingClientRect();
+          const r = { left: Math.max(p.left, f.left), top: Math.max(p.top, f.top), right: Math.min(p.right, f.right), bottom: Math.min(p.bottom, f.bottom) };
+          if (r.right > r.left && r.bottom > r.top && getComputedStyle(pic).visibility !== "hidden") mark(r, 200);
+        });
+      });
+    }
+    taken(CONTROLS).forEach(r => mark(r, 40));
+    taken([opts.panelAvoid, opts.avoid].filter(Boolean).join(", "), withImagery ? "" : img).forEach(r => mark(r, 25));
+    taken(TEXT).forEach(r => mark(r, 8));
+    // Navi is never covered: where she rests and where she is (she may still be easing to a stop).
+    if (withNavi) { const n = naviZone(); mark({ left: n.left - 6, top: n.top - 6, right: n.right + 6, bottom: n.bottom + 6 }, 1e7); }
+    const sat = new Float64Array((cols + 1) * (rows + 1));
+    for (let y = 0; y < rows; y++) {
+      let line = 0;
+      for (let x = 0; x < cols; x++) { line += cost[y * cols + x]; sat[(y + 1) * (cols + 1) + x + 1] = sat[y * (cols + 1) + x + 1] + line; }
+    }
+    /** Cost of covering the box at cell (c, r) of cw × ch cells. */
+    const sum = (/** @type {number} */ c, /** @type {number} */ r, /** @type {number} */ cw, /** @type {number} */ ch) =>
+      sat[(r + ch) * (cols + 1) + c + cw] - sat[r * (cols + 1) + c + cw] - sat[(r + ch) * (cols + 1) + c] + sat[r * (cols + 1) + c];
+    return { cols, rows, sum };
   }
-  function moveTo(/** @type {number} */ x, /** @type {number} */ y) {
-    const w = panel.offsetWidth, h = panel.offsetHeight;
-    x = clampN(x, 8, Math.max(8, vw() - w - 8)); y = clampN(y, 8, Math.max(8, vh() - h - 8));
-    panel.style.left = `${Math.round(x)}px`; panel.style.top = `${Math.round(y)}px`;
-    return { x, y };
+  /** Box around where Navi rests and where she is drawn now (plus her gentle hover). */
+  function naviZone() {
+    const r = restRect(), hover = 8;
+    return { left: Math.min(r.left, pos.x) - hover, top: Math.min(r.top, pos.y) - hover,
+      right: Math.max(r.right, pos.x + W) + hover, bottom: Math.max(r.bottom, pos.y + H) + hover };
   }
-  function saveGeom() {
-    if (sheetMode()) return;
-    const r = panel.getBoundingClientRect();
-    geom = { x: r.left, y: r.top, w: minimised ? (geom?.w ?? r.width) : r.width, h: minimised ? (geom?.h ?? CHAT_H) : r.height };
-    saveJson(CHAT_KEY, geom);
+  /** A free resting spot for Navi that stays clear of the dialogue box `b` (nearest to her), or null. */
+  function naviSpotOutside(/** @type {{x:number,y:number,w:number,h:number}} */ b) {
+    const o = obstacles(), box = { left: b.x - 16, top: b.y - 16, right: b.x + b.w + 16, bottom: b.y + b.h + 16 };
+    const pts = freePoints(o).filter(p => overlap(boxAt(p.x, p.y, 8), box) === 0);
+    if (!pts.length) return null;
+    return pts.reduce((a, p) => (Math.hypot(p.x - pos.x, p.y - pos.y) < Math.hypot(a.x - pos.x, a.y - pos.y) ? p : a));
   }
+  /** Gap between Navi and a box at (x, y) of w × h (0 when touching). */
+  function gapToNavi(/** @type {number} */ x, /** @type {number} */ y, /** @type {number} */ w, /** @type {number} */ h) {
+    const n = restRect(), dx = Math.max(n.left - (x + w), x - n.right, 0), dy = Math.max(n.top - (y + h), y - n.bottom, 0);
+    return Math.hypot(dx, dy);
+  }
+  /** Cells needed for a box of w × h pixels. */
+  const cells = (/** @type {number} */ px) => Math.ceil(px / CELL);
+  /** Free cost of a box at pixel position (x, y). */
+  function costAt(/** @type {ReturnType<typeof spaceMap>} */ map, /** @type {number} */ x, /** @type {number} */ y, /** @type {number} */ w, /** @type {number} */ h) {
+    const c = Math.floor(x / CELL), r = Math.floor(y / CELL), cw = cells(w + (x - c * CELL)), ch = cells(h + (y - r * CELL));
+    if (c < 0 || r < 0 || c + cw > map.cols || r + ch > map.rows) return Infinity;
+    return map.sum(c, r, cw, ch);
+  }
+  /**
+   * Best spot for a w × h box: with `onlyFree`, a spot covering nothing (closest to Navi) or null;
+   * otherwise the spot covering the least (then closest to Navi).
+   */
+  function spotFor(/** @type {ReturnType<typeof spaceMap>} */ map, /** @type {number} */ w, /** @type {number} */ h, onlyFree = true) {
+    const cw = cells(w), ch = cells(h);
+    /** @type {{x:number,y:number,cost:number,d:number}|null} */ let best = null;
+    for (let r = 2; r + ch <= map.rows - 2; r++) for (let c = 2; c + cw <= map.cols - 2; c++) {
+      const cost = map.sum(c, r, cw, ch);
+      if (onlyFree && cost > 0) continue;
+      const x = c * CELL, y = r * CELL, d = gapToNavi(x, y, w, h);
+      if (!best || cost < best.cost || (cost === best.cost && d < best.d)) best = { x, y, cost, d };
+    }
+    return best;
+  }
+  /** Spot for a w × h box that covers nothing in `gate`, covering the least of `map` (then closest to Navi). */
+  function spotGated(/** @type {ReturnType<typeof spaceMap>} */ map, /** @type {ReturnType<typeof spaceMap>} */ gate, /** @type {number} */ w, /** @type {number} */ h) {
+    const cw = cells(w), ch = cells(h);
+    /** @type {{x:number,y:number,cost:number,d:number}|null} */ let best = null;
+    for (let r = 2; r + ch <= map.rows - 2; r++) for (let c = 2; c + cw <= map.cols - 2; c++) {
+      if (gate.sum(c, r, cw, ch) > 0) continue;
+      const cost = map.sum(c, r, cw, ch), x = c * CELL, y = r * CELL, d = gapToNavi(x, y, w, h);
+      if (!best || cost < best.cost || (cost === best.cost && d < best.d)) best = { x, y, cost, d };
+    }
+    return best;
+  }
+  /** Candidate sizes from large to small. */
+  function sizes(/** @type {number} */ w0, /** @type {number} */ w1, /** @type {number} */ h0, /** @type {number} */ h1, /** @type {number} */ sw, /** @type {number} */ sh) {
+    const out = [];
+    for (let w = w0; w >= w1; w -= sw) for (let h = h0; h >= h1; h -= sh) out.push({ w: Math.round(w), h: Math.round(h) });
+    if (!out.some(s => s.w === w1 && s.h === h1)) out.push({ w: w1, h: h1 });
+    return out.sort((a, b) => b.w * b.h - a.w * a.h);
+  }
+
+  /** Decide form, size and position from the free space right now. */
   function placePanel() {
     const sheet = sheetMode();
     panel.classList.toggle("is-sheet", sheet);
-    if (sheet) { panel.style.left = ""; panel.style.top = ""; panel.style.width = ""; panel.style.height = ""; return; }
-    const w = Math.round(clampN(geom?.w ?? CHAT_W, CHAT_MIN_W, maxW())), h = Math.round(clampN(geom?.h ?? CHAT_H, CHAT_MIN_H, maxH()));
-    sizeSet = { w, h };
-    panel.style.width = `${w}px`; panel.style.height = minimised ? "" : `${h}px`;
-    const at = geom ?? defaultSpot(w, h);
-    moveTo(at.x, at.y);
+    if (sheet) { panel.style.left = panel.style.top = panel.style.width = panel.style.height = ""; setForm(big ? "big" : "full"); drawSky(); return; }
+    if (userPlaced) { keepOnScreen(); return; }
+    const map = spaceMap(true), maxW = vw() - 2 * EDGE_GAP, maxH = vh() - 2 * EDGE_GAP;
+    /** @type {ReturnType<typeof spaceMap>|null} */ let mapNoNavi = null;
+    /** @type {{x:number,y:number}|null} */ let naviTo = null;
+    let crowded = false;
+    /** @typedef {{w:number,h:number,x:number,y:number}} Pick */
+    const first = (/** @type {{w:number,h:number}[]} */ list, /** @type {ReturnType<typeof spaceMap>} */ m) => {
+      for (const s of list) { if (s.w > maxW || s.h > maxH) continue; const p = spotFor(m, s.w, s.h); if (p) return /** @type {Pick} */ ({ ...s, x: p.x, y: p.y }); }
+      return null;
+    };
+    /** Free space with Navi where she is; else free space she makes by flying to another free spot. */
+    const fitIn = (/** @type {{w:number,h:number}[]} */ list) => {
+      const here = first(list, map); if (here) return here;
+      mapNoNavi ??= spaceMap(false);
+      const there = first(list, mapNoNavi); if (!there) return null;
+      const to = naviSpotOutside(there); if (!to) return null;
+      naviTo = to; return there;
+    };
+    /** Over imagery at most (the emptiest part of it), never over the rest of the interface. */
+    const overImagery = (/** @type {{w:number,h:number}[]} */ list) => {
+      const ui = spaceMap(true, false);
+      for (const s of list) { if (s.w > maxW || s.h > maxH) continue; const p = spotGated(map, ui, s.w, s.h); if (p) return /** @type {Pick} */ ({ ...s, x: p.x, y: p.y }); }
+      return null;
+    };
+    /** @type {Pick|null} */ let pick = null;
+    /** @type {"full"|"bar"|"big"} */ let f = "full";
+    if (big) {
+      const list = sizes(Math.min(BIG.w, maxW), Math.min(420, maxW), Math.min(BIG.h, maxH), Math.min(360, maxH), 60, 40);
+      pick = fitIn(list) ?? overImagery(list); f = "big";
+    } else {
+      pick = fitIn(sizes(PREF.w, MIN.w, PREF.h, MIN.h, 30, 35));
+      if (!pick) { pick = fitIn(sizes(BAR.w, BAR.wMin, BAR.h, BAR.h, 20, 1)); f = "bar"; }
+      if (!pick) { pick = overImagery([{ w: BAR.wMin, h: BAR.h }]); f = "bar"; crowded = true; }
+    }
+    if (!pick) {
+      const w = f === "big" ? Math.min(BIG.w, maxW) : BAR.wMin, h = f === "big" ? Math.min(BIG.h, maxH) : BAR.h, p = spotFor(map, w, h, false);
+      pick = p && { w, h, x: p.x, y: p.y }; crowded = true;
+    }
+    // Squeezed: look again shortly (Navi may still be flying, the layout settling).
+    if (crowded && retries < 6) { retries++; refit(700); } else if (!crowded) retries = 0;
+    if (!pick) return;
+    if (naviTo) setTarget(naviTo, 120);                      // she makes room with her usual flight
+    setForm(f);
+    panel.style.width = `${pick.w}px`; panel.style.height = `${pick.h}px`;
+    moveTo(pick.x, pick.y);
+    roomForWords(); drawSky(); toLatest();
+    fmap = null; desired = null;                             // following starts again from this layout
+  }
+  /** The conversation keeps at least 150 px: in a short panel Navi's tip line, then the suggestions, step aside. */
+  function roomForWords() {
+    panel.classList.remove("no-tip", "no-sugg");
+    if (form === "bar") return;
+    if (log.clientHeight < 150) panel.classList.add("no-tip");
+    if (log.clientHeight < 150) panel.classList.add("no-sugg");
+  }
+  function setForm(/** @type {"full"|"bar"|"big"} */ f) {
+    if (f !== "bar") { panel.classList.remove("has-news"); input.placeholder = "Ask about what you see…"; }
+    form = f;
+    panel.classList.toggle("is-bar", f === "bar"); panel.classList.toggle("is-big", f === "big");
+    const b = $(".np-expand"), on = f === "big";
+    b.textContent = on ? "⤡" : "⤢"; b.setAttribute("aria-pressed", String(on));
+    b.title = on ? "Smaller" : "Larger reading area"; b.setAttribute("aria-label", b.title);
+  }
+  function moveTo(/** @type {number} */ x, /** @type {number} */ y) {
+    const w = panel.offsetWidth, h = panel.offsetHeight;
+    x = clampN(x, EDGE_GAP, Math.max(EDGE_GAP, vw() - w - EDGE_GAP)); y = clampN(y, EDGE_GAP, Math.max(EDGE_GAP, vh() - h - EDGE_GAP));
+    panel.style.left = `${Math.round(x)}px`; panel.style.top = `${Math.round(y)}px`;
+    const n = restRect();                                    // it grows out of Navi
+    panel.style.setProperty("--ox", `${Math.round((n.left + n.right) / 2 - x)}px`);
+    panel.style.setProperty("--oy", `${Math.round((n.top + n.bottom) / 2 - y)}px`);
+    return { x, y };
+  }
+  const keepOnScreen = () => moveTo(parseFloat(panel.style.left) || 0, parseFloat(panel.style.top) || 0);
+
+  // Re-fit whenever the layout around it changes (a chat the user placed is only kept on screen).
+  function refit(delay = 120) {
+    if (panel.hidden) return;
+    clearTimeout(refitTimer);
+    refitTimer = window.setTimeout(() => { if (!panel.hidden && !drag) requestAnimationFrame(placePanel); }, delay);
+  }
+  addEventListener("resize", () => refit());
+  document.addEventListener("fullscreenchange", () => refit(200));
+  subscribe((_s, patch) => { if (["compareMode", "panels", "objectId", "observationId", "candidateId"].some(k => k in patch)) refit(180); });
+  const mainEl = document.querySelector("main");
+  if (mainEl) new ResizeObserver(() => refit(160)).observe(mainEl);
+
+  // ---- the constellation around it: stars joined by thin lines ------------------------------------
+  // It sits just outside the panel's edge (inside the clearance kept around the chat), floats 5 px up
+  // and down (CSS) and changes shape in small stop-motion steps every 400–600 ms. Only the decoration
+  // moves; text, input and buttons never do. Nothing moves with reduced motion.
+  const SVG = "http://www.w3.org/2000/svg", SKY_M = 6;      // the outline extends 6 px around the panel
+  const sky = document.createElementNS(SVG, "svg");
+  sky.setAttribute("class", "np-sky"); sky.setAttribute("aria-hidden", "true");
+  panel.prepend(sky);
+  let skyKey = "";
+  /** @type {{x:number,y:number}[]} */ let skyPts = [];
+  /** @type {SVGPathElement|null} */ let skyPath = null;
+  /** @type {SVGCircleElement[]} */ let skyStars = [];
+  function drawSky() {
+    const w = Math.round(panel.offsetWidth) + 2 * SKY_M, h = Math.round(panel.offsetHeight) + 2 * SKY_M, key = `${w}x${h}`;
+    if (w <= 2 * SKY_M || h <= 2 * SKY_M || key === skyKey) return;
+    skyKey = key;
+    const i = 3, c = 12;                                     // 3 px outside the panel edge; corners cut
+    /** @type {number[][]} */ const pts = [];
+    const edge = (/** @type {number[]} */ a, /** @type {number[]} */ b) => {
+      const len = Math.hypot(b[0] - a[0], b[1] - a[1]), k = Math.max(1, Math.round(len / (60 + Math.random() * 40)));
+      for (let s = 1; s < k; s++) { const t = (s + (Math.random() - 0.5) * 0.4) / k; pts.push([a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t]); }
+    };
+    const corners = [[i + c, i], [w - i - c, i], [w - i, i + c], [w - i, h - i - c], [w - i - c, h - i], [i + c, h - i], [i, h - i - c], [i, i + c]];
+    corners.forEach((p, k) => { pts.push(p); if (k % 2 === 0) edge(p, corners[k + 1]); else edge(p, corners[(k + 1) % 8]); });
+    skyPts = pts.map(p => ({ x: p[0], y: p[1] }));
+    sky.setAttribute("viewBox", `0 0 ${w} ${h}`);
+    sky.innerHTML = `<path class="np-lines"/>` + skyPts.map((_, k) =>
+      `<circle r="${(k % 4 === 0 ? 2 : 1.2 + Math.random() * 0.6).toFixed(2)}" style="--d:${(3 + Math.random() * 4).toFixed(2)}s;--dl:${(-Math.random() * 6).toFixed(2)}s"/>`).join("");
+    skyPath = sky.querySelector("path"); skyStars = [...sky.querySelectorAll("circle")];
+    stepSky(reduced());
+  }
+  /** One stop-motion frame: every star takes a new small offset (none when `still`). */
+  function stepSky(still = false) {
+    if (!skyPath) return;
+    let d = "";
+    skyPts.forEach((p, k) => {
+      const x = p.x + (still ? 0 : (Math.random() - 0.5) * 4.8), y = p.y + (still ? 0 : (Math.random() - 0.5) * 4.8);
+      d += `${k ? " L" : "M"}${x.toFixed(1)} ${y.toFixed(1)}`;
+      skyStars[k].setAttribute("cx", x.toFixed(1)); skyStars[k].setAttribute("cy", y.toFixed(1));
+    });
+    skyPath.setAttribute("d", d + " Z");
+  }
+  let skyTimer = 0;
+  function startSky() {
+    clearTimeout(skyTimer);
+    if (panel.hidden || reduced()) { stepSky(true); return; }
+    const tick = () => {
+      if (panel.hidden || document.hidden || reduced()) return;
+      stepSky(); skyTimer = window.setTimeout(tick, 400 + Math.random() * 200);
+    };
+    tick();
+    startFollow();
+  }
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) startSky(); });
+
+  // ---- following Navi --------------------------------------------------------------------------
+  // While the user is not busy with the chat it trails Navi: a few times a second it looks for the
+  // nearest free spot beside, above or below her and eases there with a soft lag. Every step must stay in
+  // free space; if the straight way would cross anything it fades out and re-forms at the new spot.
+  // When she is somewhere crowded it stays put and catches up later. While the user types, reads, points
+  // at it or drags it, she pauses (TOUCHED) and the chat holds still.
+  /** @type {ReturnType<typeof spaceMap>|null} */ let fmap = null;
+  /** @type {{x:number,y:number}|null} */ let desired = null;
+  let fmapAt = 0, desireAt = 0, engageAt = 0, readUntil = 0, calmSince = 0, hopping = false, followRaf = 0, frameAt = 0;
+  const engaged = () => Date.now() < readUntil || Date.now() - engageAt < 4000 || panel.matches(":hover")
+    || document.activeElement === input || !!drag;
+  ["keydown", "input", "wheel", "pointerdown", "focusin"].forEach(t => panel.addEventListener(t, () => { engageAt = Date.now(); }, { passive: true }));
+  log.addEventListener("scroll", () => { engageAt = Date.now(); }, { passive: true });
+  const following = () => !userPlaced && form !== "big" && !sheetMode() && !engaged();
+
+  function desire() {
+    if (!fmap) return null;
+    const w = panel.offsetWidth, h = panel.offsetHeight, cw = cells(w), ch = cells(h);
+    const her = { left: pos.x, top: pos.y, right: pos.x + W, bottom: pos.y + H }, rest = restRect(), pad = 14;
+    const clearOf = (/** @type {Box} */ b, /** @type {Box} */ n) => b.right <= n.left - pad || b.left >= n.right + pad || b.bottom <= n.top - pad || b.top >= n.bottom + pad;
+    const gap = (/** @type {Box} */ b) => Math.hypot(Math.max(her.left - b.right, b.left - her.right, 0), Math.max(her.top - b.bottom, b.top - her.bottom, 0));
+    /** @type {{x:number,y:number,g:number}|null} */ let best = null;
+    const c0 = Math.ceil(EDGE_GAP / CELL), r0 = c0;
+    for (let r = r0; r + ch <= fmap.rows - r0; r++) for (let c = c0; c + cw <= fmap.cols - c0; c++) {
+      if (fmap.sum(c, r, cw, ch) > 0) continue;
+      const x = c * CELL, y = r * CELL, b = { left: x, top: y, right: x + w, bottom: y + h };
+      if (!clearOf(b, her) || !clearOf(b, rest)) continue;
+      const g = gap(b);
+      if (!best || g < best.g) best = { x, y, g };
+    }
+    const cx = parseFloat(panel.style.left) || 0, cy = parseFloat(panel.style.top) || 0;
+    const cur = { left: cx, top: cy, right: cx + w, bottom: cy + h };
+    const curOk = costAt(fmap, cx, cy, w, h) === 0 && clearOf(cur, her) && clearOf(cur, rest);
+    if (!best) return null;                                       // nowhere free: stay where it is
+    if (curOk && (gap(cur) <= best.g + 28 || best.g > 260)) return { x: cx, y: cy };
+    return best;
+  }
+  function startFollow() { if (!followRaf && !panel.hidden) { frameAt = 0; followRaf = requestAnimationFrame(followTick); } }
+  function followTick(/** @type {number} */ now) {
+    followRaf = 0;
+    if (panel.hidden) return;
+    const dt = Math.min(0.1, Math.max(0, (now - (frameAt || now)) / 1000)); frameAt = now;
+    follow(now, dt);
+    followRaf = requestAnimationFrame(followTick);
+  }
+  function follow(/** @type {number} */ now, /** @type {number} */ dt) {
+    // She pauses while the user is busy with the chat, and wanders again a little after.
+    if (engaged()) {
+      calmSince = 0;
+      if (!fsm.is(TOUCHED) && fsm.request(TOUCHED, { force: true })) { target = { x: pos.x, y: pos.y }; publish(); }
+    } else if (fsm.is(TOUCHED)) {
+      calmSince ||= now;
+      if (now - calmSince > 2500) { fsm.release(TOUCHED); calmSince = 0; }
+    }
+    if (!following() || hopping || document.hidden) return;
+    if (!fmap || now - fmapAt > 1000) { fmap = spaceMap(false); fmapAt = now; }
+    if (now - desireAt > 140) { desired = desire(); desireAt = now; }
+    if (!desired) return;
+    const cx = parseFloat(panel.style.left) || 0, cy = parseFloat(panel.style.top) || 0;
+    const dx = desired.x - cx, dy = desired.y - cy, dist = Math.hypot(dx, dy);
+    if (dist < 0.5) return;
+    if (reduced()) { moveTo(desired.x, desired.y); return; }
+    const step = Math.min(dist * (1 - Math.exp(-dt / 0.6)), 380 * dt);    // soft lag, at most 380 px/s
+    const nx = cx + (dx / dist) * step, ny = cy + (dy / dist) * step;
+    if (costAt(fmap, nx, ny, panel.offsetWidth, panel.offsetHeight) === 0) moveTo(nx, ny);
+    else hop(desired);
+  }
+  /** Fade out, re-form at p (never sweeping across occupied space). */
+  function hop(/** @type {{x:number,y:number}} */ p) {
+    hopping = true; panel.classList.add("is-hopping");
+    setTimeout(() => { moveTo(p.x, p.y); panel.classList.remove("is-hopping"); setTimeout(() => { hopping = false; }, 260); }, 220);
   }
 
-  // Drag by the header (buttons inside it keep working), or move with the arrow keys on the grip.
-  const head = /** @type {HTMLElement} */ (panel.querySelector(".np-head"));
-  /** @type {{dx:number,dy:number,id:number}|null} */ let dragging = null;
+  // ---- drag, expand, settings, open / close ---------------------------------------------------------
+  // Drag from the header (not its buttons) or the grip; the pointer is captured on the panel itself, so
+  // the drag keeps working in every form. Arrow keys on the grip move it too.
+  const head = /** @type {HTMLElement} */ ($(".np-head"));
   head.addEventListener("pointerdown", e => {
-    if (sheetMode() || e.button !== 0 || /** @type {HTMLElement} */ (e.target).closest(".np-min, .np-close")) return;
-    const r = panel.getBoundingClientRect();
-    dragging = { dx: e.clientX - r.left, dy: e.clientY - r.top, id: e.pointerId };
-    try { head.setPointerCapture(e.pointerId); } catch { /* synthetic pointer */ }
+    if (sheetMode() || e.button !== 0) return;
+    const t = /** @type {HTMLElement} */ (e.target);
+    if (t.closest("button") && !t.closest(".np-grip")) return;
+    drag = { dx: e.clientX - (parseFloat(panel.style.left) || 0), dy: e.clientY - (parseFloat(panel.style.top) || 0), id: e.pointerId };
+    try { panel.setPointerCapture(e.pointerId); } catch { /* synthetic pointer */ }
     panel.classList.add("is-dragging"); e.preventDefault();
   });
-  head.addEventListener("pointermove", e => { if (dragging && e.pointerId === dragging.id) moveTo(e.clientX - dragging.dx, e.clientY - dragging.dy); });
-  const endDrag = () => { if (!dragging) return; dragging = null; panel.classList.remove("is-dragging"); saveGeom(); };
-  head.addEventListener("pointerup", endDrag); head.addEventListener("pointercancel", endDrag);
+  panel.addEventListener("pointermove", e => {
+    if (!drag || e.pointerId !== drag.id) return;
+    userPlaced = true; moveTo(e.clientX - drag.dx, e.clientY - drag.dy);
+  });
+  const endDrag = () => { if (!drag) return; drag = null; panel.classList.remove("is-dragging"); };
+  panel.addEventListener("pointerup", endDrag); panel.addEventListener("pointercancel", endDrag); panel.addEventListener("lostpointercapture", endDrag);
   $(".np-grip").addEventListener("keydown", e => {
     const d = /** @type {Record<string,[number,number]>} */ ({ ArrowLeft: [-20, 0], ArrowRight: [20, 0], ArrowUp: [0, -20], ArrowDown: [0, 20] })[e.key];
     if (!d || sheetMode()) return;
-    e.preventDefault(); const r = panel.getBoundingClientRect(); moveTo(r.left + d[0], r.top + d[1]); saveGeom();
+    e.preventDefault(); userPlaced = true;
+    moveTo((parseFloat(panel.style.left) || 0) + d[0], (parseFloat(panel.style.top) || 0) + d[1]);
   });
 
-  // Resize from the corner (CSS resize); remember the size and keep the window on screen.
-  new ResizeObserver(() => {
-    if (panel.hidden || sheetMode() || minimised) return;
-    const r = panel.getBoundingClientRect();
-    if (Math.abs(r.width - sizeSet.w) < 1 && Math.abs(r.height - sizeSet.h) < 1) return;
-    sizeSet = { w: r.width, h: r.height };
-    moveTo(r.left, r.top); saveGeom();
-  }).observe(panel);
-  addEventListener("resize", () => { if (!panel.hidden) placePanel(); });
-
-  // Minimise to the title bar (still movable); the conversation is kept.
-
-  function setMinimised(/** @type {boolean} */ on) {
-    minimised = on;
-    panel.classList.toggle("is-min", on);
-    const b = $(".np-min"); b.setAttribute("aria-expanded", String(!on)); b.textContent = on ? "▢" : "–";
-    b.setAttribute("aria-label", on ? "Restore chat" : "Minimise chat"); b.title = on ? "Restore" : "Minimise";
-    placePanel();
-    if (!on) { log.scrollTop = log.scrollHeight; input.focus(); }
+  // ⤢ larger reading area ⇄ ⤡ back; it is placed afresh either way.
+  $(".np-expand").addEventListener("click", () => { big = form !== "big"; userPlaced = false; placePanel(); });
+  // ⚙ settings (explanation level, Navi's comments, replay tour) fold out inside the chat.
+  function showSettings(/** @type {boolean} */ on) {
+    $(".np-settings").hidden = !on; $(".np-gear").setAttribute("aria-expanded", String(on));
+    roomForWords();
   }
-  $(".np-min").addEventListener("click", () => setMinimised(!minimised));
+  $(".np-gear").addEventListener("click", () => showSettings($(".np-settings").hidden));
 
   function setOpen(/** @type {boolean} */ open, focus = true) {
     update({ naviOpen: open });
-    panel.hidden = !open; body.setAttribute("aria-expanded", String(open));
+    body.setAttribute("aria-expanded", String(open));
     navi.classList.toggle("is-open", open);
     if (open) {
-      hideWhisper(); dropBubble(); fsm.request(TOUCHED, { force: true });   // TOUCHED: autonomy paused
-      target = { x: pos.x, y: pos.y }; publish();                            // she pauses where she is
-      if (minimised) setMinimised(false);
+      hideWhisper(); dropBubble(); fsm.request(TOUCHED, { force: true });   // she pauses while it opens
+      target = { x: pos.x, y: pos.y }; publish();
+      panel.hidden = false; userPlaced = false; big = false; retries = 0; engageAt = Date.now(); panel.classList.remove("has-news");
+      showSettings(false);
       renderLog(); renderSuggestions(); renderTip(); syncSettings(); placePanel();
-      log.scrollTop = log.scrollHeight;
-      if (focus) input.focus();
+      panel.classList.remove("is-arriving"); void panel.offsetWidth; panel.classList.add("is-arriving");
+      startSky();
+      if (focus) input.focus({ preventScroll: true });
     } else {
+      panel.hidden = true; drag = null; clearTimeout(skyTimer);
       fsm.release(TOUCHED); scheduleRecheck(300);                           // TOUCHED → IDLE
       if (focus) body.focus();
     }
@@ -647,6 +957,12 @@ export function mountNavi(opts = {}) {
   let thinking = false, failed = /** @type {string|null} */ (null);
   const para = (/** @type {string} */ t) => t.split(/\n\n+/).map(p => `<p>${esc(p)}</p>`).join("");
 
+  /** Show the newest words: the start of Navi's latest reply when it is taller than the view, else the bottom. */
+  function toLatest() {
+    const last = /** @type {HTMLElement|null} */ (log.lastElementChild);
+    if (last?.classList.contains("msg-ai") && last.offsetHeight > log.clientHeight) log.scrollTop = last.offsetTop - 6;   // .np-log is positioned
+    else log.scrollTop = log.scrollHeight;
+  }
   function renderLog() {
     const msgs = getState().messages;
     log.innerHTML = (msgs.length ? msgs.map(renderMessage).join("") : `<div class="msg msg-ai"><div class="bubble">${para(getState().naviMode === "beginner"
@@ -654,7 +970,7 @@ export function mountNavi(opts = {}) {
       : "Navi here. Ask about candidates, comparisons, uncertainty or spectra. Replies cite what they rely on and list caveats.")}</div></div>`)
       + (thinking ? `<div class="msg msg-ai"><div class="bubble thinking" aria-label="Navi is thinking"><span class="dots" aria-hidden="true"><i></i><i></i><i></i></span> thinking</div></div>` : "")
       + (failed ? `<div class="msg"><p class="notice notice-error">${esc(failed)} <button class="btn" type="button" id="navi-retry">Try again</button></p></div>` : "");
-    log.scrollTop = log.scrollHeight;
+    toLatest();
   }
 
   /** @param {any} m @param {number} i */
@@ -691,21 +1007,30 @@ export function mountNavi(opts = {}) {
     }
   }
 
-  function pushMessage(/** @type {any} */ m) { update({ messages: [...getState().messages.slice(-39), m] }); renderLog(); }
+  function pushMessage(/** @type {any} */ m) {
+    update({ messages: [...getState().messages.slice(-39), m] }); renderLog();
+    // Give the user time to read a reply before Navi drifts off with it (~60 ms a character, 3–25 s).
+    if (m.role === "assistant") {
+      readUntil = Date.now() + Math.min(25000, Math.max(3000, String(m.content ?? "").length * 60));
+      if (!panel.hidden && form === "bar") panel.classList.add("has-news");   // the user opens it with ⤢ (it may need to lie over imagery)
+    }
+  }
 
   const comparing = () => route() === "/investigate" && getState().compareMode !== "view";
   function buildContext() {
     const s = getState(), r = route();
     const activeView = comparing() ? "comparison" : r === "/investigate" ? "viewer" : r === "/spectrum" ? "spectrum" : "workspace";
     const observationIds = comparing() ? [s.compareBaseId, s.compareTargetId].filter(Boolean) : s.observationId ? [s.observationId] : [];
-    return { activeView, ...(s.objectId ? { objectId: s.objectId } : {}), observationIds, ...(s.candidateId ? { candidateId: s.candidateId } : {}) };
+    // On the Spectrum page the selected band goes along, so "this band" questions are answered from that band's measurement.
+    return { activeView, ...(s.objectId ? { objectId: s.objectId } : {}), observationIds, ...(s.candidateId ? { candidateId: s.candidateId } : {}),
+             ...(r === "/spectrum" && s.bandIndex ? { bandIndex: s.bandIndex } : {}) };
   }
 
   /** @param {string} text @param {boolean} [isRetry] */
   async function ask(text, isRetry = false) {
     text = text.trim(); if (!text || thinking) return;
     if (!isRetry) pushMessage({ role: "user", content: text, at: new Date().toISOString() });
-    thinking = true; failed = null; renderLog(); navi.classList.add("thinking");
+    thinking = true; failed = null; renderLog(); navi.classList.add("thinking"); input.placeholder = "Navi is thinking…";
     input.disabled = true; sendBtn.disabled = true;
     try {
       const r = await api.sendChatMessage({ message: text, context: buildContext() }, { mode: getState().naviMode });
@@ -715,7 +1040,7 @@ export function mountNavi(opts = {}) {
     } catch (e) {
       thinking = false; failed = e instanceof ApiClientError ? e.message : "Navi couldn't answer. Please try again.";
     } finally {
-      navi.classList.remove("thinking"); input.disabled = false; sendBtn.disabled = false;
+      navi.classList.remove("thinking"); input.disabled = false; sendBtn.disabled = false; input.placeholder = panel.classList.contains("has-news") ? "Navi replied — press ⤢ to read" : "Ask about what you see…";
       renderLog(); renderSuggestions(); input.focus();
     }
   }
@@ -726,6 +1051,7 @@ export function mountNavi(opts = {}) {
     let list = [];
     try { list = await api.getChatSuggestions(key); } catch { /* suggestions are optional */ }
     $(".np-sugg").innerHTML = list.map((/** @type {string} */ q) => `<button type="button" class="chip" data-q="${esc(q)}">${esc(q)}</button>`).join("");
+    if (!panel.hidden) { roomForWords(); toLatest(); }
   }
   $(".np-sugg").addEventListener("click", e => { const q = /** @type {HTMLElement} */ (e.target).closest("[data-q]")?.getAttribute("data-q"); if (q) ask(q); });
 

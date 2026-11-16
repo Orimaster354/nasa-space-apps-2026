@@ -39,7 +39,8 @@ export async function mountGuided(root, host) {
   function progress() {
     const s = getState(), g = s.guided;
     if (!g || g.done || !def) return;
-    const events = s.history.slice(/** @type {any} */ (g).base ?? 0);
+    const since = /** @type {any} */ (g).since;                        // history is capped, so count by time, not by position
+    const events = since ? s.history.filter(e => e.at >= since) : s.history.slice(/** @type {any} */ (g).base ?? 0);
     if (g.step === 0 && new Set(events.filter(e => e.type === "observation_viewed").map(e => e.targetId)).size >= 3) {
       feedback = def.steps[0].done; update({ guided: { ...g, step: 1 } });
     } else if (g.step === 2 && events.some(e => e.type === "comparison_created")) {
@@ -83,7 +84,7 @@ export async function mountGuided(root, host) {
     const g = getState().guided;
     if (a === "start") {
       await host.ensureTarget(def.objectId);
-      feedback = ""; update({ guided: { id: def.guidedId, step: 0, hints: 0, done: false, base: getState().history.length } });
+      feedback = ""; update({ guided: { id: def.guidedId, step: 0, hints: 0, done: false, base: getState().history.length, since: new Date().toISOString() } });
     } else if (a === "hint" && g) { update({ guided: { ...g, hints: g.hints + 1 } }); }
     else if (a === "reset") { feedback = ""; update({ guided: null }); }
     else if (a === "blink") { update({ compareMode: "blink" }); }

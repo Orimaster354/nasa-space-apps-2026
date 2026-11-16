@@ -59,51 +59,111 @@
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) { .navi-whisper { --wash: rgba(16, 24, 32, 0.78); } }
 @media (max-width: 600px) { .navi-whisper { font-size: 0.9375rem; line-height: 1.45; padding: 8px 13px 9px; max-width: min(280px, calc(100vw - 24px)); } }
 
-/* ---- Assistant panel: compact, beside her ------------------------------------------------------- */
-.navi-panel { position: fixed; z-index: 72; width: min(340px, calc(100vw - 32px)); height: min(480px, calc(100vh - 120px));
-  display: flex; flex-direction: column; background: var(--deep-slate); border: 1px solid var(--border);
-  border-radius: var(--radius-lg); box-shadow: 0 0 24px rgba(66, 191, 174, 0.12), var(--shadow-hard); overflow: hidden; }
-.navi-panel.is-sheet { left: 0; right: 0; bottom: 0; top: auto; width: 100%; height: min(70vh, 520px); border-radius: var(--radius-lg) var(--radius-lg) 0 0;
-  padding-bottom: env(safe-area-inset-bottom, 0px); }
+/* ---- Assistant: Navi's constellation chat ---------------------------------------------------------
+   A compact, softly translucent panel framed by a constellation (an SVG just outside its edge that
+   navi.js redraws and steps). navi.js sizes and places it only in free space (see placePanel):
+   full (default), bar (one line, when there is no room) or big (reading area). All text ≥ 15 px. */
+.navi-panel { position: fixed; z-index: 69;                   /* under Navi (70): she is never hidden by it */
+  display: flex; flex-direction: column; overflow: visible;  /* the stars sit just outside the edge */
+  width: 360px; height: 400px; color: #f2f6f9; font-size: 1rem;
+  background: rgba(22, 36, 50, 0.66); border: 1px solid rgba(117, 191, 232, 0.24); border-radius: 18px;
+  -webkit-backdrop-filter: blur(14px) saturate(120%); backdrop-filter: blur(14px) saturate(120%);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.28), 0 0 26px rgba(117, 191, 232, 0.08); }
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) { .navi-panel { background: rgba(22, 36, 50, 0.95); } }
+.navi-panel > :not(.np-sky) { position: relative; z-index: 1; }
 
-/* Floating chat window: 400 × 450 by default, drag by the header, resize from the corner (navi.js keeps it on screen). */
-.navi-panel:not(.is-sheet) { width: 400px; height: 450px; min-width: 300px; min-height: 280px;
-  max-width: min(720px, calc(100vw - 16px)); max-height: calc(100vh - 16px); resize: both; }
-.navi-panel.is-dragging { user-select: none; box-shadow: 0 0 32px rgba(66, 191, 174, 0.2), var(--shadow-hard); }
-.navi-panel .np-head { align-items: center; cursor: move; touch-action: none; user-select: none; gap: var(--sp-2); }
+/* The constellation: 6 px around the panel, floating 5 px; navi.js moves the stars in stop-motion steps. */
+.np-sky { position: absolute; z-index: 0; left: -6px; top: -6px; width: calc(100% + 12px); height: calc(100% + 12px);
+  pointer-events: none; overflow: visible; animation: np-float 4.6s ease-in-out infinite alternate; }
+.np-sky .np-lines { fill: none; stroke: rgba(150, 210, 240, 0.55); stroke-width: 1; stroke-linejoin: round; }
+.np-sky circle { fill: #eaf6fd; filter: drop-shadow(0 0 2.5px rgba(117, 191, 232, 0.9));
+  animation: np-twinkle var(--d, 5s) var(--dl, 0s) ease-in-out infinite; }
+@keyframes np-float { from { transform: translateY(-2.5px); } to { transform: translateY(2.5px); } }
+@keyframes np-twinkle { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+/* Opens out of Navi; fades to re-form elsewhere when following her would cross the interface. */
+.navi-panel.is-arriving { animation: np-in 260ms ease-out both; transform-origin: var(--ox, 50%) var(--oy, 50%); }
+@keyframes np-in { from { opacity: 0; transform: scale(0.94); } to { opacity: 1; transform: none; } }
+.navi-panel { transition: opacity 220ms ease; }
+.navi-panel.is-hopping { opacity: 0; pointer-events: none; }
+.navi-panel.is-dragging { user-select: none; box-shadow: 0 10px 34px rgba(0, 0, 0, 0.34), 0 0 30px rgba(117, 191, 232, 0.14); }
+
+/* Header: drag handle, name, buttons. Nothing in it can overlap: the subtitle shrinks first. */
+.navi-panel .np-head { display: flex; align-items: center; gap: 6px; padding: 10px 10px 6px 12px; cursor: move; touch-action: none; user-select: none; flex: none; }
+.np-name { font-size: 1rem; letter-spacing: 0.04em; color: #fff; white-space: nowrap; flex: none; }
+.np-star { color: var(--glacier-blue); text-shadow: 0 0 6px rgba(117, 191, 232, 0.8); }
+.navi-panel .np-sub { flex: 1 1 auto; min-width: 0; font-size: 0.9375rem; color: rgba(222, 234, 242, 0.72); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.np-grip, .np-gear, .np-expand, .navi-panel .np-close { flex: none; width: 32px; height: 32px; display: inline-grid; place-items: center; padding: 0;
+  background: transparent; border: 0; border-radius: 999px; color: rgba(222, 234, 242, 0.85); font-size: 1rem; line-height: 1; cursor: pointer; }
+.np-grip { width: 22px; cursor: move; }
+.np-grip:hover, .np-gear:hover, .np-expand:hover, .navi-panel .np-close:hover,
+.np-grip:focus-visible, .np-gear:focus-visible, .np-expand:focus-visible, .navi-panel .np-close:focus-visible { color: #fff; background: rgba(117, 191, 232, 0.16); }
+.np-gear[aria-expanded="true"] { color: var(--glacier-blue); }
+
+/* Settings, folded out under the header. */
+.navi-panel .np-settings { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; padding: 2px 14px 10px; flex: none; border: 0; }
+.navi-panel .np-settings[hidden] { display: none; }
+.navi-panel .np-seg { display: inline-flex; align-items: center; gap: 2px; font-size: 0.9375rem; }
+.navi-panel .np-seg-label { font-size: 0.9375rem; text-transform: none; letter-spacing: 0; font-weight: 600; color: rgba(222, 234, 242, 0.8); margin-right: 4px; }
+.navi-panel .np-seg button { font-size: 0.9375rem; padding: 3px 10px; color: rgba(222, 234, 242, 0.85); border-radius: 999px; }
+.navi-panel .np-seg button[aria-checked="true"] { color: #08111a; background: var(--glacier-blue); }
+.navi-panel .np-link { font-size: 0.9375rem; }
+.navi-panel .np-tip { flex: none; margin: 0; padding: 0 14px 8px; border: 0; font-size: 0.9375rem; line-height: 1.45; color: var(--glacier-blue); }
+
+/* Conversation: wraps fully and scrolls; never clipped. */
+.navi-panel .np-log { position: relative; flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden; display: flex; flex-direction: column; gap: 12px;
+  padding: 6px 14px 10px; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: rgba(117, 191, 232, 0.4) transparent; }
+.navi-panel .msg { display: flex; min-width: 0; flex: none; }
+.navi-panel .msg-user { justify-content: flex-end; }
+.navi-panel .bubble { font-size: 1rem; line-height: 1.5; overflow-wrap: anywhere; min-width: 0; }
+.navi-panel .msg-ai .bubble { position: relative; max-width: 100%; padding: 0 0 0 18px; border: 0; background: none; border-radius: 0; color: #f2f6f9; }
+.navi-panel .msg-ai .bubble::before { content: "✦"; position: absolute; left: 0; top: 0.15em; font-size: 0.75rem; color: var(--glacier-blue); text-shadow: 0 0 5px rgba(117, 191, 232, 0.8); }
+.navi-panel .msg-user .bubble { max-width: 85%; padding: 7px 13px; color: #fff; background: rgba(117, 191, 232, 0.16);
+  border: 1px solid rgba(117, 191, 232, 0.32); border-radius: 16px 16px 4px 16px; }
+.navi-panel .caveats { background: rgba(242, 140, 88, 0.08); border-left-color: rgba(242, 140, 88, 0.75); }
+.navi-panel .caveats ul, .navi-panel .refs, .navi-panel .actions { font-size: 0.9375rem; }
+.navi-panel .label { font-size: 0.8125rem; }
+.navi-panel .chip { font-size: 0.9375rem; color: #eef5f9; background: rgba(8, 13, 21, 0.3); border-color: rgba(117, 191, 232, 0.4); }
+.navi-panel .chip:hover { border-color: var(--glacier-blue); color: #fff; }
+.navi-panel .notice { font-size: 0.9375rem; }
+/* Suggested questions: they wrap, so none is ever cut off. */
+.navi-panel .np-sugg { flex: none; display: flex; flex-wrap: wrap; gap: 6px; padding: 2px 14px 4px; }
+.navi-panel .np-sugg .chip { white-space: normal; text-align: left; max-width: 100%; }
+.navi-panel .np-sugg:empty { display: none; }
+/* Short panel: the conversation keeps its room (navi.js sets these). */
+.navi-panel.no-tip .np-tip, .navi-panel.no-sugg .np-sugg { display: none; }
+/* Input. */
+.navi-panel .np-form { flex: none; display: flex; align-items: center; gap: 8px; padding: 8px 12px 12px; border: 0; }
+.navi-panel .np-form .input { flex: 1 1 auto; min-width: 0; font-size: 1rem; color: #fff; padding: 8px 12px;
+  background: rgba(8, 13, 21, 0.42); border: 1px solid rgba(117, 191, 232, 0.3); border-radius: 12px; }
+.navi-panel .np-form .input::placeholder { color: rgba(222, 234, 242, 0.62); }
+.navi-panel .np-form .input:focus { outline: none; border-color: var(--glacier-blue); box-shadow: 0 0 0 2px rgba(117, 191, 232, 0.25); }
+.navi-panel .np-form .btn { flex: none; font-size: 0.9375rem; padding: 7px 16px; color: #08111a; background: var(--glacier-blue); border: 0; border-radius: 12px; }
+.navi-panel .np-form .btn:hover { background: #9cd3f0; }
+
+/* Bar: one line — grip, ✦, input, send, expand, close — for when there is no room for the full chat. */
+.navi-panel.is-bar { flex-direction: row; align-items: center; gap: 4px; padding: 0 6px 0 4px; border-radius: 16px; }
+.navi-panel.is-bar .np-head { display: contents; }
+.navi-panel.is-bar :is(.np-label, .np-sub, .np-gear, .np-settings, .np-tip, .np-log, .np-sugg) { display: none !important; }
+.navi-panel.is-bar .np-grip { order: 0; } .navi-panel.is-bar .np-name { order: 1; margin-right: 2px; }
+.navi-panel.is-bar .np-form { order: 2; flex: 1 1 auto; min-width: 0; padding: 0; }
+.navi-panel.is-bar .np-expand { order: 3; } .navi-panel.is-bar .np-close { order: 4; }
+.navi-panel.is-bar .np-form .input { padding: 6px 10px; }
+.navi-panel.is-bar .np-form .btn { padding: 6px 12px; }
+/* A reply arrived while in the bar: ⤢ lights up (the user opens the reading area when they want). */
+.navi-panel.has-news .np-expand { color: #08111a; background: var(--glacier-blue); animation: np-news 1.8s ease-in-out infinite; }
+@keyframes np-news { 0%, 100% { box-shadow: 0 0 0 0 rgba(117, 191, 232, 0.5); } 50% { box-shadow: 0 0 0 5px rgba(117, 191, 232, 0); } }
+
+/* Phones: a bottom sheet. */
+.navi-panel.is-sheet { left: 0 !important; right: 0; bottom: 0; top: auto !important; width: 100% !important; height: min(70vh, 520px) !important;
+  border-radius: 20px 20px 0 0; padding-bottom: env(safe-area-inset-bottom, 0px); background: rgba(22, 36, 50, 0.95); }
 .navi-panel.is-sheet .np-head { cursor: default; }
-.np-grip { background: transparent; border: 0; color: var(--text-muted); cursor: move; padding: 2px 4px; font-size: var(--fs-md); line-height: 1; border-radius: var(--radius); }
-.np-grip:hover, .np-grip:focus-visible { color: var(--accent); }
-.navi-panel.is-sheet .np-grip { display: none; }
-.np-sub { flex: 1; min-width: 0; font-size: var(--fs-sm); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.np-min { background: transparent; border: 0; color: var(--text-muted); cursor: pointer; font-size: var(--fs-md); padding: 2px 8px; border-radius: var(--radius); line-height: 1; }
-.np-min:hover, .np-close:hover { color: var(--text); background: rgba(117, 191, 232, 0.08); }
-.navi-panel.is-min { height: auto !important; min-height: 0; resize: none; }
-.navi-panel.is-min > :not(.np-head) { display: none !important; }
-/* Readable conversation. */
-.navi-panel .np-log { overscroll-behavior: contain; }
-.navi-panel .bubble { font-size: 1rem; line-height: 1.5; }
-.navi-panel .caveats ul, .navi-panel .np-tip { font-size: 0.9375rem; }
-.navi-panel .np-sugg .chip { font-size: 0.9375rem; white-space: nowrap; flex: 0 0 auto; }
-/* Suggestions: one row that scrolls sideways, so the conversation keeps the height. */
-.navi-panel .np-sugg { flex-wrap: nowrap; overflow-x: auto; padding-top: var(--sp-2); scrollbar-width: thin; }
-.navi-panel .np-log { min-height: 120px; }
-.navi-panel .np-form .input { font-size: 1rem; }
-.np-head { display: flex; align-items: baseline; gap: var(--sp-3); padding: var(--sp-3) var(--sp-3) var(--sp-2) var(--sp-4); }
-.np-head .muted { flex: 1; }
-.np-close { background: transparent; border: 0; color: var(--text-muted); cursor: pointer; font-size: var(--fs-md); padding: 2px 6px; border-radius: var(--radius); }
-.np-close:hover { color: var(--text); }
-.np-settings { display: flex; flex-wrap: wrap; gap: var(--sp-2) var(--sp-4); padding: 0 var(--sp-4) var(--sp-2); border-bottom: var(--line) solid var(--border-soft); }
-.np-seg { display: inline-flex; align-items: center; gap: 2px; font-size: var(--fs-xs); }
-.np-seg-label { color: var(--text-muted); margin-right: var(--sp-1); text-transform: uppercase; letter-spacing: var(--tracking-label); font-weight: 600; }
-.np-seg button { background: transparent; border: 1px solid transparent; color: var(--text-muted); border-radius: 999px; padding: 2px 10px; cursor: pointer; font-size: var(--fs-xs); }
-.np-seg button:hover { color: var(--text); }
-.np-seg button[aria-checked="true"] { color: var(--midnight-charcoal); background: var(--accent); }
-.np-tip { margin: 0; padding: var(--sp-2) var(--sp-4); font-size: var(--fs-xs); color: var(--glacier-blue); border-bottom: var(--line) solid var(--border-soft); }
-.np-log { flex: 1; overflow-y: auto; padding: var(--sp-3); display: grid; gap: var(--sp-3); align-content: start; }
-.np-sugg { display: flex; gap: var(--sp-2); flex-wrap: wrap; padding: 0 var(--sp-3) var(--sp-2); }
-.np-form { display: flex; gap: var(--sp-2); padding: var(--sp-3); border-top: var(--line) solid var(--border-soft); }
-.np-form .input { flex: 1; min-width: 0; }
+.navi-panel.is-sheet :is(.np-grip, .np-expand) { display: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .np-sky, .np-sky circle, .navi-panel.is-arriving { animation: none; }
+  .navi-panel { transition: none; }
+}
 
 .msg { display: flex; } .msg-user { justify-content: flex-end; }
 .bubble { max-width: 92%; padding: var(--sp-3) var(--sp-4); border: var(--line) solid var(--border-soft); border-radius: var(--radius-lg); background: rgba(16, 24, 32, 0.7); font-size: var(--fs-sm); }
