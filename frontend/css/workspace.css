@@ -130,7 +130,7 @@ body { position: relative; }
 /* ---- Spectrum ---------------------------------------------------------------------------------------- */
 .spectrum { display: grid; gap: var(--sp-4); padding: var(--sp-3) var(--gutter) var(--sp-6); }
 .sp-body { display: grid; gap: var(--sp-4); }
-.sp-top { display: grid; gap: var(--sp-4); grid-template-columns: 1fr; }
+.sp-top { display: grid; gap: var(--sp-4); grid-template-columns: 1fr; align-items: start; }
 @media (min-width: 1000px) { .sp-top { grid-template-columns: minmax(0, 3fr) minmax(260px, 1fr); } }   /* viewer ≈ 70-75% */
 .sp-viewer { height: clamp(320px, 52vh, 600px); }
 .sp-strip-head { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: var(--sp-3); }
@@ -280,3 +280,11 @@ body.focus-mode .ws .viewer-wrap { height: calc(100vh - 150px); }
   .navi-zone-head { display: none; }
   .ws-context .select, .ws-context .input { flex: 1 1 100%; }
 }
+
+/* Spectrum page: the side column holds only the readout; long notes are collapsible below the chart. */
+#sp-info { max-height: clamp(320px, 52vh, 600px); overflow: auto; }
+#sp-info .flags summary, #about-details summary, .chart-panel summary { cursor: pointer; }
+#sp-info .flags { margin: var(--sp-2) 0; }
+.linklike { background: none; border: 0; padding: 0; color: var(--accent); text-decoration: underline; cursor: pointer; font: inherit; }
+.about-notes { display: grid; gap: var(--sp-2); grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr)); margin-top: var(--sp-3); }
+.about-notes .notice { margin: 0; }

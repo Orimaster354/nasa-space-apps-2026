@@ -9,6 +9,7 @@ import { api, isMock } from "../api/client.js";
 import { update } from "../core/store.js";
 import { go } from "../core/router.js";
 import { esc } from "../core/dom.js";
+import { emit } from "../core/events.js";
 
 const num = (/** @type {number} */ v, d = 2) => (Number.isFinite(v) ? v.toFixed(d) : "n/a");
 const errMsg = (/** @type {any} */ e) => (e && e.message) || "Something went wrong.";
@@ -34,6 +35,7 @@ function card(t) {
   const pm = t.properMotion ? ` · moves ${num(t.properMotion.value, 2)} ${esc(t.properMotion.unit)}` : "";
   return `<article class="panel lib-card" data-id="${esc(t.objectId)}">
     <h2>${esc(t.name)}</h2>
+    ${t.origin === "added from a search" ? `<p class="fine"><span class="badge">Added from a search</span> <span class="muted">stored for everyone until the server restarts</span></p>` : ""}
     <p class="fine muted">${t.objectType ? esc(t.objectType) + " · " : ""}RA ${num(t.coordinates.raDeg, 3)}°, Dec ${num(t.coordinates.decDeg, 3)}°${pm}</p>
     <p><strong>${t.defaultBandStored}</strong> of ${t.defaultBandListed} timeline pictures stored <span class="muted">(${esc((t.defaultBand || "").replace("SPHEREx-", ""))} band)</span></p>
     <p class="fine muted">${t.storedFrames} pictures stored in all (${bands}). The archive lists ${t.observationsListed} observations of this target across all six detectors.</p>
@@ -107,7 +109,7 @@ export function mount(root) {
     if (a === "stack") {
       const box = /** @type {HTMLElement} */ (cardEl.querySelector(".lib-stack"));
       box.innerHTML = `<div class="stage-msg"><div class="spinner" aria-hidden="true"></div><p>Stacking frames…</p></div>`;
-      try { const j = await api.getCoadd(id); if (alive) box.innerHTML = stackHtml(j); }
+      try { const j = await api.getCoadd(id); if (alive) { box.innerHTML = stackHtml(j); if (j.availability.status === "available") emit("stack_viewed"); } }
       catch (err) { if (alive) box.innerHTML = `<p class="notice notice-error fine">${esc(errMsg(err))}</p>`; }
     }
   });

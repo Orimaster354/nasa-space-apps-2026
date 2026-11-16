@@ -166,3 +166,24 @@
 .data-table { width: 100%; border-collapse: collapse; font-size: var(--fs-sm); margin: var(--sp-3) 0; }
 .data-table th, .data-table td { text-align: left; padding: var(--sp-2) var(--sp-3); border-bottom: var(--line) solid var(--border-soft); vertical-align: top; }
 .data-table th { color: var(--text-muted); font-weight: 600; font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: var(--tracking-label); }
+
+/* ---- Achievements --------------------------------------------------------------------------------------------- */
+.achievements { padding: 0 var(--gutter) var(--sp-6); display: grid; gap: var(--sp-5); }
+.ach-count { font-size: var(--fs-xs); color: var(--accent-2); margin-left: var(--sp-1); }
+.ach-grid { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--sp-4); grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr)); }
+.ach { display: flex; gap: var(--sp-4); align-items: flex-start; padding: var(--sp-4); border: var(--line) solid var(--border); border-radius: var(--radius-lg); background: var(--surface, transparent); }
+.ach h3 { margin: 0 0 var(--sp-1); font-size: var(--fs-md, 1rem); }
+.ach p { margin: var(--sp-1) 0; }
+.ach-glyph { flex: none; width: 44px; height: 44px; display: grid; place-items: center; border-radius: 50%; border: 2px solid var(--border); font-size: 1.35rem; color: var(--text-muted); }
+.ach.is-done { border-color: var(--accent-2); }
+.ach.is-done .ach-glyph { border-color: var(--accent-2); color: var(--accent-2); background: rgba(80, 200, 190, 0.12); }
+.ach.is-locked { opacity: 0.8; }
+.ach-bar { height: 8px; border-radius: 4px; background: var(--border-soft, rgba(255, 255, 255, 0.12)); overflow: hidden; margin-top: var(--sp-2); }
+.ach-bar > span { display: block; height: 100%; background: var(--accent-2); }
+.ach-bar-big { height: 12px; max-width: 520px; }
+.ach-toast { position: fixed; left: 50%; bottom: 28px; transform: translate(-50%, 24px); z-index: 60; display: flex; gap: var(--sp-3); align-items: center;
+  max-width: min(92vw, 520px); padding: var(--sp-3) var(--sp-4); background: var(--surface-solid, #0f1a24); color: var(--text); border: 2px solid var(--accent-2); border-radius: var(--radius-lg);
+  box-shadow: 4px 4px 0 rgba(0, 0, 0, 0.6); opacity: 0; transition: opacity 0.25s ease, transform 0.25s ease; }
+.ach-toast.is-shown { opacity: 1; transform: translate(-50%, 0); }
+.ach-toast .ach-glyph { border-color: var(--accent-2); color: var(--accent-2); }
+@media (prefers-reduced-motion: reduce) { .ach-toast { transition: none; } }

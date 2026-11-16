@@ -32,9 +32,13 @@ export function mount(root) {
         <div id="bands"></div>
         ${isMock() ? `<p class="muted fine">Band layout and spectrum are illustrative, not SPHEREx measurements.</p>` : ""}
       </div>
-      <details class="panel chart-panel" id="chart-details">
+      <details class="panel chart-panel" id="chart-details" open>
         <summary><h2 style="display:inline">Intensity vs wavelength</h2></summary>
         <div id="chart"></div>
+      </details>
+      <details class="panel" id="about-details">
+        <summary><h2 style="display:inline">About this spectrum and its limits</h2> <span class="badge" id="about-count"></span></summary>
+        <div id="about"></div>
       </details>
       ${isMock() ? "" : `<details class="panel" id="epoch-details">
         <summary><h2 style="display:inline">Compare earlier and later observations</h2></summary>
@@ -64,6 +68,7 @@ export function mount(root) {
         <td>${esc(b.early.flux)} <span class="muted">± ${esc(b.early.fluxUncertainty)}</span><br><span class="muted fine">${esc(shortDate(b.early.observedAt))}</span></td>
         <td>${esc(b.late.flux)} <span class="muted">± ${esc(b.late.fluxUncertainty)}</span><br><span class="muted fine">${esc(shortDate(b.late.observedAt))}</span></td>
         <td>${esc(b.difference)} <span class="muted">± ${esc(b.differenceUncertainty)}</span></td><td>${esc(b.significanceSigma)}</td></tr>`).join("");
+      emit("epoch_compared");
       const skipped = j.bands.filter((/** @type {any} */ b) => !b.comparable).length;
       box.innerHTML = `<p><strong>${esc(j.summary.text)}</strong></p>
         <table class="data-table"><thead><tr><th>Band</th><th>Wavelength</th><th>Earlier (${esc(spec.fluxUnit)})</th><th>Later</th><th>Later minus earlier</th><th>Times its uncertainty</th></tr></thead><tbody>${rows}</tbody></table>
@@ -94,7 +99,7 @@ export function mount(root) {
       $("#sp-empty").innerHTML = `<p class="notice notice-warn">${esc(spec.availability.statusReason ?? "No spectrum is available for this target.")}</p>`;
       return;
     }
-    $("#sp-empty").innerHTML = ""; /** @type {HTMLElement} */ ($(".sp-body")).hidden = false;
+    $("#sp-empty").innerHTML = ""; /** @type {HTMLElement} */ ($(".sp-body")).hidden = false; renderAbout();
     logEvent("spectrum_viewed", spec.spectrumId);
     if (!spec.points.some((/** @type {any} */ p) => p.bandIndex === getState().bandIndex)) {
       update({ bandIndex: spec.points.find((/** @type {any} */ p) => p.available)?.bandIndex ?? spec.points[0].bandIndex });
@@ -145,7 +150,7 @@ export function mount(root) {
       <dt>Flux</dt><dd>${flux}</dd>
       <dt>Uncertainty</dt><dd>${p.available ? (p.fluxUncertainty !== undefined ? "provided" : "not available") : "n/a"}</dd>
       <dt>Observed</dt><dd>${esc(shortDate(p.observedAt))}</dd></dl>
-      ${p.qualityFlags.map((/** @type {any} */ f) => `<p class="notice fine">${esc(f.description)}</p>`).join("")}
+      ${p.qualityFlags.length ? `<details class="flags fine"><summary>${p.qualityFlags.length} quality note${p.qualityFlags.length > 1 ? "s" : ""}</summary>${p.qualityFlags.map((/** @type {any} */ f) => `<p class="notice fine">${esc(f.description)}</p>`).join("")}</details>` : ""}
       ${p.available ? "" : `<p class="notice notice-warn fine">${esc(p.unavailableReason ?? "No usable observation.")}</p>`}`;
   }
 
@@ -153,9 +158,15 @@ export function mount(root) {
     const p2 = second !== null ? pointOf(second) : null;
     $("#sp-info").innerHTML = `<h2>Selected band</h2>${readout(p)}
       ${p2 ? `<h3 class="label group">Compared band</h3>${readout(p2)}` : comparing ? `<p class="muted fine">Pick a second band on the selector or the chart.</p>` : ""}
-      <h3 class="label group">About this spectrum</h3>
-      <p class="fine muted">${esc(spec.extractionMethod)}. Aperture ${spec.apertureRadiusArcsec !== undefined ? esc(spec.apertureRadiusArcsec) + " arcsec" : "n/a"}.</p>
-      ${spec.warnings.map((/** @type {string} */ w) => `<p class="notice notice-warn fine">${esc(w)}</p>`).join("")}`;
+      <p class="fine muted"><button type="button" class="linklike" id="open-about">${spec.warnings.length} notes on how this spectrum was made and its limits</button> are below the chart.</p>`;
+    root.querySelector("#open-about")?.addEventListener("click", () => { const d = /** @type {HTMLDetailsElement} */ ($("#about-details")); d.open = true; d.scrollIntoView({ behavior: "smooth", block: "start" }); });
+  }
+
+  /** The long explanations live in a collapsible section under the chart, so they never stretch the side column. */
+  function renderAbout() {
+    $("#about-count").textContent = `${spec.warnings.length} notes`;
+    $("#about").innerHTML = `<p class="fine muted">${esc(spec.extractionMethod)}. Aperture ${spec.apertureRadiusArcsec !== undefined ? esc(spec.apertureRadiusArcsec) + " arcsec" : "n/a"}.</p>
+      <div class="about-notes">${spec.warnings.map((/** @type {string} */ w) => `<p class="notice notice-warn fine">${esc(w)}</p>`).join("")}</div>`;
   }
 
   // ---- chart ---------------------------------------------------------------------

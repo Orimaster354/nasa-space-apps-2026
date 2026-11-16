@@ -85,6 +85,7 @@ export function mount(root) {
     ws.classList.toggle("is-overlay", !w);
     /** @type {HTMLElement} */ ($("#drawer-scrim")).hidden = w || !overlayOpen;
     root.querySelectorAll(".ctx-toggle[data-drawer]").forEach(b => b.setAttribute("aria-expanded", String(/** @type {HTMLElement} */ (b).dataset.drawer === "left" ? left : right)));
+    $("#verdict-chip").setAttribute("aria-expanded", String(right));
     /** @type {HTMLElement} */ ($("#drawer-left")).inert = !left; /** @type {HTMLElement} */ ($("#drawer-right")).inert = !right;
   }
   function toggleDrawer(/** @type {"left"|"right"} */ side, /** @type {boolean} */ open = !ws.classList.contains(`${side}-open`)) {
@@ -96,6 +97,14 @@ export function mount(root) {
     const t = /** @type {HTMLElement} */ (e.target);
     const d = t.closest("[data-drawer]"); if (d) { const side = /** @type {"left"|"right"} */ (d.getAttribute("data-drawer")); toggleDrawer(side, d.classList.contains("drawer-close") ? false : undefined); }
     if (t.id === "drawer-scrim") { overlayOpen = null; applyPanels(); }
+  });
+  // Escape closes the drawer you are in (on a narrow screen, whichever one is open). Before, Escape did nothing on wide screens, so the details
+  // looked closed to the visitor but were still open, and the next press of the Details button closed them instead of opening them.
+  root.addEventListener("keydown", e => {
+    if (e.key !== "Escape") return;
+    const inRight = $("#drawer-right").contains(document.activeElement), inLeft = $("#drawer-left").contains(document.activeElement);
+    const side = wide() ? (inRight ? "right" : inLeft ? "left" : null) : overlayOpen;
+    if (side) { toggleDrawer(/** @type {"left"|"right"} */ (side), false); e.stopPropagation(); }
   });
   const mq = matchMedia("(min-width: 1000px)"), onMq = () => { overlayOpen = null; applyPanels(); };
   mq.addEventListener("change", onMq);
@@ -118,7 +127,7 @@ export function mount(root) {
     else if (document.body.classList.contains("focus-mode")) setFocus(false);
   };
   document.addEventListener("keydown", onKey);
-  $("#verdict-chip").addEventListener("click", () => toggleDrawer("right", true));
+  $("#verdict-chip").addEventListener("click", () => toggleDrawer("right"));          // a real toggle: a second click closes the details again
   const statusEl = $("#target-status"), candEl = $("#cand-panel"), detailsEl = $("#details");
 
   // ---- local view state (data only; selection state lives in the store) -------

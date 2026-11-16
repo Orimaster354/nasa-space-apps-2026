@@ -5,7 +5,8 @@
  * on a listener being present, so views stay independent of the companion.
  *
  * @typedef {"play"|"pause"|"stop"|"step"|"save"|"note_added"|"image_missing"|"image_processing"|
- *   "not_comparable"|"gap_band"|"guided_wrong"|"guided_right"|"study"|"tour_target"|"focus_mode"} AppEventType
+ *   "not_comparable"|"gap_band"|"guided_wrong"|"guided_right"|"study"|"tour_target"|"focus_mode"|
+ *   "tour_finished"|"epoch_compared"|"stack_viewed"} AppEventType
  */
 
 const NAME = "sx:event";

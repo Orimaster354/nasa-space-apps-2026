@@ -17,6 +17,8 @@ import * as spectrum from "./views/spectrum.js";
 import * as notes from "./views/notes.js";
 import * as learn from "./views/learn.js";
 import * as library from "./views/library.js";
+import * as achievementsView from "./views/achievements.js";
+import { initAchievements } from "./core/achievements.js";
 
 const viewEl = /** @type {HTMLElement} */ (document.getElementById("view"));
 const toolbarEl = /** @type {HTMLElement} */ (document.getElementById("toolbar"));
@@ -29,6 +31,7 @@ const VIEWS = {
   "/spectrum": { mount: spectrum.mount, title: "Spectral explorer" },
   "/notes": { mount: notes.mount, title: "Investigation notes" },
   "/library": { mount: library.mount, title: "Library of stored targets" },
+  "/achievements": { mount: achievementsView.mount, title: "Achievements" },
   "/learn": { mount: learn.mount, title: "Learn" },
 };
 
@@ -36,6 +39,9 @@ const VIEWS = {
 if (isMock()) badgeEl.innerHTML = `<span class="badge badge-illustrative">Sample / illustrative — not real SPHEREx data</span>`;
 
 if (!isMock()) mountArchiveBadge(badgeEl);          // real backend: show whether NASA's archive is answering
+
+initAchievements();                 // a light game layer: badges for real actions, kept in this browser only
+achievementsView.mountToasts();
 
 mountScene(/** @type {HTMLElement} */ (document.getElementById("scene")));
 const navi = mountNavi({

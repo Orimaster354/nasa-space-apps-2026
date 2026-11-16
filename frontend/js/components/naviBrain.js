@@ -14,7 +14,7 @@
  */
 
 import { getState, update, subscribe } from "../core/store.js";
-import { on } from "../core/events.js";
+import { on, emit } from "../core/events.js";
 
 /** Lines by situation. `{x}` placeholders are filled from context. */
 const LINES = /** @type {Record<string, string[]>} */ ({
@@ -154,7 +154,7 @@ export function attachBrain(navi) {
     clearTimeout(stepTimer);
     const i = MAIN_FLOW.indexOf(id);
     const next = i >= 0 ? MAIN_FLOW.slice(i + 1).map(n => TOUR.find(s => s.id === n)).find(s => s && !tourState()?.seen.includes(s.id)) : null;
-    if (!next) { if (i >= 0) running = false; return; }
+    if (!next) { if (i >= 0) { running = false; emit("tour_finished"); } return; }          // the whole main flow was walked through (skipping does not come here)
     // The next step is only reached because the visitor pressed Next (or did the action), so it follows quickly. Only the open chat
     // window holds it back; "studying" no longer does (that could stall the tour for 20 s while Navi drifted around).
     const wait = () => { if (!running) return; if (navi.panelOpen) { stepTimer = window.setTimeout(wait, 600); return; } show(next); };
