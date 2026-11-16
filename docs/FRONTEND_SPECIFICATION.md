@@ -111,13 +111,24 @@ candidates → viewer modes; Blink is explained when first used and the Spectral
 a whisper with *Next* and *Skip tour*; doing the thing (e.g. pressing play) also advances it; it pauses while the user
 studies an image. Progress in `store.naviTour`; *Replay tour* in the assistant.
 
-**Assistant.** Clicking Navi opens a floating chat window (default 400 × 450, conversation text 16px) with its own
-open state (`store.naviOpen`), fully independent of the Details drawer (`store.panels.right`). Drag it by its header
-(or the grip with arrow keys), resize it from the corner (300 × 280 up to 720px × screen height); it always stays
-inside the viewport, and its position and size are remembered (`spherex.navi.chat`) across mode switches, tools and
-reloads. By default it opens beside Navi or in the corner that hides the least imagery. Minimise (–) collapses it to
-its title bar; ✕ or Escape inside it closes it (Escape elsewhere on the page does not). Long conversations scroll
-inside. Below 600px it is a bottom sheet.
+**Assistant (constellation chat).** Clicking Navi opens and closes her chat: a compact, softly translucent panel
+(text ≥ 15 px; messages wrap and scroll) framed by small stars joined with thin glacier-blue lines just outside its
+edge. Header: drag grip, name, ⚙ settings (explanation level, Navi's comments, replay tour), ⤢ larger reading area,
+✕ close (Escape closes too). Its open state (`store.naviOpen`) is independent of the Details drawer.
+*Placement — the workspace comes first.* Before it opens and on every layout change, the viewport is mapped on an
+8 px grid (imagery, controls, navigation, side panels, text and Navi are taken, 10 px clearance) and it takes free
+space near Navi: **full** (360 × 400 down to 300 × 260); else a one-line **bar** (input, send, ⤢, ✕) in free space
+(Navi flies aside if she is resting in the only free pocket). A reply that arrives in the bar lights up ⤢; the user
+opens the **reading area** (up to 600 × 620) when they want — it uses free space if there is enough, otherwise it may
+lie over imagery (never controls, navigation, side panels, text or Navi) and can be dragged, shrunk (⤡) or closed.
+In a short panel Navi's tip line and then the suggestions step aside so the conversation keeps ≥ 150 px.
+*Moving.* Dragging the header (or the grip, also with arrow keys) leaves it where the user put it, inside the
+viewport, until the chat is closed. While idle it trails Navi with a soft lag to the nearest free spot beside her
+(fading and re-forming instead of sweeping across content; staying put when she is somewhere crowded); it freezes
+while the user types, reads (a reading time after each reply), points at it or drags it, and Navi pauses then.
+*Animation.* Only the decoration moves: the constellation floats 5 px and changes shape in stop-motion steps every
+400–600 ms; stars twinkle. Text, input and buttons never move. Reduced motion: no animation. Below 600px it is a
+bottom sheet.
 Messages, suggested questions per page/mode, beginner/advanced, thinking and error/retry states; answers show
 explanation, **Based on** references, **Caveats**, **Next steps**. Mock replies are labelled illustrative.
 
