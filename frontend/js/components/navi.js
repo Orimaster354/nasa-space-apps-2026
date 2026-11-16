@@ -104,7 +104,7 @@ export function mountNavi(opts = {}) {
     <div class="np-sugg" aria-label="Suggested questions"></div>
     <form class="np-form">
       <label class="sr-only" for="navi-input">Ask Navi</label>
-      <input class="input" id="navi-input" placeholder="Ask about what you see…" autocomplete="off" maxlength="300">
+      <span class="np-cloud"><span class="np-cloud-in"><input class="input" id="navi-input" placeholder="Ask about what you see…" autocomplete="off" maxlength="300"></span></span>
       <button class="btn" type="submit">Ask</button>
     </form>`;
   document.body.append(navi, whisper, panel);
