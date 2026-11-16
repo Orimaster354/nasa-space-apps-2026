@@ -19,6 +19,7 @@ from ai.limits import QuotaLimiter
 from ai.llm import ProviderChain, providers_from_settings
 from api.routes import router
 from processing.archive_status import archive as archive_status
+from services import pm_lookup
 from processing.irsa import CutoutCache, discover
 from services.core import BadRequest, DataUnavailable, NotFound, Services, Upstream
 from store.registry import Registry
@@ -44,7 +45,7 @@ def build_default_services() -> Services:
     data = Path(settings.data_dir)
     collections = tuple(c.strip() for c in settings.sia_collections.split(",") if c.strip())
     return Services(Registry(data / "registry.sqlite"), CutoutCache(data / "cutouts"), data / "images",
-                    discover=lambda ra, dec: discover(ra, dec, collections=collections))
+                    discover=lambda ra, dec: discover(ra, dec, collections=collections), pm_fetch=pm_lookup.fetch_sesame)
 
 
 def build_default_companion(services: Services) -> Companion:
@@ -59,6 +60,9 @@ def create_app(services: Services | None = None, companion: Companion | None = N
     app.state.companion = companion or build_default_companion(app.state.services)
     if settings.archive_probe:
         archive_status.enable_probe()
+    if settings.auto_preload:
+        from services.promotion import Promoter
+        app.state.services.promoter = Promoter(app.state.services, per_day=settings.auto_preload_per_day, max_data_mb=settings.auto_preload_max_mb)
     if settings.backup_bucket:
         from store.backup import GcsBackup
         reg = app.state.services.registry

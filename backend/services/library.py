@@ -34,6 +34,11 @@ def _dir_bytes(path) -> int:
     return total
 
 
+def invalidate(svc) -> None:
+    with _lock:
+        _cache.pop(id(svc), None)
+
+
 def build(svc, fresh: bool = False) -> dict:
     key = id(svc)
     with _lock:
@@ -93,8 +98,10 @@ def _compute(svc) -> dict:
         run = svc.registry.get_candidate_run(obj_id)
         cands = None if run is None else {"count": len(run.get("candidateIds", [])), "note": run.get("note")}
         is_curated = o["name"].lower() in curated
+        added = bool(o.get("promotedAt"))
         items.append({
             "objectId": obj_id, "name": o["name"], "objectType": o.get("objectType"), "coordinates": o["coordinates"], "curated": is_curated,
+            "origin": "added from a search" if added else "shipped with the app", "addedAt": o.get("promotedAt"),
             "observationsListed": p["listed"], "storedFrames": p["stored"], "storedByBand": dict(sorted(p["byBand"].items())),
             "listedByBand": dict(sorted(p["listedByBand"].items())),
             # The default timeline shows ONE detector band. 'listed' counts every detector (six per pointing), so 'stored of listed' would compare

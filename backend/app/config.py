@@ -19,6 +19,10 @@ class Settings(BaseSettings):
     auto_differencing: bool = False
     # Name of a Google Cloud Storage bucket that keeps a copy of saved investigations (they survive redeploys and restarts). Empty = off.
     backup_bucket: str = ""
+    # Searches that succeed for targets that are not preloaded are added to the preloaded set in the background (services/promotion.py). OFF by default.
+    auto_preload: bool = False
+    auto_preload_per_day: int = 12
+    auto_preload_max_mb: int = 1500
     # P2-08: catalogue overlay (Gaia, AllWISE via CDS VizieR). OFF by default: the live query has not been verified against the real service.
     catalog_overlay: bool = False
     data_dir: str = "data"

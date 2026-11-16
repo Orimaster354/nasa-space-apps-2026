@@ -172,7 +172,7 @@ def test_an_object_that_is_not_a_catalogue_target_gets_no_seeded_candidates(env)
     oid = c.get("/api/v1/objects/resolve", params={"q": "Synthetic Test Field"}).json()["objectId"]
     c.app.state.services.compute_candidates(oid)
     page = c.get(f"/api/v1/objects/{oid}/candidates").json()
-    assert page["items"] == [] and "seeded from the catalogue" in page["coverageNote"]
+    assert page["items"] == [] and "seeded from a known proper motion" in page["coverageNote"]
 
 
 def test_too_few_usable_frames_is_reported_not_guessed(tmp_path):
@@ -319,3 +319,23 @@ def test_without_any_candidate_there_is_no_guided_investigation_to_offer(tmp_pat
     r = c.get("/api/v1/guided/spot-the-shift")
     assert r.status_code == 404 and "No candidate with a measured shift" in r.json()["error"]["message"]
     assert c.get("/api/v1/guided/spot-the-shift?objectId=obj_nope").status_code == 404
+
+
+# ---- a single bad frame must not fake a brightness change (found on real LHS 1140 data) ---------------------------------------------------------
+def _pts(fluxes, days=100.0):
+    return [{"mjd": 60800.0 + days * k, "wl": 1.9, "bw": 0.05, "flux": f, "sigma": 0.1} for k, f in enumerate(fluxes)]
+
+
+def test_one_bad_frame_does_not_make_a_brightness_candidate():
+    from services import candidates
+    steady = [10.0, 10.1, 9.9, 10.05, 9.95, 10.0]
+    bad_one = steady[:3] + [25.0] + steady[4:]                                  # one frame wildly off, the rest agree
+    assert candidates.brightness_pairs(_pts(steady))["significant"] is False
+    r = candidates.brightness_pairs(_pts(bad_one))
+    assert r["max_abs_z"] > 5.0 and r["significant"] is False                    # large in some pairs, but all of them share the one bad frame
+
+
+def test_a_real_change_seen_in_several_frames_still_counts():
+    from services import candidates
+    changed = [10.0, 10.1, 9.9, 20.0, 20.2, 19.9]                               # the later epoch is brighter in three frames
+    assert candidates.brightness_pairs(_pts(changed))["significant"] is True

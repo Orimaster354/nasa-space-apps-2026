@@ -415,5 +415,5 @@ def test_candidates_for_an_object_outside_the_catalogue_say_why_there_are_none(e
     oid = _object(c)["objectId"]
     c.app.state.services.compute_candidates(oid)                                                  # the search runs in the background; run it now
     page = c.get(f"/api/v1/objects/{oid}/candidates").json()
-    assert page["items"] == [] and page["total"] == 0 and "seeded from the catalogue" in page["coverageNote"]
+    assert page["items"] == [] and page["total"] == 0 and "seeded from a known proper motion" in page["coverageNote"]
     assert c.get("/api/v1/objects/obj_unknown/candidates").status_code == 404

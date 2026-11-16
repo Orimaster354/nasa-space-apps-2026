@@ -84,6 +84,34 @@ def warm_spectrum(svc, object_id: str, wait_s: float = 900.0, log=print) -> dict
     return {"status": status, "bandImages": len(ids), "rendered": ready}
 
 
+def build_final_spectrum(svc, object_id: str, passes: int = 3, budget_s: float = 240.0, log=print) -> dict:
+    """The spectrum of a target that is being ADDED to the preloaded set: built with a long download budget, repeated (frames fetched in one pass are
+    stored for the next) until nothing is missing, and then kept as the final answer, an honest refusal included, so a visitor never triggers a rebuild.
+    Also renders the picture behind every measured band. Returns {status, bandImages, rendered, reason}."""
+    from . import spectrum as sp
+    from .core import now_iso
+    obj = svc.get_object(object_id)
+    sid = sp.spectrum_id(object_id, None, None, sp.DEFAULT_RADIUS_ARCSEC)
+    result = None
+    for _ in range(max(1, passes)):
+        result = svc._build_spectrum(obj, None, None, sp.DEFAULT_RADIUS_ARCSEC, sid, budget_s=budget_s)
+        rec = svc.registry.get_spectrum(sid)
+        if rec is not None and not rec.get("partial"):
+            break
+    rec = svc.registry.get_spectrum(sid)
+    if rec is None or rec.get("partial"):                      # what the stored frames allow is the answer (a refusal is stored too)
+        svc.registry.put_spectrum(sid, {"result": result, "partial": False, "savedAt": now_iso()})
+    status = result["availability"]["status"]
+    ids = sorted({p["observationId"] for p in result.get("points", []) if p.get("available") and p.get("observationId")})
+    ready = 0
+    if status == "available" and ids:
+        with ThreadPoolExecutor(max_workers=4) as pool:
+            ready = sum(a["status"] == "available" for a in pool.map(lambda oid: svc.get_image(oid, wait_s=300)["availability"], ids))
+    reason = result["availability"].get("statusReason", "")
+    log(f"  spectrum: {status}, {len(ids)} band images, {ready} rendered" + ("" if status == "available" else f" ({reason[:80]})"))
+    return {"status": status, "bandImages": len(ids), "rendered": ready, "reason": reason}
+
+
 def warm_target(svc, query: str, band: str = "SPHEREx-D3", frames: int = 50, workers: int = 4, rounds: int = 4,
                 pause_s: float = 5.0, log=print, skip_poor: bool = False, spare: float = 0.25) -> dict:
     """Resolve a target, list its observations in `band`, and render the first `frames` images, retrying failures a few rounds.

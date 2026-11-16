@@ -110,8 +110,28 @@ def test_non_detection_reports_low_significance_not_zero_flux_claim():
 def test_fully_masked_aperture_is_unmeasurable_not_zero():
     flags = np.zeros((N, N), dtype=np.int32)
     flags[18:23, 18:23] = CRIT_BIT                # covers the whole 12 arcsec aperture, leaves the ring usable
-    with pytest.raises(Unmeasurable, match="usable data"):
+    with pytest.raises(Unmeasurable, match="usable data|centre of the source is masked"):
         photometry.aperture_flux(_cutout(total_counts=900.0, flags=flags), *CENTER)
+
+
+def test_a_masked_centre_is_refused_even_when_most_of_the_aperture_is_usable():
+    """Scaling a partly masked aperture up assumes the missing pixels look like the rest; for a bright star the masked pixels ARE the star. Real frames of
+    LHS 1140 with the core masked read three times too low, so the source's centre must be usable."""
+    flags = np.zeros((N, N), dtype=np.int32)
+    ci = N // 2
+    flags[ci, ci] = CRIT_BIT                                                      # a single flagged pixel at the peak
+    with pytest.raises(Unmeasurable, match="centre of the source is masked"):
+        photometry.aperture_flux(_cutout(total_counts=900.0, flags=flags), *CENTER)
+
+
+def test_an_aperture_with_more_than_five_percent_unusable_is_refused():
+    flags = np.zeros((N, N), dtype=np.int32)
+    flags[20, 23] = CRIT_BIT                                                      # four pixels in the wing of a 30 arcsec aperture (about 5 square pixels' worth)
+    flags[21, 23] = CRIT_BIT
+    flags[19, 23] = CRIT_BIT
+    flags[22, 22] = CRIT_BIT
+    with pytest.raises(Unmeasurable, match="usable data"):
+        photometry.aperture_flux(_cutout(total_counts=900.0, flags=flags), *CENTER, radius_arcsec=30, annulus_arcsec=(45, 70))
 
 
 def test_partly_masked_aperture_warns_and_is_scaled():
@@ -140,9 +160,12 @@ def test_position_off_the_image_is_unmeasurable():
 def test_near_the_edge_is_flagged_not_hidden():
     w = _wcs()
     ra, dec = w.wcs_pix2world([[1.0, 20.0]], 0)[0]                    # 1 pixel from the left edge: part of the aperture is off-image
-    r = photometry.aperture_flux(_cutout(total_counts=0.0, noise=0.5, seed=2), float(ra), float(dec))
-    assert r.usable_fraction < 1.0
-    assert any("masked or off the image" in x for x in r.warnings)
+    # Part of the aperture is off the image. Up to 5 percent missing is measured and flagged; more than that is refused (extrapolating a bright source is not safe).
+    ra2, dec2 = w.wcs_pix2world([[1.9, 20.0]], 0)[0]
+    r = photometry.aperture_flux(_cutout(total_counts=0.0, noise=0.5, seed=2), float(ra2), float(dec2))
+    assert r.usable_fraction >= 0.95
+    with pytest.raises(Unmeasurable, match="usable data"):
+        photometry.aperture_flux(_cutout(total_counts=0.0, noise=0.5, seed=2), float(ra), float(dec))
 
 
 def test_corner_position_has_too_little_usable_data():
