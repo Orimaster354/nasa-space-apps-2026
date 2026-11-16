@@ -210,7 +210,9 @@ def build(svc, obj: dict, now_iso) -> tuple[list[dict], dict]:
     """Returns (candidates, run_info). run_info has `note` (why there are none, or None) and `partial` (frames skipped for archive reasons)."""
     target = targets.find(obj.get("name"))
     if target is None:
-        return [], {"note": "Candidates are seeded from the catalogue, and this object is not one of the catalogue targets, so none were generated.", "partial": False}
+        why = ((svc.registry.get_object(obj["objectId"]) or {}).get("pmLookup") or {}).get("reason")
+        return [], {"note": ("Candidates are seeded from a known proper motion, and none could be obtained for this object: " + why) if why else
+                    "Candidates are seeded from a known proper motion, and this object is not one of the catalogue targets, so none were generated.", "partial": False}
     rec_obj = svc.registry.get_object(obj["objectId"])
     c = rec_obj.get("viewCenter") or rec_obj["coordinates"]
     grid = imaging.GridSpec(c["raDeg"], c["decDeg"], imaging.DEFAULT_FOV_ARCMIN)

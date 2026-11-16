@@ -210,12 +210,12 @@ def _sig(v: float, digits: int) -> float:
     return float(f"{v:.{digits}g}")
 
 
-def build(svc, obj: dict, ra: float | None, dec: float | None, radius: float, sid: str, now_iso) -> tuple[dict, bool]:
+def build(svc, obj: dict, ra: float | None, dec: float | None, radius: float, sid: str, now_iso, budget_s: float | None = None) -> tuple[dict, bool]:
     """Returns (SpectralData, partial). `partial` is True when some frames were skipped (time budget or archive trouble)."""
     files, archive_note = svc._discover_cached(obj["coordinates"]["raDeg"], obj["coordinates"]["decDeg"])
     svc.list_observations(obj["objectId"], limit=1)                  # makes sure every observation record is stored
     plan = _plan(svc, obj["objectId"], files)
-    deadline = time.monotonic() + DOWNLOAD_BUDGET_S
+    deadline = time.monotonic() + (DOWNLOAD_BUDGET_S if budget_s is None else budget_s)
     jobs = [(rec, d) for d, recs in plan.items() for rec in recs]
     hot = [j for j in jobs if _is_cached(svc, obj, j[0])]
     cold = [j for j in jobs if j not in hot]

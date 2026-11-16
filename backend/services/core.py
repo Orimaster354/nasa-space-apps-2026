@@ -29,7 +29,7 @@ from processing.archive_status import archive
 from processing.fits_io import FitsReadError, read_cutout
 from store.registry import Registry
 
-from . import candidates, guided, spectrum, targets
+from . import candidates, guided, pm_lookup, spectrum, targets
 from .investigations import InvestigationStore
 
 log = logging.getLogger("spx.core")
@@ -114,8 +114,12 @@ class Services:
                  discover: Callable[[float, float], list[irsa.ArchiveFile]] = irsa.discover,
                  resolver: Callable[[str], tuple[float, float]] = _astropy_resolver,
                  discovery_ttl_s: float = 600.0, image_wait_s: float = 20.0, render_workers: int = 6,
-                 snapshot_max_age_s: float = 3 * 86400.0):
+                 snapshot_max_age_s: float = 3 * 86400.0,
+                 pm_fetch: Callable[[str], dict] | None = None):
         self.registry, self.cutouts = registry, cutouts
+        # Proper-motion lookup for names that are not curated (SIMBAD via Sesame). None = off (tests, offline runs); the app passes the real one.
+        self._pm_fetch = pm_fetch
+        self._restore_dynamic_targets()
         self.investigations = InvestigationStore(registry)
         self.images_dir = Path(images_dir)
         self.images_dir.mkdir(parents=True, exist_ok=True)
@@ -153,7 +157,7 @@ class Services:
                "resolver": {"name": resolver_name, **({"identifier": identifier} if identifier else {})}}
         if existing and existing["name"] != name and existing["resolver"]["name"] != "user-supplied coordinates":
             obj["aliases"] = sorted(set(existing.get("aliases", [])) | {existing["name"]})
-        self.registry.put_object(oid, obj)
+        self.registry.put_object(oid, {**obj, **self._carried(oid)})
         return obj
 
     def resolve(self, q: str | None = None, ra: float | None = None, dec: float | None = None) -> dict:
@@ -168,18 +172,60 @@ class Services:
         if t is not None:
             return self._make_curated(t)                  # works offline and for spellings the name resolver does not know
         r_ra, r_dec = self._resolver(q.strip())
-        return self._make_object(q.strip(), r_ra, r_dec, "CDS Sesame via astropy", q.strip())
+        dt, why, src = self._dynamic_target(q.strip())
+        if dt is not None:
+            return self._make_curated(dt, dynamic=True, pm_source=src)
+        obj = self._make_object(q.strip(), r_ra, r_dec, "CDS Sesame via astropy", q.strip())
+        if why:                                                    # remembered, so the candidates page can say why there are none
+            self.registry.put_object(obj["objectId"], {**obj, "pmLookup": {"ok": False, "reason": why}})
+        return obj
 
-    def _make_curated(self, t: targets.Target) -> dict:
+    def _make_curated(self, t: targets.Target, *, dynamic: bool = False, pm_source: str | None = None) -> dict:
         oid = object_id_for(t.ra, t.dec)
         vra, vdec = targets.view_center(t)
         obj = {"objectId": oid, "name": t.name, "aliases": sorted({a for a in t.aliases if a != t.name}),
                "coordinates": {"raDeg": t.ra, "decDeg": t.dec}, "objectType": t.object_type,
-               "properMotion": targets.proper_motion_model(t),
-               "resolver": {"name": "Curated demo target", "identifier": t.catalog_id}}
+               "properMotion": targets.proper_motion_model(t, pm_source),
+               "resolver": {"name": "CDS Sesame (SIMBAD data)" if dynamic else "Curated demo target", "identifier": t.catalog_id}}
         # `viewCenter` is internal (not in the contract model): images are centred where the object is expected during the survey.
-        self.registry.put_object(oid, {**obj, "viewCenter": {"raDeg": vra, "decDeg": vdec}})
+        internal = {"viewCenter": {"raDeg": vra, "decDeg": vdec}, **self._carried(oid)}
+        if dynamic:                                                # kept so the target can be re-created after a restart
+            internal["dynamicTarget"] = {"name": t.name, "aliases": list(t.aliases), "ra": t.ra, "dec": t.dec, "pmra": t.pmra_mas_yr, "pmdec": t.pmdec_mas_yr,
+                                         "catalogId": t.catalog_id, "objectType": t.object_type, "note": t.note, "pmSource": pm_source}
+        self.registry.put_object(oid, {**obj, **internal})
         return obj
+
+    def _carried(self, oid: str) -> dict:
+        """Bookkeeping that must survive the object being resolved again (whether it was added from a search, and how that went)."""
+        prev = self.registry.get_object(oid) or {}
+        return {k: prev[k] for k in ("promotedAt", "promotion") if k in prev}
+
+    def _restore_dynamic_targets(self) -> None:
+        for o in self.registry.all_objects():
+            d = o.get("dynamicTarget")
+            if d:
+                targets.register_dynamic(targets.Target(d["name"], tuple(d.get("aliases", ())), d["ra"], d["dec"], d["pmra"], d["pmdec"], d["catalogId"], d["objectType"], d.get("note", "")))
+
+    def _dynamic_target(self, name: str) -> tuple[targets.Target | None, str | None, str | None]:
+        """(target, why_not, source text). Asks SIMBAD for the object's proper motion; the reason is kept so the page can say why there are no candidates."""
+        if self._pm_fetch is None:
+            return None, None, None
+        try:
+            d = self._pm_fetch(name)
+        except pm_lookup.PmLookupError as exc:
+            return None, str(exc), None
+        except Exception as exc:                                  # a lookup problem must never stop a search
+            return None, f"The proper-motion lookup failed ({type(exc).__name__}).", None
+        if d.get("pmra") is None or d.get("pmdec") is None:
+            return None, "SIMBAD knows this object but lists no proper motion for it.", None
+        try:
+            irsa.validate_position(d["ra"], d["dec"])
+        except ValueError:
+            return None, "SIMBAD returned a position that could not be used.", None
+        t = targets.Target(name, (), d["ra"], d["dec"], d["pmra"], d["pmdec"], d.get("oname") or name, d.get("objectType") or "Astronomical object",
+                           "Position and proper motion from SIMBAD via CDS Sesame at the time of the search; not separately checked in SPHEREx frames.")
+        targets.register_dynamic(t)
+        return t, None, f"SIMBAD via CDS Sesame, retrieved {datetime.now(timezone.utc).date().isoformat()}"
 
     def get_object(self, object_id: str) -> dict:
         obj = self.registry.get_object(object_id)
@@ -299,6 +345,9 @@ class Services:
         obj = self.get_object(object_id)
         c = obj["coordinates"]
         files, archive_note = self._discover_cached(c["raDeg"], c["decDeg"])
+        promoter = getattr(self, "promoter", None)            # a complete listing of a target that is not preloaded: add it to the preloaded set
+        if promoter is not None and archive_note is None:
+            promoter.consider(object_id, sum(1 for f in files if f.bandpass == "SPHEREx-D3"), True)
 
         lo = iso_to_mjd(date_from) if date_from else None
         hi = iso_to_mjd(date_to) if date_to else None
@@ -508,8 +557,8 @@ class Services:
         except irsa.IrsaError as exc:
             raise Upstream(str(exc), exc.retryable) from exc
 
-    def _build_spectrum(self, obj: dict, ra, dec, radius: float, sid: str) -> dict:
-        result, partial = spectrum.build(self, obj, ra, dec, radius, sid, now_iso)
+    def _build_spectrum(self, obj: dict, ra, dec, radius: float, sid: str, budget_s: float | None = None) -> dict:
+        result, partial = spectrum.build(self, obj, ra, dec, radius, sid, now_iso, budget_s)
         if result["availability"]["status"] == "available" or not partial:
             # A complete spectrum is kept for good. One that is missing frames because the archive was slow or down is only kept briefly,
             # so the next visit tries again instead of showing an old gap for ever. A REFUSAL that is not caused by archive trouble (a saturated

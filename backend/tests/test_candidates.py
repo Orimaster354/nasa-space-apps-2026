@@ -172,7 +172,7 @@ def test_an_object_that_is_not_a_catalogue_target_gets_no_seeded_candidates(env)
     oid = c.get("/api/v1/objects/resolve", params={"q": "Synthetic Test Field"}).json()["objectId"]
     c.app.state.services.compute_candidates(oid)
     page = c.get(f"/api/v1/objects/{oid}/candidates").json()
-    assert page["items"] == [] and "seeded from the catalogue" in page["coverageNote"]
+    assert page["items"] == [] and "seeded from a known proper motion" in page["coverageNote"]
 
 
 def test_too_few_usable_frames_is_reported_not_guessed(tmp_path):

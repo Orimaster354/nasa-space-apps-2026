@@ -67,8 +67,21 @@ def normalize(text: str) -> str:
 _INDEX = {normalize(n): t for t in TARGETS for n in (t.name, *t.aliases)}
 
 
+# Targets added at run time: any named object whose proper motion SIMBAD supplies (services/pm_lookup.py). They behave exactly like the curated ones
+# (field centred where the object is during the survey, position carried along its motion for every measurement, motion candidates).
+_DYNAMIC: dict[str, Target] = {}
+
+
+def register_dynamic(t: Target) -> None:
+    for n in (t.name, *t.aliases):
+        _DYNAMIC[normalize(n)] = t
+
+
 def find(query: str | None) -> Target | None:
-    return _INDEX.get(normalize(query)) if query else None
+    if not query:
+        return None
+    n = normalize(query)
+    return _INDEX.get(n) or _DYNAMIC.get(n)
 
 
 def position_at(t: Target, epoch: float) -> tuple[float, float]:
@@ -84,7 +97,7 @@ def view_center(t: Target) -> tuple[float, float]:
     return position_at(t, VIEW_EPOCH)
 
 
-def proper_motion_model(t: Target) -> dict:
-    return {"value": round(t.pm_total_arcsec_yr, 4), "unit": "arcsec/yr", "source": SOURCE, "provenanceKind": "catalog",
+def proper_motion_model(t: Target, source: str | None = None) -> dict:
+    return {"value": round(t.pm_total_arcsec_yr, 4), "unit": "arcsec/yr", "source": source or SOURCE, "provenanceKind": "catalog",
             "catalogName": "SIMBAD via CDS Sesame", "catalogId": t.catalog_id, "pmRaMasPerYr": t.pmra_mas_yr, "pmDecMasPerYr": t.pmdec_mas_yr,
             "convention": "pmRA includes cos(dec)", "referenceEpoch": "J2000"}
