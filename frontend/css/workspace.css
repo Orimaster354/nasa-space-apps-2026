@@ -288,3 +288,6 @@ body.focus-mode .ws .viewer-wrap { height: calc(100vh - 150px); }
 .linklike { background: none; border: 0; padding: 0; color: var(--accent); text-decoration: underline; cursor: pointer; font: inherit; }
 .about-notes { display: grid; gap: var(--sp-2); grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr)); margin-top: var(--sp-3); }
 .about-notes .notice { margin: 0; }
+
+/* Side panels (Candidates, Details) scroll inside themselves on wide screens, like the Spectrum readout, so a long panel never stretches the page. */
+.ws:not(.is-overlay) .ws-drawer { align-self: start; position: sticky; top: var(--sp-3); max-height: calc(100vh - 110px); overflow-y: auto; overscroll-behavior: contain; }
